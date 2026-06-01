@@ -20,3 +20,17 @@ build/
 .env
 .env.local
 .env.*.local
+
+# Expo / React Native
+mobile/node_modules/
+mobile/.expo/
+mobile/android/
+mobile/ios/
+mobile/*.jks
+mobile/*.p8
+mobile/*.p12
+mobile/*.key
+mobile/*.mobileprovision
+mobile/*.orig.*
+mobile/web-build/
+mobile/.env*
