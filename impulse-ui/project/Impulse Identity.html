@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>impulse — identity exploration</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; padding: 0; }
+  :root{
+    --ink:    #0E0E0E;
+    --paper:  #FBFAF8;
+    --night:  #0E0E0E;
+    --cream:  #F4F1EA;
+    --accent: #FF7A1A;            /* sodium-vapour orange */
+    --accent-soft: color-mix(in srgb, var(--accent) 30%, transparent);
+    --accent-faint: color-mix(in srgb, var(--accent) 14%, transparent);
+    --mono: "Space Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  /* monospace caption used to label states / specs */
+  .cap{
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel">
+// marks.jsx — Impulse wordmark + icon system
+// Exports: Wordmark, StateGrid, Icon, IconShowcase, Lockup, Palette, Masthead
+
+// ── treatment config ─────────────────────────────────────────
+// Each wordmark treatment defines its font, weight, tracking, how the i-dot
+// is drawn, and how the full stop is drawn. The accent element (dot/period)
+// is the single brand colour; the letters are neutral ink/cream.
+const TREATMENTS = {
+  clean: { font: "Archivo, sans-serif",       weight: 500, tracking: "-0.015em", iDot: "natural", period: "round",     size: 46 },
+  square:{ font: "'Space Grotesk', sans-serif",weight: 500, tracking: "-0.005em", iDot: "square",  period: "square",    size: 44 },
+  pulse: { font: "Archivo, sans-serif",        weight: 600, tracking: "-0.02em",  iDot: "natural", period: "pulse",     size: 46 },
+  spark: { font: "'Space Grotesk', sans-serif",weight: 600, tracking: "-0.01em",  iDot: "spark",   period: "smallsq",   size: 44 },
+  bold:  { font: "Archivo, sans-serif",        weight: 800, tracking: "-0.035em", iDot: "natural", period: "bigsquare", size: 48 },
+};
+
+// ── the full-stop / period element ──────────────────────────
+function Period({ kind, color, em }) {
+  const u = (n) => `${n * em}px`;
+  if (kind === "round" || kind === "smallsq") {
+    return (
+      <span style={{
+        display: "inline-block",
+        width: u(0.155), height: u(0.155),
+        borderRadius: kind === "round" ? "50%" : `${0.02 * em}px`,
+        background: color,
+        marginLeft: u(0.03),
+        verticalAlign: "baseline",
+      }} />
+    );
+  }
+  if (kind === "square") {
+    return (
+      <span style={{
+        display: "inline-block",
+        width: u(0.16), height: u(0.16),
+        background: color,
+        marginLeft: u(0.035),
+        verticalAlign: "baseline",
+      }} />
+    );
+  }
+  if (kind === "bigsquare") {
+    return (
+      <span style={{
+        display: "inline-block",
+        width: u(0.27), height: u(0.27),
+        background: color,
+        marginLeft: u(0.05),
+        verticalAlign: "baseline",
+      }} />
+    );
+  }
+  if (kind === "pulse") {
+    // accent dot wrapped in a faint concentric ring — a quiet "pulse"
+    return (
+      <span style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: u(0.34), height: u(0.34),
+        borderRadius: "50%",
+        border: `${Math.max(1, 0.028 * em)}px solid var(--accent-soft)`,
+        marginLeft: u(0.04),
+        verticalAlign: "baseline",
+        position: "relative", top: u(0.02),
+      }}>
+        <span style={{ width: u(0.16), height: u(0.16), borderRadius: "50%", background: color }} />
+      </span>
+    );
+  }
+  return null;
+}
+
+// ── the i glyph (stem + chosen dot) ──────────────────────────
+function IGlyph({ kind, accent, em }) {
+  const u = (n) => `${n * em}px`;
+  if (kind === "natural") return "i";
+  // dotless stem + a custom tittle
+  const dotStyle =
+    kind === "square"
+      ? { width: u(0.15), height: u(0.15), background: accent }
+      : /* spark */ { width: u(0.12), height: u(0.26), background: accent, borderRadius: `${0.02 * em}px` };
+  return (
+    <span style={{ position: "relative", display: "inline-block" }}>
+      {"\u0131"/* dotless i */}
+      <span style={{
+        position: "absolute",
+        left: "50%",
+        transform: "translateX(-50%)",
+        bottom: kind === "spark" ? u(0.58) : u(0.6),
+        ...dotStyle,
+      }} />
+    </span>
+  );
+}
+
+// ── the wordmark ─────────────────────────────────────────────
+// mode: "colour" (accent dot, neutral letters) | "mono" (all one colour)
+// on:   "light" | "dark"
+function Wordmark({ treatment = "clean", mode = "colour", on = "light", size }) {
+  const t = TREATMENTS[treatment];
+  const em = size || t.size;
+  const ink = on === "light" ? "var(--ink)" : "var(--cream)";
+  const dotColor = mode === "colour" ? "var(--accent)" : ink;
+  return (
+    <span style={{
+      fontFamily: t.font,
+      fontWeight: t.weight,
+      letterSpacing: t.tracking,
+      fontSize: em,
+      lineHeight: 1,
+      color: ink,
+      whiteSpace: "nowrap",
+      display: "inline-flex",
+      alignItems: "baseline",
+    }}>
+      <IGlyph kind={t.iDot} accent={dotColor} em={em} />
+      <span>mpulse</span>
+      <Period kind={t.period} color={dotColor} em={em} />
+    </span>
+  );
+}
+
+// ── 2×2 state grid for one treatment ─────────────────────────
+function StateGrid({ treatment }) {
+  const Cell = ({ on, mode, label }) => (
+    <div style={{
+      position: "relative",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      background: on === "light" ? "var(--paper)" : "var(--night)",
+    }}>
+      <Wordmark treatment={treatment} mode={mode} on={on} />
+      <span className="cap" style={{
+        position: "absolute", left: 14, bottom: 11,
+        color: on === "light" ? "rgba(14,14,14,0.32)" : "rgba(244,241,234,0.34)",
+      }}>{label}</span>
+    </div>
+  );
+  return (
+    <div style={{
+      width: "100%", height: "100%",
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gridTemplateRows: "1fr 1fr",
+      gap: 1,
+      background: "rgba(14,14,14,0.10)",
+    }}>
+      <Cell on="light" mode="colour" label="colour / light" />
+      <Cell on="light" mode="mono"   label="mono / light" />
+      <Cell on="dark"  mode="colour" label="colour / dark" />
+      <Cell on="dark"  mode="mono"   label="mono / dark" />
+    </div>
+  );
+}
+
+// ── app icon (proportional, reused at every size) ────────────
+function Icon({ family, variant, size = 200, radius }) {
+  const r = radius != null ? radius : size * 0.225; // iOS squircle-ish
+  const pct = (n) => `${n * size}px`;
+  const base = {
+    width: size, height: size, borderRadius: r,
+    position: "relative", overflow: "hidden", flex: "0 0 auto",
+  };
+
+  if (family === "dot") {
+    const night = "var(--night)", accent = "var(--accent)";
+    if (variant === "solid")
+      return (
+        <div style={{ ...base, background: night, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: pct(0.46), height: pct(0.46), borderRadius: "50%", background: accent }} />
+        </div>
+      );
+    if (variant === "knockout")
+      return (
+        <div style={{ ...base, background: accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: pct(0.46), height: pct(0.46), borderRadius: "50%", background: night }} />
+        </div>
+      );
+    // pulse — concentric rings
+    const ring = (d, col, bw) => (
+      <div style={{
+        position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)",
+        width: pct(d), height: pct(d), borderRadius: "50%",
+        border: `${Math.max(1, size * bw)}px solid ${col}`,
+      }} />
+    );
+    return (
+      <div style={{ ...base, background: night }}>
+        {ring(0.82, "var(--accent-faint)", 0.018)}
+        {ring(0.6, "var(--accent-soft)", 0.022)}
+        <div style={{
+          position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)",
+          width: pct(0.34), height: pct(0.34), borderRadius: "50%", background: "var(--accent)",
+        }} />
+      </div>
+    );
+  }
+
+  // family === "i"
+  const conf =
+    variant === "mark"  ? { bg: "var(--night)",  stem: "var(--accent)", dot: "var(--accent)" } :
+    variant === "spark" ? { bg: "var(--night)",  stem: "var(--cream)",  dot: "var(--accent)" } :
+                          { bg: "var(--accent)", stem: "var(--night)",  dot: "var(--night)" };
+  const stemW = 0.155, stemH = 0.42, dotS = 0.155, gap = 0.085;
+  return (
+    <div style={{ ...base, background: conf.bg }}>
+      {/* dot */}
+      <div style={{
+        position: "absolute", left: "50%", transform: "translateX(-50%)",
+        bottom: pct(0.5 + stemH / 2 + gap),
+        width: pct(dotS), height: pct(dotS),
+        borderRadius: `${size * 0.02}px`, background: conf.dot,
+      }} />
+      {/* stem */}
+      <div style={{
+        position: "absolute", left: "50%", transform: "translateX(-50%)",
+        bottom: pct(0.5 - stemH / 2),
+        width: pct(stemW), height: pct(stemH),
+        borderRadius: pct(stemW / 2), background: conf.stem,
+      }} />
+    </div>
+  );
+}
+
+// icon card: big colour master + mono / inverse / 32px favicon test
+function IconShowcase({ family, variant }) {
+  // a mono rendering: black mark on white
+  const monoBg = "#fff";
+  return (
+    <div style={{
+      width: "100%", height: "100%", boxSizing: "border-box",
+      background: "var(--paper)",
+      display: "flex", flexDirection: "column", alignItems: "center",
+      padding: "34px 0 22px",
+    }}>
+      <Icon family={family} variant={variant} size={196} />
+      <div className="cap" style={{ color: "rgba(14,14,14,0.4)", marginTop: 16 }}>1024 master</div>
+
+      <div style={{ flex: 1 }} />
+
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 26 }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 9 }}>
+          <Icon family={family} variant={variant} size={56} />
+          <span className="cap" style={{ color: "rgba(14,14,14,0.4)" }}>60px</span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 9 }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: 12.6, background: monoBg,
+            border: "1px solid rgba(14,14,14,0.10)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <MonoMark family={family} size={56} />
+          </div>
+          <span className="cap" style={{ color: "rgba(14,14,14,0.4)" }}>mono</span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 9 }}>
+          <Icon family={family} variant={variant} size={32} radius={7.2} />
+          <span className="cap" style={{ color: "rgba(14,14,14,0.4)" }}>32px</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// flat single-colour (black) version of each mark for the mono chip
+function MonoMark({ family, size }) {
+  const r = size * 0.225;
+  const pct = (n) => `${n * size}px`;
+  if (family === "dot")
+    return <div style={{ width: pct(0.46), height: pct(0.46), borderRadius: "50%", background: "var(--ink)" }} />;
+  const stemW = 0.155, stemH = 0.42, dotS = 0.155, gap = 0.085;
+  return (
+    <div style={{ width: size, height: size, position: "relative" }}>
+      <div style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", bottom: pct(0.5 + stemH / 2 + gap), width: pct(dotS), height: pct(dotS), borderRadius: `${size * 0.02}px`, background: "var(--ink)" }} />
+      <div style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", bottom: pct(0.5 - stemH / 2), width: pct(stemW), height: pct(stemH), borderRadius: pct(stemW / 2), background: "var(--ink)" }} />
+    </div>
+  );
+}
+
+// ── horizontal lockup ────────────────────────────────────────
+function Lockup({ ground = "light" }) {
+  const on = ground;
+  return (
+    <div style={{
+      width: "100%", height: "100%",
+      background: on === "light" ? "var(--paper)" : "var(--night)",
+      display: "flex", alignItems: "center", justifyContent: "center", gap: 26,
+    }}>
+      <Icon family="dot" variant="pulse" size={86} radius={20} />
+      <Wordmark treatment="pulse" mode="colour" on={on} size={52} />
+    </div>
+  );
+}
+
+// ── palette ──────────────────────────────────────────────────
+function Palette() {
+  const Swatch = ({ c, name, hex, oklch, big, dark }) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, width: big ? 200 : 132 }}>
+      <div style={{ height: big ? 150 : 108, borderRadius: 4, background: c, border: dark ? "1px solid rgba(14,14,14,0.12)" : "none" }} />
+      <div>
+        <div style={{ fontFamily: "Archivo, sans-serif", fontWeight: 600, fontSize: 14, color: "var(--ink)" }}>{name}</div>
+        <div className="cap" style={{ color: "rgba(14,14,14,0.5)", marginTop: 4, textTransform: "none", letterSpacing: 0 }}>{hex}</div>
+        {oklch && <div className="cap" style={{ color: "rgba(14,14,14,0.34)", marginTop: 2, textTransform: "none", letterSpacing: 0 }}>{oklch}</div>}
+      </div>
+    </div>
+  );
+  return (
+    <div style={{
+      width: "100%", height: "100%", boxSizing: "border-box",
+      background: "var(--paper)", padding: "36px 40px",
+      display: "flex", alignItems: "flex-start", gap: 40,
+    }}>
+      <div>
+        <div className="cap" style={{ color: "rgba(14,14,14,0.4)", marginBottom: 16 }}>Lead accent</div>
+        <Swatch big c="var(--accent)" name="Sodium" hex="#FF7A1A" oklch="oklch(.72 .17 55)" />
+      </div>
+      <div>
+        <div className="cap" style={{ color: "rgba(14,14,14,0.4)", marginBottom: 16 }}>Alternates — for comparison only</div>
+        <div style={{ display: "flex", gap: 22 }}>
+          <Swatch c="#FF5A4D" name="Coral" hex="#FF5A4D" />
+          <Swatch c="#D6149A" name="Magenta" hex="#D6149A" />
+          <Swatch c="#E8FF3A" name="Acid" hex="#E8FF3A" />
+        </div>
+      </div>
+      <div>
+        <div className="cap" style={{ color: "rgba(14,14,14,0.4)", marginBottom: 16 }}>Neutrals</div>
+        <div style={{ display: "flex", gap: 22 }}>
+          <Swatch c="var(--night)" name="Ink" hex="#0E0E0E" />
+          <Swatch c="var(--cream)" name="Cream" hex="#F4F1EA" dark />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── masthead / system overview ───────────────────────────────
+function Masthead() {
+  return (
+    <div style={{
+      width: "100%", height: "100%", boxSizing: "border-box",
+      background: "var(--night)", color: "var(--cream)",
+      display: "flex", flexDirection: "column", justifyContent: "space-between",
+      padding: "44px 48px",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
+        <Icon family="dot" variant="pulse" size={104} radius={24} />
+        <div>
+          <Wordmark treatment="pulse" mode="colour" on="dark" size={88} />
+          <div style={{ fontFamily: "Archivo, sans-serif", fontSize: 17, color: "rgba(244,241,234,0.6)", marginTop: 14, letterSpacing: "0.01em" }}>
+            plans, on impulse.
+          </div>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 48, flexWrap: "wrap" }}>
+        <div>
+          <div className="cap" style={{ color: "rgba(244,241,234,0.4)" }}>Type</div>
+          <div style={{ fontFamily: "Archivo, sans-serif", fontSize: 14, color: "rgba(244,241,234,0.85)", marginTop: 6 }}>Archivo · Space Grotesk</div>
+        </div>
+        <div>
+          <div className="cap" style={{ color: "rgba(244,241,234,0.4)" }}>Accent</div>
+          <div style={{ fontFamily: "Archivo, sans-serif", fontSize: 14, color: "rgba(244,241,234,0.85)", marginTop: 6 }}>Sodium #FF7A1A</div>
+        </div>
+        <div>
+          <div className="cap" style={{ color: "rgba(244,241,234,0.4)" }}>Principle</div>
+          <div style={{ fontFamily: "Archivo, sans-serif", fontSize: 14, color: "rgba(244,241,234,0.85)", marginTop: 6 }}>The dot is the one accent</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── colourway comparison (chosen pairing: pulse icon + clean wordmark) ──
+function ColourwayCard({ accent, hex }) {
+  const Panel = ({ on }) => (
+    <div style={{
+      flex: 1, position: "relative",
+      display: "flex", alignItems: "center", justifyContent: "center", gap: 22,
+      background: on === "light" ? "var(--paper)" : "var(--night)",
+    }}>
+      <Icon family="dot" variant="pulse" size={72} radius={16} />
+      <Wordmark treatment="clean" mode="colour" on={on} size={44} />
+      <span className="cap" style={{
+        position: "absolute", left: 16, bottom: 12,
+        color: on === "light" ? "rgba(14,14,14,0.32)" : "rgba(244,241,234,0.34)",
+      }}>{on}</span>
+    </div>
+  );
+  return (
+    <div style={{ "--accent": accent, width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
+      <Panel on="light" />
+      <div style={{ height: 1, background: "rgba(14,14,14,0.10)" }} />
+      <Panel on="dark" />
+    </div>
+  );
+}
+
+Object.assign(window, { Wordmark, StateGrid, Icon, IconShowcase, MonoMark, Lockup, Palette, Masthead, ColourwayCard });
+
+</script>
+<script type="text/babel">
+  const { Wordmark, StateGrid, Icon, IconShowcase, Lockup, Palette, Masthead, ColourwayCard } = window;
+
+  function App() {
+    return (
+      <DesignCanvas>
+        <DCSection id="intro" title="impulse — identity" subtitle="Wordmark + app icon exploration · the dot is the system">
+          <DCArtboard id="masthead" label="System overview" width={960} height={320}>
+            <Masthead />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="chosen" title="Chosen direction — colourways" subtitle="Pulse-rings icon + Clean wordmark · sodium / coral / magenta on light & warm-dark">
+          <DCArtboard id="cw-sodium" label="Sodium · #FF7A1A" width={480} height={320}>
+            <ColourwayCard accent="#FF7A1A" hex="#FF7A1A" />
+          </DCArtboard>
+          <DCArtboard id="cw-coral" label="Coral · #FF5A4D" width={480} height={320}>
+            <ColourwayCard accent="#FF5A4D" hex="#FF5A4D" />
+          </DCArtboard>
+          <DCArtboard id="cw-magenta" label="Magenta · #D6149A" width={480} height={320}>
+            <ColourwayCard accent="#D6149A" hex="#D6149A" />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="wordmark" title="Wordmark — five directions" subtitle="Restrained → expressive · each shown colour / mono × light / warm-dark">
+          <DCArtboard id="w1" label="01 · Clean" width={640} height={300}>
+            <StateGrid treatment="clean" />
+          </DCArtboard>
+          <DCArtboard id="w2" label="02 · Square" width={640} height={300}>
+            <StateGrid treatment="square" />
+          </DCArtboard>
+          <DCArtboard id="w3" label="03 · Pulse" width={640} height={300}>
+            <StateGrid treatment="pulse" />
+          </DCArtboard>
+          <DCArtboard id="w4" label="04 · Spark-i" width={640} height={300}>
+            <StateGrid treatment="spark" />
+          </DCArtboard>
+          <DCArtboard id="w5" label="05 · Bold lockup" width={640} height={300}>
+            <StateGrid treatment="bold" />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="icon-dot" title="App icon — the dot" subtitle="The full stop from impulse. standing alone as a pulse / moment">
+          <DCArtboard id="d1" label="Solid" width={300} height={392}>
+            <IconShowcase family="dot" variant="solid" />
+          </DCArtboard>
+          <DCArtboard id="d2" label="Pulse rings" width={300} height={392}>
+            <IconShowcase family="dot" variant="pulse" />
+          </DCArtboard>
+          <DCArtboard id="d3" label="Knockout" width={300} height={392}>
+            <IconShowcase family="dot" variant="knockout" />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="icon-i" title="App icon — the i" subtitle="A stylised lowercase i — stem + dot reads as a spark">
+          <DCArtboard id="i1" label="Mark" width={300} height={392}>
+            <IconShowcase family="i" variant="mark" />
+          </DCArtboard>
+          <DCArtboard id="i2" label="Spark" width={300} height={392}>
+            <IconShowcase family="i" variant="spark" />
+          </DCArtboard>
+          <DCArtboard id="i3" label="Block" width={300} height={392}>
+            <IconShowcase family="i" variant="block" />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="lockup" title="Horizontal lockup" subtitle="Icon + wordmark · the dot pairing">
+          <DCArtboard id="lk-light" label="On light" width={560} height={240}>
+            <Lockup ground="light" />
+          </DCArtboard>
+          <DCArtboard id="lk-dark" label="On warm-dark" width={560} height={240}>
+            <Lockup ground="dark" />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="palette" title="Colour" subtitle="One accent at launch — sodium leads; alternates for comparison">
+          <DCArtboard id="pal" label="Palette" width={1120} height={300}>
+            <Palette />
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

@@ -1,237 +1,121 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { DROPS, money } from '../../../src/data';
+import { fontDisplay, fontUI, useApp } from '../../../src/theme';
 import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+  Btn,
+  CountdownPill,
+  MetaLine,
+  Placeholder,
+  PriceBlock,
+  RatingDot,
+} from '../../../src/components';
+import { ChevronBack } from '../../../src/icons';
 
-// Placeholder — in production, fetch deal by id from API
-const DEAL_DATA: Record<string, {
-  venue: string;
-  category: string;
-  suburb: string;
-  address: string;
-  discount: string;
-  originalPrice: number;
-  dealPrice: number;
-  expiresAt: string;
-  slots: string[];
-  spotsLeft: number;
-  description: string;
-  emoji: string;
-}> = {
-  '1': {
-    venue: 'Strike Bowling Darling Harbour',
-    category: 'Bowling',
-    suburb: 'Darling Harbour',
-    address: '1-25 Harbour St, Sydney NSW 2000',
-    discount: '30% off',
-    originalPrice: 28,
-    dealPrice: 19,
-    expiresAt: 'Today 9:00 PM',
-    slots: ['5:00 PM', '6:00 PM', '7:00 PM'],
-    spotsLeft: 6,
-    description: 'Premium 10-pin bowling in the heart of Darling Harbour. Shoe hire included. Lane for up to 6 players.',
-    emoji: '🎳',
-  },
-  '2': {
-    venue: 'Enigma Escape Rooms',
-    category: 'Escape Room',
-    suburb: 'CBD',
-    address: '227 Elizabeth St, Sydney NSW 2000',
-    discount: '25% off',
-    originalPrice: 40,
-    dealPrice: 30,
-    expiresAt: 'Today 9:30 PM',
-    slots: ['7:00 PM', '8:00 PM'],
-    spotsLeft: 4,
-    description: '60-minute escape room experience for groups of 2–6. Multiple themed rooms available. Book your preferred time below.',
-    emoji: '🔐',
-  },
-};
+function PushHead({ onBack, floating }: { onBack: () => void; floating?: boolean }) {
+  const { T } = useApp();
+  const insets = useSafeAreaInsets();
+  const bg = floating ? 'rgba(15,14,13,0.5)' : T.chipBg;
+  const ink = floating ? '#fff' : T.text;
+  return (
+    <Pressable
+      onPress={onBack}
+      style={{
+        position: 'absolute', top: insets.top + 4, left: 16, zIndex: 10,
+        width: 40, height: 40, borderRadius: 999, backgroundColor: bg,
+        alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <ChevronBack size={11} color={ink} />
+    </Pressable>
+  );
+}
 
-export default function EventDetailScreen() {
+export default function DetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { T } = useApp();
   const router = useRouter();
-  const deal = DEAL_DATA[id ?? ''] ?? null;
+  const insets = useSafeAreaInsets();
+  const d = DROPS.find((x) => x.id === id) || null;
 
-  if (!deal) {
+  if (!d) {
     return (
-      <SafeAreaView style={styles.container}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-        <View style={styles.notFound}>
-          <Text style={styles.notFoundText}>Deal not found</Text>
-        </View>
-      </SafeAreaView>
+      <View style={{ flex: 1, backgroundColor: T.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <PushHead onBack={() => router.back()} />
+        <Text style={{ fontFamily: fontUI(400), fontSize: 16, color: T.muted }}>Drop not found</Text>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={{ flex: 1, backgroundColor: T.bg }}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Hero */}
-        <View style={styles.hero}>
-          <Text style={styles.heroEmoji}>{deal.emoji}</Text>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
-          <View style={styles.discountBadge}>
-            <Text style={styles.discountText}>{deal.discount}</Text>
-          </View>
+        <View>
+          <Placeholder label={d.cat + ' · venue photo'} style={{ height: 300 }} />
+          <PushHead onBack={() => router.back()} floating />
+          {d.target ? (
+            <View style={{ position: 'absolute', top: insets.top + 4, right: 16 }}>
+              <CountdownPill d={d} />
+            </View>
+          ) : null}
         </View>
 
-        <View style={styles.body}>
-          {/* Title block */}
-          <Text style={styles.category}>{deal.category.toUpperCase()}</Text>
-          <Text style={styles.venueName}>{deal.venue}</Text>
-          <Text style={styles.address}>📍 {deal.address}</Text>
-
-          {/* Price */}
-          <View style={styles.priceRow}>
-            <Text style={styles.dealPrice}>${deal.dealPrice}</Text>
-            <Text style={styles.originalPrice}>${deal.originalPrice}</Text>
-            <Text style={styles.perPerson}> per person</Text>
+        <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 140 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: fontDisplay(700), fontSize: 28, color: T.text, letterSpacing: -0.84 }}>{d.venue}</Text>
+              <MetaLine d={d} style={{ marginTop: 5, fontSize: 14.5 }} />
+            </View>
+            <RatingDot d={d} />
           </View>
 
-          <Text style={styles.expires}>⏱ Deal expires: {deal.expiresAt}</Text>
-          <Text style={styles.spots}>🔥 Only {deal.spotsLeft} spots left</Text>
+          <View style={[{ marginTop: 20, paddingHorizontal: 18, paddingVertical: 16, backgroundColor: T.surface, borderRadius: 18 }, T.shadow]}>
+            <PriceBlock d={d} big />
+            <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: T.line, flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: d.status === 'now' ? T.accent : T.faint }} />
+              <Text style={{ fontFamily: fontUI(400), fontSize: 14, color: T.muted }}>{d.window}</Text>
+            </View>
+          </View>
 
-          <View style={styles.divider} />
+          <Text style={{ marginTop: 22, fontFamily: fontUI(400), fontSize: 16, lineHeight: 25, color: T.text }}>{d.blurb}</Text>
 
-          {/* Description */}
-          <Text style={styles.sectionTitle}>About</Text>
-          <Text style={styles.description}>{deal.description}</Text>
-
-          <View style={styles.divider} />
-
-          {/* Time slots */}
-          <Text style={styles.sectionTitle}>Select a Time</Text>
-          <View style={styles.slotRow}>
-            {deal.slots.map((slot) => (
-              <TouchableOpacity key={slot} style={styles.slot}>
-                <Text style={styles.slotText}>{slot}</Text>
-              </TouchableOpacity>
+          <View style={{ marginTop: 18, borderRadius: 16, overflow: 'hidden', backgroundColor: T.line, gap: 1 }}>
+            {[
+              ['What you get', d.gets],
+              ['Where', d.addr],
+            ].map(([k, v]) => (
+              <View key={k} style={{ backgroundColor: T.surface, paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', justifyContent: 'space-between', gap: 16 }}>
+                <Text style={{ fontFamily: fontUI(400), fontSize: 14, color: T.muted }}>{k}</Text>
+                <Text style={{ fontFamily: fontUI(400), fontSize: 14.5, color: T.text, textAlign: 'right', flex: 1 }}>{v}</Text>
+              </View>
             ))}
           </View>
 
-          <View style={styles.divider} />
-
-          {/* Group size */}
-          <Text style={styles.sectionTitle}>Group Size</Text>
-          <View style={styles.groupRow}>
-            {[1, 2, 3, 4, 5, 6].map((n) => (
-              <TouchableOpacity key={n} style={[styles.groupBtn, n === 2 && styles.groupBtnActive]}>
-                <Text style={[styles.groupBtnText, n === 2 && styles.groupBtnTextActive]}>{n}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <Placeholder label="map" style={{ height: 120, borderRadius: 16, marginTop: 14 }} />
         </View>
       </ScrollView>
 
-      {/* Sticky CTA */}
-      <View style={styles.footer}>
+      {/* sticky claim bar */}
+      <View
+        style={{
+          position: 'absolute', left: 0, right: 0, bottom: 0,
+          paddingHorizontal: 20, paddingTop: 14, paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 24,
+          backgroundColor: T.bg, borderTopWidth: 0.5, borderTopColor: T.line,
+          flexDirection: 'row', alignItems: 'center', gap: 16,
+        }}
+      >
         <View>
-          <Text style={styles.footerTotal}>$38 total</Text>
-          <Text style={styles.footerNote}>for 2 people</Text>
+          <Text style={{ fontFamily: fontDisplay(600), fontSize: 22, color: T.text }}>
+            {money(d.now)}
+            <Text style={{ fontFamily: fontUI(500), fontSize: 12, color: T.muted }}>{d.unit}</Text>
+          </Text>
+          <Text style={{ fontFamily: fontUI(400), fontSize: 12, color: T.faint, textDecorationLine: 'line-through' }}>usually {money(d.usual)}</Text>
         </View>
-        <TouchableOpacity style={styles.bookButton}>
-          <Text style={styles.bookButtonText}>Book Now</Text>
-        </TouchableOpacity>
+        <View style={{ flex: 1 }}>
+          <Btn full onPress={() => router.push(`/(user)/claim/${d.id}`)}>Claim slot</Btn>
+        </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0D0D0D' },
-  hero: {
-    height: 220,
-    backgroundColor: '#2C2C2E',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  heroEmoji: { fontSize: 72 },
-  backButton: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    backgroundColor: '#0D0D0D80',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  backText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
-  discountBadge: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    backgroundColor: '#FF5C35',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  discountText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
-  body: { padding: 20 },
-  category: { color: '#FF5C35', fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
-  venueName: { color: '#FFFFFF', fontSize: 24, fontWeight: '800', marginBottom: 6 },
-  address: { color: '#8E8E93', fontSize: 14, marginBottom: 16 },
-  priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 8 },
-  dealPrice: { color: '#FFFFFF', fontSize: 28, fontWeight: '800' },
-  originalPrice: { color: '#8E8E93', fontSize: 16, textDecorationLine: 'line-through' },
-  perPerson: { color: '#8E8E93', fontSize: 13 },
-  expires: { color: '#8E8E93', fontSize: 13, marginBottom: 4 },
-  spots: { color: '#FF9F0A', fontSize: 13, fontWeight: '600', marginBottom: 4 },
-  divider: { height: 1, backgroundColor: '#2C2C2E', marginVertical: 20 },
-  sectionTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '700', marginBottom: 12 },
-  description: { color: '#8E8E93', fontSize: 14, lineHeight: 22 },
-  slotRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
-  slot: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: '#1C1C1E',
-    borderWidth: 1,
-    borderColor: '#2C2C2E',
-  },
-  slotText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
-  groupRow: { flexDirection: 'row', gap: 10 },
-  groupBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#1C1C1E',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#2C2C2E',
-  },
-  groupBtnActive: { backgroundColor: '#FF5C35', borderColor: '#FF5C35' },
-  groupBtnText: { color: '#8E8E93', fontSize: 15, fontWeight: '700' },
-  groupBtnTextActive: { color: '#FFFFFF' },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#1C1C1E',
-    borderTopWidth: 1,
-    borderTopColor: '#2C2C2E',
-  },
-  footerTotal: { color: '#FFFFFF', fontSize: 20, fontWeight: '800' },
-  footerNote: { color: '#8E8E93', fontSize: 12 },
-  bookButton: {
-    backgroundColor: '#FF5C35',
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 12,
-  },
-  bookButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-  notFound: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  notFoundText: { color: '#8E8E93', fontSize: 16 },
-});

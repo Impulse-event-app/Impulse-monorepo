@@ -1,0 +1,2664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>impulse — app</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#0b0a09;-webkit-font-smoothing:antialiased}
+  #root{width:100%}
+  button{font-family:inherit}
+  ::-webkit-scrollbar{display:none}
+  *{scrollbar-width:none}
+  @keyframes imp-slide{from{transform:translateX(100%)}to{transform:translateX(0)}}
+  @keyframes imp-rise{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  @keyframes imp-pop{from{transform:scale(.82);opacity:0}to{transform:scale(1);opacity:1}}
+  @keyframes imp-blink{0%,60%{opacity:1}61%,100%{opacity:.25}}
+  @keyframes imp-ring{0%{transform:scale(.37);opacity:.9}70%{opacity:.12}100%{transform:scale(1);opacity:0}}
+  @keyframes imp-fade{from{opacity:0}to{opacity:1}}
+  @keyframes imp-fadeup{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" data-src="ios-frame.jsx">
+// @ds-adherence-ignore -- omelette starter scaffold (raw elements/hex/px by design)
+
+/* BEGIN USAGE */
+// iOS.jsx — Simplified iOS 26 (Liquid Glass) device frame
+// Based on the iOS 26 UI Kit + Figma status bar spec. No assets, no deps.
+// Exports (to window): IOSDevice, IOSStatusBar, IOSNavBar, IOSGlassPill, IOSList, IOSListRow, IOSKeyboard
+//
+// Usage — wrap your screen content in <IOSDevice> to get the bezel, status bar
+// and home indicator (props: title, dark, keyboard):
+//
+//   <IOSDevice title="Settings">
+//     ...your screen content...
+//   </IOSDevice>
+//   <IOSDevice dark title="Search" keyboard>…</IOSDevice>
+/* END USAGE */
+
+// ─────────────────────────────────────────────────────────────
+// Status bar
+// ─────────────────────────────────────────────────────────────
+function IOSStatusBar({ dark = false, time = '9:41' }) {
+  const c = dark ? '#fff' : '#000';
+  return (
+    <div style={{
+      display: 'flex', gap: 154, alignItems: 'center', justifyContent: 'center',
+      padding: '21px 24px 19px', boxSizing: 'border-box',
+      position: 'relative', zIndex: 20, width: '100%',
+    }}>
+      <div style={{ flex: 1, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 1.5 }}>
+        <span style={{
+          fontFamily: '-apple-system, "SF Pro", system-ui', fontWeight: 590,
+          fontSize: 17, lineHeight: '22px', color: c,
+        }}>{time}</span>
+      </div>
+      <div style={{ flex: 1, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, paddingTop: 1, paddingRight: 1 }}>
+        <svg width="19" height="12" viewBox="0 0 19 12">
+          <rect x="0" y="7.5" width="3.2" height="4.5" rx="0.7" fill={c}/>
+          <rect x="4.8" y="5" width="3.2" height="7" rx="0.7" fill={c}/>
+          <rect x="9.6" y="2.5" width="3.2" height="9.5" rx="0.7" fill={c}/>
+          <rect x="14.4" y="0" width="3.2" height="12" rx="0.7" fill={c}/>
+        </svg>
+        <svg width="17" height="12" viewBox="0 0 17 12">
+          <path d="M8.5 3.2C10.8 3.2 12.9 4.1 14.4 5.6L15.5 4.5C13.7 2.7 11.2 1.5 8.5 1.5C5.8 1.5 3.3 2.7 1.5 4.5L2.6 5.6C4.1 4.1 6.2 3.2 8.5 3.2Z" fill={c}/>
+          <path d="M8.5 6.8C9.9 6.8 11.1 7.3 12 8.2L13.1 7.1C11.8 5.9 10.2 5.1 8.5 5.1C6.8 5.1 5.2 5.9 3.9 7.1L5 8.2C5.9 7.3 7.1 6.8 8.5 6.8Z" fill={c}/>
+          <circle cx="8.5" cy="10.5" r="1.5" fill={c}/>
+        </svg>
+        <svg width="27" height="13" viewBox="0 0 27 13">
+          <rect x="0.5" y="0.5" width="23" height="12" rx="3.5" stroke={c} strokeOpacity="0.35" fill="none"/>
+          <rect x="2" y="2" width="20" height="9" rx="2" fill={c}/>
+          <path d="M25 4.5V8.5C25.8 8.2 26.5 7.2 26.5 6.5C26.5 5.8 25.8 4.8 25 4.5Z" fill={c} fillOpacity="0.4"/>
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Liquid glass pill — blur + tint + shine
+// ─────────────────────────────────────────────────────────────
+function IOSGlassPill({ children, dark = false, style = {} }) {
+  return (
+    <div style={{
+      height: 44, minWidth: 44, borderRadius: 9999,
+      position: 'relative', overflow: 'hidden',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      boxShadow: dark
+        ? '0 2px 6px rgba(0,0,0,0.35), 0 6px 16px rgba(0,0,0,0.2)'
+        : '0 1px 3px rgba(0,0,0,0.07), 0 3px 10px rgba(0,0,0,0.06)',
+      ...style,
+    }}>
+      {/* blur + tint */}
+      <div style={{
+        position: 'absolute', inset: 0, borderRadius: 9999,
+        backdropFilter: 'blur(12px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+        background: dark ? 'rgba(120,120,128,0.28)' : 'rgba(255,255,255,0.5)',
+      }} />
+      {/* shine */}
+      <div style={{
+        position: 'absolute', inset: 0, borderRadius: 9999,
+        boxShadow: dark
+          ? 'inset 1.5px 1.5px 1px rgba(255,255,255,0.15), inset -1px -1px 1px rgba(255,255,255,0.08)'
+          : 'inset 1.5px 1.5px 1px rgba(255,255,255,0.7), inset -1px -1px 1px rgba(255,255,255,0.4)',
+        border: dark ? '0.5px solid rgba(255,255,255,0.15)' : '0.5px solid rgba(0,0,0,0.06)',
+      }} />
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', padding: '0 4px' }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Navigation bar — glass pills + large title
+// ─────────────────────────────────────────────────────────────
+function IOSNavBar({ title = 'Title', dark = false, trailingIcon = true }) {
+  const muted = dark ? 'rgba(255,255,255,0.6)' : '#404040';
+  const text = dark ? '#fff' : '#000';
+  const pillIcon = (content) => (
+    <IOSGlassPill dark={dark}>
+      <div style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {content}
+      </div>
+    </IOSGlassPill>
+  );
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: 10,
+      paddingTop: 62, paddingBottom: 10, position: 'relative', zIndex: 5,
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '0 16px',
+      }}>
+        {/* back chevron */}
+        {pillIcon(
+          <svg width="12" height="20" viewBox="0 0 12 20" fill="none" style={{ marginLeft: -1 }}>
+            <path d="M10 2L2 10l8 8" stroke={muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        )}
+        {/* trailing ellipsis */}
+        {trailingIcon && pillIcon(
+          <svg width="22" height="6" viewBox="0 0 22 6">
+            <circle cx="3" cy="3" r="2.5" fill={muted}/>
+            <circle cx="11" cy="3" r="2.5" fill={muted}/>
+            <circle cx="19" cy="3" r="2.5" fill={muted}/>
+          </svg>
+        )}
+      </div>
+      {/* large title */}
+      <div style={{
+        padding: '0 16px',
+        fontFamily: '-apple-system, system-ui',
+        fontSize: 34, fontWeight: 700, lineHeight: '41px',
+        color: text, letterSpacing: 0.4,
+      }}>{title}</div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Grouped list (inset card, r:26) + row (52px)
+// ─────────────────────────────────────────────────────────────
+function IOSListRow({ title, detail, icon, chevron = true, isLast = false, dark = false }) {
+  const text = dark ? '#fff' : '#000';
+  const sec = dark ? 'rgba(235,235,245,0.6)' : 'rgba(60,60,67,0.6)';
+  const ter = dark ? 'rgba(235,235,245,0.3)' : 'rgba(60,60,67,0.3)';
+  const sep = dark ? 'rgba(84,84,88,0.65)' : 'rgba(60,60,67,0.12)';
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', minHeight: 52,
+      padding: '0 16px', position: 'relative',
+      fontFamily: '-apple-system, system-ui', fontSize: 17,
+      letterSpacing: -0.43,
+    }}>
+      {icon && (
+        <div style={{
+          width: 30, height: 30, borderRadius: 7, background: icon,
+          marginRight: 12, flexShrink: 0,
+        }} />
+      )}
+      <div style={{ flex: 1, color: text }}>{title}</div>
+      {detail && <span style={{ color: sec, marginRight: 6 }}>{detail}</span>}
+      {chevron && (
+        <svg width="8" height="14" viewBox="0 0 8 14" style={{ flexShrink: 0 }}>
+          <path d="M1 1l6 6-6 6" stroke={ter} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      )}
+      {!isLast && (
+        <div style={{
+          position: 'absolute', bottom: 0, right: 0,
+          left: icon ? 58 : 16, height: 0.5, background: sep,
+        }} />
+      )}
+    </div>
+  );
+}
+
+function IOSList({ header, children, dark = false }) {
+  const hc = dark ? 'rgba(235,235,245,0.6)' : 'rgba(60,60,67,0.6)';
+  const bg = dark ? '#1C1C1E' : '#fff';
+  return (
+    <div>
+      {header && (
+        <div style={{
+          fontFamily: '-apple-system, system-ui', fontSize: 13,
+          color: hc, textTransform: 'uppercase',
+          padding: '8px 36px 6px', letterSpacing: -0.08,
+        }}>{header}</div>
+      )}
+      <div style={{
+        background: bg, borderRadius: 26,
+        margin: '0 16px', overflow: 'hidden',
+      }}>{children}</div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Device frame
+// ─────────────────────────────────────────────────────────────
+function IOSDevice({
+  children, width = 402, height = 874, dark = false,
+  title, keyboard = false,
+}) {
+  return (
+    <div style={{
+      width, height, borderRadius: 48, overflow: 'hidden',
+      position: 'relative', background: dark ? '#000' : '#F2F2F7',
+      boxShadow: '0 40px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.12)',
+      fontFamily: '-apple-system, system-ui, sans-serif',
+      WebkitFontSmoothing: 'antialiased',
+    }}>
+      {/* dynamic island */}
+      <div style={{
+        position: 'absolute', top: 11, left: '50%', transform: 'translateX(-50%)',
+        width: 126, height: 37, borderRadius: 24, background: '#000', zIndex: 50,
+      }} />
+      {/* status bar (absolute) */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 }}>
+        <IOSStatusBar dark={dark} />
+      </div>
+      {/* nav + content */}
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        {title !== undefined && <IOSNavBar title={title} dark={dark} />}
+        <div style={{ flex: 1, overflow: 'auto' }}>{children}</div>
+        {keyboard && <IOSKeyboard dark={dark} />}
+      </div>
+      {/* home indicator — always on top */}
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 60,
+        height: 34, display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
+        paddingBottom: 8, pointerEvents: 'none',
+      }}>
+        <div style={{
+          width: 139, height: 5, borderRadius: 100,
+          background: dark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.25)',
+        }} />
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Keyboard — iOS 26 liquid glass
+// ─────────────────────────────────────────────────────────────
+function IOSKeyboard({ dark = false }) {
+  const glyph = dark ? 'rgba(255,255,255,0.7)' : '#595959';
+  const sugg = dark ? 'rgba(255,255,255,0.6)' : '#333';
+  const keyBg = dark ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.85)';
+
+  // special-key icons
+  const icons = {
+    shift: <svg width="19" height="17" viewBox="0 0 19 17"><path d="M9.5 1L1 9.5h4.5V16h8V9.5H18L9.5 1z" fill={glyph}/></svg>,
+    del: <svg width="23" height="17" viewBox="0 0 23 17"><path d="M7 1h13a2 2 0 012 2v11a2 2 0 01-2 2H7l-6-7.5L7 1z" fill="none" stroke={glyph} strokeWidth="1.6" strokeLinejoin="round"/><path d="M10 5l7 7M17 5l-7 7" stroke={glyph} strokeWidth="1.6" strokeLinecap="round"/></svg>,
+    ret: <svg width="20" height="14" viewBox="0 0 20 14"><path d="M18 1v6H4m0 0l4-4M4 7l4 4" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  };
+
+  const key = (content, { w, flex, ret, fs = 25, k } = {}) => (
+    <div key={k} style={{
+      height: 42, borderRadius: 8.5,
+      flex: flex ? 1 : undefined, width: w, minWidth: 0,
+      background: ret ? '#08f' : keyBg,
+      boxShadow: '0 1px 0 rgba(0,0,0,0.075)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: '-apple-system, "SF Compact", system-ui',
+      fontSize: fs, fontWeight: 458, color: ret ? '#fff' : glyph,
+    }}>{content}</div>
+  );
+
+  const row = (keys, pad = 0) => (
+    <div style={{ display: 'flex', gap: 6.5, justifyContent: 'center', padding: `0 ${pad}px` }}>
+      {keys.map(l => key(l, { flex: true, k: l }))}
+    </div>
+  );
+
+  return (
+    <div style={{
+      position: 'relative', zIndex: 15, borderRadius: 27, overflow: 'hidden',
+      padding: '11px 0 2px',
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      boxShadow: dark
+        ? '0 -2px 20px rgba(0,0,0,0.09)'
+        : '0 -1px 6px rgba(0,0,0,0.018), 0 -3px 20px rgba(0,0,0,0.012)',
+    }}>
+      {/* liquid glass bg — same recipe as nav pills */}
+      <div style={{
+        position: 'absolute', inset: 0, borderRadius: 27,
+        backdropFilter: 'blur(12px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+        background: dark ? 'rgba(120,120,128,0.14)' : 'rgba(255,255,255,0.25)',
+      }} />
+      <div style={{
+        position: 'absolute', inset: 0, borderRadius: 27,
+        boxShadow: dark
+          ? 'inset 1.5px 1.5px 1px rgba(255,255,255,0.15)'
+          : 'inset 1.5px 1.5px 1px rgba(255,255,255,0.7), inset -1px -1px 1px rgba(255,255,255,0.4)',
+        border: dark ? '0.5px solid rgba(255,255,255,0.15)' : '0.5px solid rgba(0,0,0,0.06)',
+        pointerEvents: 'none',
+      }} />
+
+      {/* autocorrect bar */}
+      <div style={{
+        display: 'flex', gap: 20, alignItems: 'center',
+        padding: '8px 22px 13px', width: '100%', boxSizing: 'border-box',
+        position: 'relative',
+      }}>
+        {['"The"', 'the', 'to'].map((w, i) => (
+          <React.Fragment key={i}>
+            {i > 0 && <div style={{ width: 1, height: 25, background: '#ccc', opacity: 0.3 }} />}
+            <div style={{
+              flex: 1, textAlign: 'center',
+              fontFamily: '-apple-system, system-ui', fontSize: 17,
+              color: sugg, letterSpacing: -0.43, lineHeight: '22px',
+            }}>{w}</div>
+          </React.Fragment>
+        ))}
+      </div>
+
+      {/* key layout */}
+      <div style={{
+        display: 'flex', flexDirection: 'column', gap: 13,
+        padding: '0 6.5px', width: '100%', boxSizing: 'border-box',
+        position: 'relative',
+      }}>
+        {row(['q','w','e','r','t','y','u','i','o','p'])}
+        {row(['a','s','d','f','g','h','j','k','l'], 20)}
+        <div style={{ display: 'flex', gap: 14.25, alignItems: 'center' }}>
+          {key(icons.shift, { w: 45, k: 'shift' })}
+          <div style={{ display: 'flex', gap: 6.5, flex: 1 }}>
+            {['z','x','c','v','b','n','m'].map(l => key(l, { flex: true, k: l }))}
+          </div>
+          {key(icons.del, { w: 45, k: 'del' })}
+        </div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {key('ABC', { w: 92.25, fs: 18, k: 'abc' })}
+          {key('', { flex: true, k: 'space' })}
+          {key(icons.ret, { w: 92.25, ret: true, k: 'ret' })}
+        </div>
+      </div>
+
+      {/* bottom spacer (emoji+mic area, icons omitted) */}
+      <div style={{ height: 56, width: '100%', position: 'relative' }} />
+    </div>
+  );
+}
+
+Object.assign(window, {
+  IOSDevice, IOSStatusBar, IOSNavBar, IOSGlassPill, IOSList, IOSListRow, IOSKeyboard,
+});
+
+</script>
+
+<script type="text/babel" data-src="tweaks-panel.jsx">
+// @ds-adherence-ignore -- omelette starter scaffold (raw elements/hex/px by design)
+
+/* BEGIN USAGE */
+// tweaks-panel.jsx
+// Reusable Tweaks shell + form-control helpers.
+// Exports (to window): useTweaks, TweaksPanel, TweakSection, TweakRow, TweakSlider,
+//   TweakToggle, TweakRadio, TweakSelect, TweakText, TweakNumber, TweakColor, TweakButton.
+//
+// Owns the host protocol (listens for __activate_edit_mode / __deactivate_edit_mode,
+// posts __edit_mode_available / __edit_mode_set_keys / __edit_mode_dismissed) so
+// individual prototypes don't re-roll it. Ships a consistent set of controls so you
+// don't hand-draw <input type="range">, segmented radios, steppers, etc.
+//
+// Usage (in an HTML file that loads React + Babel):
+//
+//   const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+//     "primaryColor": "#D97757",
+//     "palette": ["#D97757", "#29261b", "#f6f4ef"],
+//     "fontSize": 16,
+//     "density": "regular",
+//     "dark": false
+//   }/*EDITMODE-END*/;
+//
+//   function App() {
+//     const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+//     return (
+//       <div style={{ fontSize: t.fontSize, color: t.primaryColor }}>
+//         Hello
+//         <TweaksPanel>
+//           <TweakSection label="Typography" />
+//           <TweakSlider label="Font size" value={t.fontSize} min={10} max={32} unit="px"
+//                        onChange={(v) => setTweak('fontSize', v)} />
+//           <TweakRadio  label="Density" value={t.density}
+//                        options={['compact', 'regular', 'comfy']}
+//                        onChange={(v) => setTweak('density', v)} />
+//           <TweakSection label="Theme" />
+//           <TweakColor  label="Primary" value={t.primaryColor}
+//                        options={['#D97757', '#2A6FDB', '#1F8A5B', '#7A5AE0']}
+//                        onChange={(v) => setTweak('primaryColor', v)} />
+//           <TweakColor  label="Palette" value={t.palette}
+//                        options={[['#D97757', '#29261b', '#f6f4ef'],
+//                                  ['#475569', '#0f172a', '#f1f5f9']]}
+//                        onChange={(v) => setTweak('palette', v)} />
+//           <TweakToggle label="Dark mode" value={t.dark}
+//                        onChange={(v) => setTweak('dark', v)} />
+//         </TweaksPanel>
+//       </div>
+//     );
+//   }
+//
+// TweakRadio is the segmented control for 2–3 short options (auto-falls-back to
+// TweakSelect past ~16/~10 chars per label); reach for TweakSelect directly when
+// options are many or long. For color tweaks always curate 3-4 options rather than
+// a free picker; an option can also be a whole 2–5 color palette (the stored value
+// is the array). The Tweak* controls are a floor, not a ceiling — build custom
+// controls inside the panel if a tweak calls for UI they don't cover.
+/* END USAGE */
+// ─────────────────────────────────────────────────────────────────────────────
+
+const __TWEAKS_STYLE = `
+  .twk-panel{position:fixed;right:16px;bottom:16px;z-index:2147483646;width:280px;
+    max-height:calc(100vh - 32px);display:flex;flex-direction:column;
+    transform:scale(var(--dc-inv-zoom,1));transform-origin:bottom right;
+    background:rgba(250,249,247,.78);color:#29261b;
+    -webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);
+    border:.5px solid rgba(255,255,255,.6);border-radius:14px;
+    box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 12px 40px rgba(0,0,0,.18);
+    font:11.5px/1.4 ui-sans-serif,system-ui,-apple-system,sans-serif;overflow:hidden}
+  .twk-hd{display:flex;align-items:center;justify-content:space-between;
+    padding:10px 8px 10px 14px;cursor:move;user-select:none}
+  .twk-hd b{font-size:12px;font-weight:600;letter-spacing:.01em}
+  .twk-x{appearance:none;border:0;background:transparent;color:rgba(41,38,27,.55);
+    width:22px;height:22px;border-radius:6px;cursor:default;font-size:13px;line-height:1}
+  .twk-x:hover{background:rgba(0,0,0,.06);color:#29261b}
+  .twk-body{padding:2px 14px 14px;display:flex;flex-direction:column;gap:10px;
+    overflow-y:auto;overflow-x:hidden;min-height:0;
+    scrollbar-width:thin;scrollbar-color:rgba(0,0,0,.15) transparent}
+  .twk-body::-webkit-scrollbar{width:8px}
+  .twk-body::-webkit-scrollbar-track{background:transparent;margin:2px}
+  .twk-body::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:4px;
+    border:2px solid transparent;background-clip:content-box}
+  .twk-body::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.25);
+    border:2px solid transparent;background-clip:content-box}
+  .twk-row{display:flex;flex-direction:column;gap:5px}
+  .twk-row-h{flex-direction:row;align-items:center;justify-content:space-between;gap:10px}
+  .twk-lbl{display:flex;justify-content:space-between;align-items:baseline;
+    color:rgba(41,38,27,.72)}
+  .twk-lbl>span:first-child{font-weight:500}
+  .twk-val{color:rgba(41,38,27,.5);font-variant-numeric:tabular-nums}
+
+  .twk-sect{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    color:rgba(41,38,27,.45);padding:10px 0 0}
+  .twk-sect:first-child{padding-top:0}
+
+  .twk-field{appearance:none;box-sizing:border-box;width:100%;min-width:0;height:26px;padding:0 8px;
+    border:.5px solid rgba(0,0,0,.1);border-radius:7px;
+    background:rgba(255,255,255,.6);color:inherit;font:inherit;outline:none}
+  .twk-field:focus{border-color:rgba(0,0,0,.25);background:rgba(255,255,255,.85)}
+  select.twk-field{padding-right:22px;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='rgba(0,0,0,.5)' d='M0 0h10L5 6z'/></svg>");
+    background-repeat:no-repeat;background-position:right 8px center}
+
+  .twk-slider{appearance:none;-webkit-appearance:none;width:100%;height:4px;margin:6px 0;
+    border-radius:999px;background:rgba(0,0,0,.12);outline:none}
+  .twk-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
+    width:14px;height:14px;border-radius:50%;background:#fff;
+    border:.5px solid rgba(0,0,0,.12);box-shadow:0 1px 3px rgba(0,0,0,.2);cursor:default}
+  .twk-slider::-moz-range-thumb{width:14px;height:14px;border-radius:50%;
+    background:#fff;border:.5px solid rgba(0,0,0,.12);box-shadow:0 1px 3px rgba(0,0,0,.2);cursor:default}
+
+  .twk-seg{position:relative;display:flex;padding:2px;border-radius:8px;
+    background:rgba(0,0,0,.06);user-select:none}
+  .twk-seg-thumb{position:absolute;top:2px;bottom:2px;border-radius:6px;
+    background:rgba(255,255,255,.9);box-shadow:0 1px 2px rgba(0,0,0,.12);
+    transition:left .15s cubic-bezier(.3,.7,.4,1),width .15s}
+  .twk-seg.dragging .twk-seg-thumb{transition:none}
+  .twk-seg button{appearance:none;position:relative;z-index:1;flex:1;border:0;
+    background:transparent;color:inherit;font:inherit;font-weight:500;min-height:22px;
+    border-radius:6px;cursor:default;padding:4px 6px;line-height:1.2;
+    overflow-wrap:anywhere}
+
+  .twk-toggle{position:relative;width:32px;height:18px;border:0;border-radius:999px;
+    background:rgba(0,0,0,.15);transition:background .15s;cursor:default;padding:0}
+  .twk-toggle[data-on="1"]{background:#34c759}
+  .twk-toggle i{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+  .twk-toggle[data-on="1"] i{transform:translateX(14px)}
+
+  .twk-num{display:flex;align-items:center;box-sizing:border-box;min-width:0;height:26px;padding:0 0 0 8px;
+    border:.5px solid rgba(0,0,0,.1);border-radius:7px;background:rgba(255,255,255,.6)}
+  .twk-num-lbl{font-weight:500;color:rgba(41,38,27,.6);cursor:ew-resize;
+    user-select:none;padding-right:8px}
+  .twk-num input{flex:1;min-width:0;height:100%;border:0;background:transparent;
+    font:inherit;font-variant-numeric:tabular-nums;text-align:right;padding:0 8px 0 0;
+    outline:none;color:inherit;-moz-appearance:textfield}
+  .twk-num input::-webkit-inner-spin-button,.twk-num input::-webkit-outer-spin-button{
+    -webkit-appearance:none;margin:0}
+  .twk-num-unit{padding-right:8px;color:rgba(41,38,27,.45)}
+
+  .twk-btn{appearance:none;height:26px;padding:0 12px;border:0;border-radius:7px;
+    background:rgba(0,0,0,.78);color:#fff;font:inherit;font-weight:500;cursor:default}
+  .twk-btn:hover{background:rgba(0,0,0,.88)}
+  .twk-btn.secondary{background:rgba(0,0,0,.06);color:inherit}
+  .twk-btn.secondary:hover{background:rgba(0,0,0,.1)}
+
+  .twk-swatch{appearance:none;-webkit-appearance:none;width:56px;height:22px;
+    border:.5px solid rgba(0,0,0,.1);border-radius:6px;padding:0;cursor:default;
+    background:transparent;flex-shrink:0}
+  .twk-swatch::-webkit-color-swatch-wrapper{padding:0}
+  .twk-swatch::-webkit-color-swatch{border:0;border-radius:5.5px}
+  .twk-swatch::-moz-color-swatch{border:0;border-radius:5.5px}
+
+  .twk-chips{display:flex;gap:6px}
+  .twk-chip{position:relative;appearance:none;flex:1;min-width:0;height:46px;
+    padding:0;border:0;border-radius:6px;overflow:hidden;cursor:default;
+    box-shadow:0 0 0 .5px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.06);
+    transition:transform .12s cubic-bezier(.3,.7,.4,1),box-shadow .12s}
+  .twk-chip:hover{transform:translateY(-1px);
+    box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 4px 10px rgba(0,0,0,.12)}
+  .twk-chip[data-on="1"]{box-shadow:0 0 0 1.5px rgba(0,0,0,.85),
+    0 2px 6px rgba(0,0,0,.15)}
+  .twk-chip>span{position:absolute;top:0;bottom:0;right:0;width:34%;
+    display:flex;flex-direction:column;box-shadow:-1px 0 0 rgba(0,0,0,.1)}
+  .twk-chip>span>i{flex:1;box-shadow:0 -1px 0 rgba(0,0,0,.1)}
+  .twk-chip>span>i:first-child{box-shadow:none}
+  .twk-chip svg{position:absolute;top:6px;left:6px;width:13px;height:13px;
+    filter:drop-shadow(0 1px 1px rgba(0,0,0,.3))}
+`;
+
+// ── useTweaks ───────────────────────────────────────────────────────────────
+// Single source of truth for tweak values. setTweak persists via the host
+// (__edit_mode_set_keys → host rewrites the EDITMODE block on disk).
+function useTweaks(defaults) {
+  const [values, setValues] = React.useState(defaults);
+  // Accepts either setTweak('key', value) or setTweak({ key: value, ... }) so a
+  // useState-style call doesn't write a "[object Object]" key into the persisted
+  // JSON block.
+  const setTweak = React.useCallback((keyOrEdits, val) => {
+    const edits = typeof keyOrEdits === 'object' && keyOrEdits !== null
+      ? keyOrEdits : { [keyOrEdits]: val };
+    setValues((prev) => ({ ...prev, ...edits }));
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits }, '*');
+    // Same-window signal so in-page listeners (deck-stage rail thumbnails)
+    // can react — the parent message only reaches the host, not peers.
+    window.dispatchEvent(new CustomEvent('tweakchange', { detail: edits }));
+  }, []);
+  return [values, setTweak];
+}
+
+// ── TweaksPanel ─────────────────────────────────────────────────────────────
+// Floating shell. Registers the protocol listener BEFORE announcing
+// availability — if the announce ran first, the host's activate could land
+// before our handler exists and the toolbar toggle would silently no-op.
+// The close button posts __edit_mode_dismissed so the host's toolbar toggle
+// flips off in lockstep; the host echoes __deactivate_edit_mode back which
+// is what actually hides the panel.
+function TweaksPanel({ title = 'Tweaks', children }) {
+  const [open, setOpen] = React.useState(false);
+  const dragRef = React.useRef(null);
+  const offsetRef = React.useRef({ x: 16, y: 16 });
+  const PAD = 16;
+
+  const clampToViewport = React.useCallback(() => {
+    const panel = dragRef.current;
+    if (!panel) return;
+    const w = panel.offsetWidth, h = panel.offsetHeight;
+    const maxRight = Math.max(PAD, window.innerWidth - w - PAD);
+    const maxBottom = Math.max(PAD, window.innerHeight - h - PAD);
+    offsetRef.current = {
+      x: Math.min(maxRight, Math.max(PAD, offsetRef.current.x)),
+      y: Math.min(maxBottom, Math.max(PAD, offsetRef.current.y)),
+    };
+    panel.style.right = offsetRef.current.x + 'px';
+    panel.style.bottom = offsetRef.current.y + 'px';
+  }, []);
+
+  React.useEffect(() => {
+    if (!open) return;
+    clampToViewport();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', clampToViewport);
+      return () => window.removeEventListener('resize', clampToViewport);
+    }
+    const ro = new ResizeObserver(clampToViewport);
+    ro.observe(document.documentElement);
+    return () => ro.disconnect();
+  }, [open, clampToViewport]);
+
+  React.useEffect(() => {
+    const onMsg = (e) => {
+      const t = e?.data?.type;
+      if (t === '__activate_edit_mode') setOpen(true);
+      else if (t === '__deactivate_edit_mode') setOpen(false);
+    };
+    window.addEventListener('message', onMsg);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  const dismiss = () => {
+    setOpen(false);
+    window.parent.postMessage({ type: '__edit_mode_dismissed' }, '*');
+  };
+
+  const onDragStart = (e) => {
+    const panel = dragRef.current;
+    if (!panel) return;
+    const r = panel.getBoundingClientRect();
+    const sx = e.clientX, sy = e.clientY;
+    const startRight = window.innerWidth - r.right;
+    const startBottom = window.innerHeight - r.bottom;
+    const move = (ev) => {
+      offsetRef.current = {
+        x: startRight - (ev.clientX - sx),
+        y: startBottom - (ev.clientY - sy),
+      };
+      clampToViewport();
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  };
+
+  if (!open) return null;
+  return (
+    <>
+      <style>{__TWEAKS_STYLE}</style>
+      <div ref={dragRef} className="twk-panel" data-omelette-chrome=""
+           style={{ right: offsetRef.current.x, bottom: offsetRef.current.y }}>
+        <div className="twk-hd" onMouseDown={onDragStart}>
+          <b>{title}</b>
+          <button className="twk-x" aria-label="Close tweaks"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={dismiss}>✕</button>
+        </div>
+        <div className="twk-body">
+          {children}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Layout helpers ──────────────────────────────────────────────────────────
+
+function TweakSection({ label, children }) {
+  return (
+    <>
+      <div className="twk-sect">{label}</div>
+      {children}
+    </>
+  );
+}
+
+function TweakRow({ label, value, children, inline = false }) {
+  return (
+    <div className={inline ? 'twk-row twk-row-h' : 'twk-row'}>
+      <div className="twk-lbl">
+        <span>{label}</span>
+        {value != null && <span className="twk-val">{value}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ── Controls ────────────────────────────────────────────────────────────────
+
+function TweakSlider({ label, value, min = 0, max = 100, step = 1, unit = '', onChange }) {
+  return (
+    <TweakRow label={label} value={`${value}${unit}`}>
+      <input type="range" className="twk-slider" min={min} max={max} step={step}
+             value={value} onChange={(e) => onChange(Number(e.target.value))} />
+    </TweakRow>
+  );
+}
+
+function TweakToggle({ label, value, onChange }) {
+  return (
+    <div className="twk-row twk-row-h">
+      <div className="twk-lbl"><span>{label}</span></div>
+      <button type="button" className="twk-toggle" data-on={value ? '1' : '0'}
+              role="switch" aria-checked={!!value}
+              onClick={() => onChange(!value)}><i /></button>
+    </div>
+  );
+}
+
+function TweakRadio({ label, value, options, onChange }) {
+  const trackRef = React.useRef(null);
+  const [dragging, setDragging] = React.useState(false);
+  // The active value is read by pointer-move handlers attached for the lifetime
+  // of a drag — ref it so a stale closure doesn't fire onChange for every move.
+  const valueRef = React.useRef(value);
+  valueRef.current = value;
+
+  // Segments wrap mid-word once per-segment width runs out. The track is
+  // ~248px (280 panel − 28 body pad − 4 seg pad), each button loses 12px
+  // to its own padding, and 11.5px system-ui averages ~6.3px/char — so 2
+  // options fit ~16 chars each, 3 fit ~10. Past that (or >3 options), fall
+  // back to a dropdown rather than wrap.
+  const labelLen = (o) => String(typeof o === 'object' ? o.label : o).length;
+  const maxLen = options.reduce((m, o) => Math.max(m, labelLen(o)), 0);
+  const fitsAsSegments = maxLen <= ({ 2: 16, 3: 10 }[options.length] ?? 0);
+  if (!fitsAsSegments) {
+    // <select> emits strings — map back to the original option value so the
+    // fallback stays type-preserving (numbers, booleans) like the segment path.
+    const resolve = (s) => {
+      const m = options.find((o) => String(typeof o === 'object' ? o.value : o) === s);
+      return m === undefined ? s : typeof m === 'object' ? m.value : m;
+    };
+    return <TweakSelect label={label} value={value} options={options}
+                        onChange={(s) => onChange(resolve(s))} />;
+  }
+  const opts = options.map((o) => (typeof o === 'object' ? o : { value: o, label: o }));
+  const idx = Math.max(0, opts.findIndex((o) => o.value === value));
+  const n = opts.length;
+
+  const segAt = (clientX) => {
+    const r = trackRef.current.getBoundingClientRect();
+    const inner = r.width - 4;
+    const i = Math.floor(((clientX - r.left - 2) / inner) * n);
+    return opts[Math.max(0, Math.min(n - 1, i))].value;
+  };
+
+  const onPointerDown = (e) => {
+    setDragging(true);
+    const v0 = segAt(e.clientX);
+    if (v0 !== valueRef.current) onChange(v0);
+    const move = (ev) => {
+      if (!trackRef.current) return;
+      const v = segAt(ev.clientX);
+      if (v !== valueRef.current) onChange(v);
+    };
+    const up = () => {
+      setDragging(false);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  return (
+    <TweakRow label={label}>
+      <div ref={trackRef} role="radiogroup" onPointerDown={onPointerDown}
+           className={dragging ? 'twk-seg dragging' : 'twk-seg'}>
+        <div className="twk-seg-thumb"
+             style={{ left: `calc(2px + ${idx} * (100% - 4px) / ${n})`,
+                      width: `calc((100% - 4px) / ${n})` }} />
+        {opts.map((o) => (
+          <button key={o.value} type="button" role="radio" aria-checked={o.value === value}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </TweakRow>
+  );
+}
+
+function TweakSelect({ label, value, options, onChange }) {
+  return (
+    <TweakRow label={label}>
+      <select className="twk-field" value={value} onChange={(e) => onChange(e.target.value)}>
+        {options.map((o) => {
+          const v = typeof o === 'object' ? o.value : o;
+          const l = typeof o === 'object' ? o.label : o;
+          return <option key={v} value={v}>{l}</option>;
+        })}
+      </select>
+    </TweakRow>
+  );
+}
+
+function TweakText({ label, value, placeholder, onChange }) {
+  return (
+    <TweakRow label={label}>
+      <input className="twk-field" type="text" value={value} placeholder={placeholder}
+             onChange={(e) => onChange(e.target.value)} />
+    </TweakRow>
+  );
+}
+
+function TweakNumber({ label, value, min, max, step = 1, unit = '', onChange }) {
+  const clamp = (n) => {
+    if (min != null && n < min) return min;
+    if (max != null && n > max) return max;
+    return n;
+  };
+  const startRef = React.useRef({ x: 0, val: 0 });
+  const onScrubStart = (e) => {
+    e.preventDefault();
+    startRef.current = { x: e.clientX, val: value };
+    const decimals = (String(step).split('.')[1] || '').length;
+    const move = (ev) => {
+      const dx = ev.clientX - startRef.current.x;
+      const raw = startRef.current.val + dx * step;
+      const snapped = Math.round(raw / step) * step;
+      onChange(clamp(Number(snapped.toFixed(decimals))));
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  return (
+    <div className="twk-num">
+      <span className="twk-num-lbl" onPointerDown={onScrubStart}>{label}</span>
+      <input type="number" value={value} min={min} max={max} step={step}
+             onChange={(e) => onChange(clamp(Number(e.target.value)))} />
+      {unit && <span className="twk-num-unit">{unit}</span>}
+    </div>
+  );
+}
+
+// Relative-luminance contrast pick — checkmarks drawn over a swatch need to
+// read on both #111 and #fafafa without per-option configuration. Hex input
+// only (#rgb / #rrggbb); named or rgb()/hsl() colors fall through to "light".
+function __twkIsLight(hex) {
+  const h = String(hex).replace('#', '');
+  const x = h.length === 3 ? h.replace(/./g, (c) => c + c) : h.padEnd(6, '0');
+  const n = parseInt(x.slice(0, 6), 16);
+  if (Number.isNaN(n)) return true;
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return r * 299 + g * 587 + b * 114 > 148000;
+}
+
+const __TwkCheck = ({ light }) => (
+  <svg viewBox="0 0 14 14" aria-hidden="true">
+    <path d="M3 7.2 5.8 10 11 4.2" fill="none" strokeWidth="2.2"
+          strokeLinecap="round" strokeLinejoin="round"
+          stroke={light ? 'rgba(0,0,0,.78)' : '#fff'} />
+  </svg>
+);
+
+// TweakColor — curated color/palette picker. Each option is either a single
+// hex string or an array of 1-5 hex strings; the card adapts — a lone color
+// renders solid, a palette renders colors[0] as the hero (left ~2/3) with the
+// rest stacked in a sharp column on the right. onChange emits the
+// option in the shape it was passed (string stays string, array stays array).
+// Without options it falls back to the native color input for back-compat.
+function TweakColor({ label, value, options, onChange }) {
+  if (!options || !options.length) {
+    return (
+      <div className="twk-row twk-row-h">
+        <div className="twk-lbl"><span>{label}</span></div>
+        <input type="color" className="twk-swatch" value={value}
+               onChange={(e) => onChange(e.target.value)} />
+      </div>
+    );
+  }
+  // Native <input type=color> emits lowercase hex per the HTML spec, so
+  // compare case-insensitively. String() guards JSON.stringify(undefined),
+  // which returns the primitive undefined (no .toLowerCase).
+  const key = (o) => String(JSON.stringify(o)).toLowerCase();
+  const cur = key(value);
+  return (
+    <TweakRow label={label}>
+      <div className="twk-chips" role="radiogroup">
+        {options.map((o, i) => {
+          const colors = Array.isArray(o) ? o : [o];
+          const [hero, ...rest] = colors;
+          const sup = rest.slice(0, 4);
+          const on = key(o) === cur;
+          return (
+            <button key={i} type="button" className="twk-chip" role="radio"
+                    aria-checked={on} data-on={on ? '1' : '0'}
+                    aria-label={colors.join(', ')} title={colors.join(' · ')}
+                    style={{ background: hero }}
+                    onClick={() => onChange(o)}>
+              {sup.length > 0 && (
+                <span>
+                  {sup.map((c, j) => <i key={j} style={{ background: c }} />)}
+                </span>
+              )}
+              {on && <__TwkCheck light={__twkIsLight(hero)} />}
+            </button>
+          );
+        })}
+      </div>
+    </TweakRow>
+  );
+}
+
+function TweakButton({ label, onClick, secondary = false }) {
+  return (
+    <button type="button" className={secondary ? 'twk-btn secondary' : 'twk-btn'}
+            onClick={onClick}>{label}</button>
+  );
+}
+
+Object.assign(window, {
+  useTweaks, TweaksPanel, TweakSection, TweakRow,
+  TweakSlider, TweakToggle, TweakRadio, TweakSelect,
+  TweakText, TweakNumber, TweakColor, TweakButton,
+});
+
+</script>
+
+<script type="text/babel" data-src="app-data.jsx">
+// app-data.jsx — Impulse app: theme tokens, dataset, helpers
+// Exports (window): ThemeCtx, useT, tokens, DROPS, CATEGORIES, money, pct, useCountdown, fmtCountdown
+
+const ThemeCtx = React.createContext(null);
+function useT() { return React.useContext(ThemeCtx); }
+
+// ── theme tokens ─────────────────────────────────────────────
+function hexA(hex, a) {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+function tokens(dark, accent = "#FF5A4D") {
+  return dark
+    ? {
+        dark: true,
+        bg: "#0F0E0D", surface: "#1A1817", surface2: "#232120", sunken: "#0A0908",
+        text: "#F4F1EA", muted: "rgba(244,241,234,0.60)", faint: "rgba(244,241,234,0.38)",
+        line: "rgba(244,241,234,0.10)", line2: "rgba(244,241,234,0.16)",
+        accent, accentInk: "#1A0B08", accentSoft: hexA(accent, 0.17),
+        chipBg: "rgba(244,241,234,0.07)", chipOn: "#F4F1EA", chipOnInk: "#0F0E0D",
+        mapBg: "#15110F", mapLine: "rgba(244,241,234,0.055)", mapBlock: "rgba(244,241,234,0.03)",
+        ph: "#211E1C", phLine: "rgba(244,241,234,0.05)", phText: "rgba(244,241,234,0.34)",
+        shadow: "0 12px 34px rgba(0,0,0,0.5)",
+      }
+    : {
+        dark: false,
+        bg: "#F6F3ED", surface: "#FFFFFF", surface2: "#F0ECE4", sunken: "#EEEAE2",
+        text: "#17120F", muted: "rgba(23,18,15,0.60)", faint: "rgba(23,18,15,0.42)",
+        line: "rgba(23,18,15,0.10)", line2: "rgba(23,18,15,0.16)",
+        accent, accentInk: "#1A0B08", accentSoft: hexA(accent, 0.13),
+        chipBg: "rgba(23,18,15,0.05)", chipOn: "#17120F", chipOnInk: "#F6F3ED",
+        mapBg: "#E9E3D8", mapLine: "rgba(23,18,15,0.06)", mapBlock: "rgba(23,18,15,0.035)",
+        ph: "#EAE5DC", phLine: "rgba(23,18,15,0.05)", phText: "rgba(23,18,15,0.34)",
+        shadow: "0 12px 30px rgba(40,30,20,0.12)",
+      };
+}
+
+// ── categories (filter rail) ─────────────────────────────────
+const CATEGORIES = ["All", "Bowling", "Karaoke", "Escape rooms", "Mini golf", "Pool", "Comedy", "Live music", "Darts"];
+
+// ── helpers ──────────────────────────────────────────────────
+const money = (n) => "$" + n;
+const pct = (now, usual) => Math.round((1 - now / usual) * 100);
+
+// live countdown to a target timestamp
+function useCountdown(target) {
+  const [now, setNow] = React.useState(Date.now());
+  React.useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return Math.max(0, target - now);
+}
+function fmtCountdown(ms) {
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  const p = (n) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${p(m)}:${p(ss)}` : `${m}:${p(ss)}`;
+}
+
+// ── dataset: Sydney drops ────────────────────────────────────
+// max party each venue fits (drives the party-size filter)
+const CAPS = { pins: 6, lockup: 8, sidepocket: 8, puttlane: 8, echoroom: 8, frontroom: 10, frequency: 10, bullseye: 6 };
+// hotMin → minutes from load until the slot ends (drives the live countdown
+// on the most time-critical drops). window → human label for the rest.
+const T0 = Date.now();
+const DROPS = [
+  {
+    id: "pins", venue: "Pins & Needles", cat: "Bowling", suburb: "Moore Park",
+    km: 1.2, now: 18, usual: 24, unit: "/lane", status: "now",
+    window: "On now · ends 9:00pm", hotMin: null, rating: 4.6,
+    blurb: "Six lanes held back for tonight. Neon, a decent jukebox, and a kitchen that does the job after a few frames.",
+    gets: "One lane, up to 6 players, 1 hour.",
+    addr: "2 Lang Rd, Moore Park",
+  },
+  {
+    id: "lockup", venue: "The Lockup", cat: "Escape rooms", suburb: "Newtown",
+    km: 3.4, now: 28, usual: 39, unit: "pp", status: "now",
+    window: "On now · last room 8:00pm", hotMin: 128, rating: 4.8,
+    blurb: "Two new rooms, one very old building. The 'Tax Office' room has the best twist in the inner west.",
+    gets: "60-minute room for your group.",
+    addr: "14 Wilson St, Newtown",
+  },
+  {
+    id: "sidepocket", venue: "Side Pocket", cat: "Pool", suburb: "Enmore",
+    km: 4.0, now: 12, usual: 18, unit: "/table·hr", status: "now",
+    window: "On now · ends 6:00pm", hotMin: 47, rating: 4.4,
+    blurb: "Eight tables, cheap before six, loud after. Arvo rates while the felt's still quiet.",
+    gets: "One table, per hour.",
+    addr: "118 Enmore Rd, Enmore",
+  },
+  {
+    id: "puttlane", venue: "Putt Lane", cat: "Mini golf", suburb: "Darlinghurst",
+    km: 1.8, now: 15, usual: 21, unit: "pp", status: "now",
+    window: "On now · ends 10:00pm", hotMin: null, rating: 4.3,
+    blurb: "Nine holes in the dark, blacklight everywhere, a bar at the ninth. More fun than it has any right to be.",
+    gets: "Nine holes, one round.",
+    addr: "33 Oxford St, Darlinghurst",
+  },
+  {
+    id: "echoroom", venue: "Echo Room", cat: "Karaoke", suburb: "CBD",
+    km: 2.1, now: 22, usual: 30, unit: "/room·hr", status: "later",
+    window: "From 7:00pm tonight", hotMin: null, rating: 4.7,
+    blurb: "Private rooms, no minimum spend, a song book that actually has the good stuff. Bring your worst.",
+    gets: "Private room, up to 8, per hour.",
+    addr: "Level 2, 401 Sussex St, CBD",
+  },
+  {
+    id: "frontroom", venue: "The Front Room", cat: "Comedy", suburb: "Newtown",
+    km: 3.5, now: 16, usual: 25, unit: "pp", status: "later",
+    window: "Doors 8:00pm tonight", hotMin: null, rating: 4.5,
+    blurb: "A tight five from six comics, hosted by someone who's almost famous. Back room of a pub, exactly as it should be.",
+    gets: "One ticket, tonight's lineup.",
+    addr: "91 King St, Newtown",
+  },
+  {
+    id: "frequency", venue: "Frequency", cat: "Live music", suburb: "Marrickville",
+    km: 5.2, now: 20, usual: 32, unit: "pp", status: "later",
+    window: "8:30pm tonight", hotMin: null, rating: 4.6,
+    blurb: "Three local bands, one good room, a sound guy who cares. The kind of night you'll claim you discovered first.",
+    gets: "One ticket, three sets.",
+    addr: "7 Sydenham Rd, Marrickville",
+  },
+  {
+    id: "bullseye", venue: "Bullseye Social", cat: "Darts", suburb: "Chippendale",
+    km: 2.4, now: 19, usual: 28, unit: "/oche·hr", status: "now",
+    window: "On now · ends 11:00pm", hotMin: null, rating: 4.5,
+    blurb: "Digital oches, frozen margs, a leaderboard that'll ruin friendships. Built for a group that can't decide.",
+    gets: "One oche, up to 6, per hour.",
+    addr: "5 Kensington St, Chippendale",
+  },
+].map((d) => ({ ...d, target: d.hotMin ? T0 + d.hotMin * 60000 : null, cap: CAPS[d.id] }));
+
+// areas present in the dataset (for the filter sheet)
+const AREAS = Array.from(new Set(DROPS.map((d) => d.suburb)));
+
+// default filter state
+const DEFAULT_FILTERS = { cats: [], areas: [], when: "all", party: 1, maxPrice: 40, sort: "closest" };
+
+// apply a filter object to the dataset
+function applyFilters(list, f) {
+  let out = list.filter((d) =>
+    (f.cats.length === 0 || f.cats.includes(d.cat)) &&
+    (f.areas.length === 0 || f.areas.includes(d.suburb)) &&
+    (f.when === "all" || d.status === f.when) &&
+    (d.cap >= f.party) &&
+    (d.now <= f.maxPrice)
+  );
+  if (f.sort === "closest") out = [...out].sort((a, b) => a.km - b.km);
+  else if (f.sort === "price") out = [...out].sort((a, b) => a.now - b.now);
+  else if (f.sort === "rating") out = [...out].sort((a, b) => b.rating - a.rating);
+  return out;
+}
+
+// count of active (non-default) filter facets, for the badge
+function activeFilterCount(f) {
+  let n = 0;
+  n += f.cats.length ? 1 : 0;
+  n += f.areas.length ? 1 : 0;
+  n += f.when !== "all" ? 1 : 0;
+  n += f.party > 1 ? 1 : 0;
+  n += f.maxPrice < 40 ? 1 : 0;
+  n += f.sort !== "closest" ? 1 : 0;
+  return n;
+}
+
+Object.assign(window, { ThemeCtx, useT, tokens, hexA, DROPS, CATEGORIES, AREAS, DEFAULT_FILTERS, applyFilters, activeFilterCount, money, pct, useCountdown, fmtCountdown });
+
+</script>
+
+<script type="text/babel" data-src="app-ui.jsx">
+// app-ui.jsx — Impulse app shared UI atoms
+// Exports (window): Logo, PulseMark, Btn, Chip, Placeholder, PriceBlock,
+//   MetaLine, RatingDot, CountdownPill, DropCardEditorial, DropCardCompact,
+//   TabBar, Stepper, FauxQR, Pin, Sheet
+const { useT, money, pct, useCountdown, fmtCountdown, hexA } = window;
+
+const FONT_UI = "'Archivo', system-ui, sans-serif";
+const FONT_DISPLAY = "'Space Grotesk', system-ui, sans-serif";
+const FONT_MONO = "'Space Mono', ui-monospace, monospace";
+
+// ── impulse wordmark (clean, coral dot) ──────────────────────
+function Logo({ size = 22, color }) {
+  const T = useT();
+  const ink = color || T.text;
+  return (
+    <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: size, letterSpacing: "-0.02em", color: ink, lineHeight: 1, display: "inline-flex", alignItems: "baseline" }}>
+      impulse
+      <span style={{ width: size * 0.15, height: size * 0.15, borderRadius: "50%", background: T.accent, marginLeft: size * 0.04, display: "inline-block" }} />
+    </span>
+  );
+}
+
+// pulse-rings icon mark (the chosen app icon), proportional
+function PulseMark({ size = 30, radius }) {
+  const T = useT();
+  const r = radius != null ? radius : size * 0.26;
+  const ring = (d, col, bw) => (
+    <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: d * size, height: d * size, borderRadius: "50%", border: `${Math.max(1, size * bw)}px solid ${col}` }} />
+  );
+  return (
+    <div style={{ width: size, height: size, borderRadius: r, background: "#0F0E0D", position: "relative", overflow: "hidden", flex: "0 0 auto" }}>
+      {ring(0.82, hexA(T.accent, 0.22), 0.02)}
+      {ring(0.6, hexA(T.accent, 0.45), 0.024)}
+      <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: 0.34 * size, height: 0.34 * size, borderRadius: "50%", background: T.accent }} />
+    </div>
+  );
+}
+
+// ── button ───────────────────────────────────────────────────
+function Btn({ children, onClick, variant = "primary", full, style = {}, disabled }) {
+  const T = useT();
+  const [press, setPress] = React.useState(false);
+  const base = {
+    primary: { background: T.accent, color: T.accentInk, border: "none" },
+    secondary: { background: "transparent", color: T.text, border: `1.5px solid ${T.line2}` },
+    ghost: { background: T.chipBg, color: T.text, border: "none" },
+  }[variant];
+  return (
+    <button
+      onClick={onClick} disabled={disabled}
+      onPointerDown={() => setPress(true)} onPointerUp={() => setPress(false)} onPointerLeave={() => setPress(false)}
+      style={{
+        ...base, width: full ? "100%" : undefined, height: 54, borderRadius: 16,
+        fontFamily: FONT_UI, fontWeight: 600, fontSize: 17, letterSpacing: "-0.01em",
+        cursor: "pointer", transition: "transform .12s ease, opacity .12s",
+        transform: press ? "scale(0.975)" : "scale(1)", opacity: disabled ? 0.4 : 1,
+        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+        whiteSpace: "nowrap", padding: "0 18px",
+        ...style,
+      }}>
+      {children}
+    </button>
+  );
+}
+
+// ── filter chip ──────────────────────────────────────────────
+function Chip({ children, active, onClick, small }) {
+  const T = useT();
+  return (
+    <button onClick={onClick} style={{
+      flex: "0 0 auto", height: small ? 30 : 36, padding: small ? "0 13px" : "0 16px", borderRadius: 999,
+      border: "none", cursor: "pointer", fontFamily: FONT_UI, fontWeight: 500,
+      fontSize: small ? 13 : 14.5, letterSpacing: "-0.01em", transition: "background .15s,color .15s",
+      background: active ? T.chipOn : T.chipBg, color: active ? T.chipOnInk : T.chipText,
+      whiteSpace: "nowrap",
+    }}>{children}</button>
+  );
+}
+
+// ── striped image placeholder ────────────────────────────────
+function Placeholder({ label = "venue photo", style = {}, radius = 0 }) {
+  const T = useT();
+  return (
+    <div style={{
+      position: "relative", background: T.ph, overflow: "hidden", borderRadius: radius,
+      backgroundImage: `repeating-linear-gradient(135deg, ${T.phLine} 0 1px, transparent 1px 11px)`,
+      ...style,
+    }}>
+      <span style={{ position: "absolute", left: 12, bottom: 10, fontFamily: FONT_MONO, fontSize: 9.5, letterSpacing: "0.08em", textTransform: "uppercase", color: T.phText }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// ── price block (now + usually struck + −pct chip) ───────────
+function PriceBlock({ d, big }) {
+  const T = useT();
+  const p = pct(d.now, d.usual);
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", gap: big ? 10 : 8, flexWrap: "wrap" }}>
+      <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: big ? 34 : 22, color: T.text, letterSpacing: "-0.02em" }}>
+        {money(d.now)}<span style={{ fontSize: big ? 16 : 12, fontWeight: 500, color: T.muted, marginLeft: 2 }}>{d.unit}</span>
+      </span>
+      <span style={{ fontFamily: FONT_UI, fontSize: big ? 15 : 13, color: T.faint, textDecoration: "line-through" }}>
+        usually {money(d.usual)}
+      </span>
+      <span style={{ fontFamily: FONT_MONO, fontWeight: 700, fontSize: big ? 13 : 11, color: T.accent, background: T.accentSoft, padding: "3px 7px", borderRadius: 6, letterSpacing: "0.02em" }}>
+        −{p}%
+      </span>
+    </div>
+  );
+}
+
+// ── meta line: cat · suburb · km ─────────────────────────────
+function MetaLine({ d, style = {} }) {
+  const T = useT();
+  return (
+    <div style={{ fontFamily: FONT_UI, fontSize: 13.5, color: T.muted, letterSpacing: "-0.01em", ...style }}>
+      {d.cat} · {d.suburb} · {d.km} km
+    </div>
+  );
+}
+
+function RatingDot({ d }) {
+  const T = useT();
+  return (
+    <span style={{ fontFamily: FONT_MONO, fontSize: 11.5, color: T.muted, display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: T.accent }} />{d.rating}
+    </span>
+  );
+}
+
+// ── countdown pill (live, only on hot drops) ─────────────────
+function CountdownPill({ d, plain }) {
+  const T = useT();
+  const ms = useCountdown(d.target);
+  if (!d.target) return null;
+  return (
+    <span style={{
+      fontFamily: FONT_MONO, fontWeight: 700, fontSize: plain ? 13 : 11.5, letterSpacing: "0.02em",
+      color: plain ? T.accent : T.accentInk, background: plain ? "transparent" : T.accent,
+      padding: plain ? 0 : "4px 8px", borderRadius: 7, display: "inline-flex", alignItems: "center", gap: 5,
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: plain ? T.accent : T.accentInk, animation: "imp-blink 1.4s steps(1) infinite" }} />
+      ends in {fmtCountdown(ms)}
+    </span>
+  );
+}
+
+// ── editorial drop card (image-led, one per row) ─────────────
+function DropCardEditorial({ d, onClick }) {
+  const T = useT();
+  const [press, setPress] = React.useState(false);
+  return (
+    <div onClick={onClick}
+      onPointerDown={() => setPress(true)} onPointerUp={() => setPress(false)} onPointerLeave={() => setPress(false)}
+      style={{
+        background: T.surface, borderRadius: 22, overflow: "hidden", cursor: "pointer",
+        boxShadow: T.shadow, transition: "transform .14s ease", transform: press ? "scale(0.985)" : "scale(1)",
+      }}>
+      <div style={{ position: "relative" }}>
+        <Placeholder label={d.cat + " · venue photo"} style={{ height: 168 }} />
+        <div style={{ position: "absolute", top: 12, left: 12, display: "flex", gap: 7 }}>
+          <span style={{ fontFamily: FONT_UI, fontWeight: 600, fontSize: 12.5, color: "#0F0E0D", background: "rgba(244,241,234,0.92)", padding: "5px 10px", borderRadius: 999 }}>{d.cat}</span>
+          {d.target && <span style={{ display: "inline-flex" }}><CountdownPill d={d} /></span>}
+        </div>
+      </div>
+      <div style={{ padding: "14px 16px 16px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 20, color: T.text, letterSpacing: "-0.02em" }}>{d.venue}</div>
+          <RatingDot d={d} />
+        </div>
+        <MetaLine d={d} style={{ marginTop: 3, marginBottom: 12 }} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+          <PriceBlock d={d} />
+        </div>
+        <div style={{ marginTop: 11, fontFamily: FONT_UI, fontSize: 12.5, color: T.faint, display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 5, height: 5, borderRadius: "50%", background: d.status === "now" ? T.accent : T.faint }} />
+          {d.window}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── compact drop row (dense list) ────────────────────────────
+function DropCardCompact({ d, onClick }) {
+  const T = useT();
+  const [press, setPress] = React.useState(false);
+  return (
+    <div onClick={onClick}
+      onPointerDown={() => setPress(true)} onPointerUp={() => setPress(false)} onPointerLeave={() => setPress(false)}
+      style={{
+        background: T.surface, borderRadius: 16, overflow: "hidden", cursor: "pointer", display: "flex",
+        boxShadow: T.shadow, transition: "transform .14s ease", transform: press ? "scale(0.99)" : "scale(1)",
+      }}>
+      <Placeholder label={d.cat} style={{ width: 92, flex: "0 0 92px" }} />
+      <div style={{ padding: "11px 13px", flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 16.5, color: T.text, letterSpacing: "-0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.venue}</div>
+          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 17, color: T.text, flex: "0 0 auto" }}>{money(d.now)}<span style={{ fontSize: 10.5, color: T.muted, fontWeight: 500 }}>{d.unit}</span></span>
+        </div>
+        <MetaLine d={d} style={{ fontSize: 12.5, marginTop: 2 }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+          <span style={{ fontFamily: FONT_MONO, fontWeight: 700, fontSize: 10.5, color: T.accent, background: T.accentSoft, padding: "2px 6px", borderRadius: 5 }}>−{pct(d.now, d.usual)}%</span>
+          {d.target
+            ? <CountdownPill d={d} plain />
+            : <span style={{ fontFamily: FONT_UI, fontSize: 12, color: T.faint, whiteSpace: "nowrap" }}>{d.window.replace("On now · ", "").replace(" tonight", "")}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── bottom tab bar ───────────────────────────────────────────
+function TabBar({ tab, onTab }) {
+  const T = useT();
+  const tabs = [
+    { id: "tonight", label: "What's on" },
+    { id: "map", label: "Map" },
+    { id: "plans", label: "Plans" },
+    { id: "profile", label: "You" },
+  ];
+  const icon = (id, on) => {
+    const c = on ? T.accent : T.faint;
+    if (id === "tonight") // pulse dot + ring
+      return (<svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke={c} strokeWidth="1.8" opacity={on ? 0.5 : 0.9} /><circle cx="12" cy="12" r="3.6" fill={c} /></svg>);
+    if (id === "map")
+      return (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinejoin="round"><path d="M12 21c4.5-4.2 7-7.6 7-11a7 7 0 10-14 0c0 3.4 2.5 6.8 7 11z" /><circle cx="12" cy="10" r="2.4" fill={on ? c : "none"} /></svg>);
+    if (id === "plans")
+      return (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 4h11l3 3v13H5z" /><path d="M9 11h7M9 15h5" /></svg>);
+    return (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="3.6" fill={on ? c : "none"} /><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" /></svg>);
+  };
+  return (
+    <div style={{
+      position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 30,
+      paddingBottom: 26, paddingTop: 9, background: T.dark
+        ? "linear-gradient(to top, rgba(15,14,13,0.97) 60%, rgba(15,14,13,0))"
+        : "linear-gradient(to top, rgba(246,243,237,0.97) 60%, rgba(246,243,237,0))",
+      backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
+      borderTop: `0.5px solid ${T.line}`,
+      display: "flex", justifyContent: "space-around", alignItems: "center",
+    }}>
+      {tabs.map((t) => {
+        const on = tab === t.id;
+        return (
+          <button key={t.id} onClick={() => onTab(t.id)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "2px 14px" }}>
+            {icon(t.id, on)}
+            <span style={{ fontFamily: FONT_UI, fontWeight: on ? 600 : 500, fontSize: 11, color: on ? T.accent : T.faint, letterSpacing: "-0.01em" }}>{t.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── iOS-style switch ─────────────────────────────────────────
+function Switch({ on, onChange }) {
+  const T = useT();
+  return (
+    <button onClick={() => onChange(!on)} style={{
+      width: 50, height: 30, borderRadius: 999, border: "none", cursor: "pointer", padding: 2,
+      background: on ? T.accent : T.line2, transition: "background .2s", flex: "0 0 auto",
+      display: "flex", justifyContent: on ? "flex-end" : "flex-start", alignItems: "center",
+    }}>
+      <span style={{ width: 26, height: 26, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.3)", transition: "all .2s" }} />
+    </button>
+  );
+}
+
+// ── party-size stepper ───────────────────────────────────────
+function Stepper({ value, onChange, min = 1, max = 8 }) {
+  const T = useT();
+  const btn = (label, fn, dis) => (
+    <button onClick={fn} disabled={dis} style={{
+      width: 46, height: 46, borderRadius: 13, border: `1.5px solid ${T.line2}`, background: "transparent",
+      color: dis ? T.faint : T.text, fontSize: 24, fontFamily: FONT_UI, cursor: dis ? "default" : "pointer",
+      display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, opacity: dis ? 0.5 : 1,
+    }}>{label}</button>
+  );
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+      {btn("−", () => onChange(Math.max(min, value - 1)), value <= min)}
+      <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 26, color: T.text, minWidth: 28, textAlign: "center" }}>{value}</span>
+      {btn("+", () => onChange(Math.min(max, value + 1)), value >= max)}
+    </div>
+  );
+}
+
+// ── faux QR (deterministic module grid) ──────────────────────
+function FauxQR({ code, size = 132 }) {
+  const T = useT();
+  const N = 13;
+  // deterministic fill from code hash
+  let h = 0; for (let i = 0; i < code.length; i++) h = (h * 31 + code.charCodeAt(i)) >>> 0;
+  const rng = (i) => { const x = Math.sin(h + i * 12.9898) * 43758.5453; return x - Math.floor(x); };
+  const isFinder = (r, c) => (r < 3 && c < 3) || (r < 3 && c >= N - 3) || (r >= N - 3 && c < 3);
+  const cells = [];
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    const finder = isFinder(r, c);
+    const on = finder ? ((r === 0 || r === 2 || r === N - 1 || r === N - 3 || c === 0 || c === 2 || c === N - 1 || c === N - 3) ? true : (r === 1 && c === 1) || (r === 1 && c === N - 2) || (r === N - 2 && c === 1)) : rng(r * N + c) > 0.5;
+    cells.push(on);
+  }
+  return (
+    <div style={{ width: size, height: size, background: "#fff", borderRadius: 14, padding: 12, boxSizing: "border-box" }}>
+      <div style={{ width: "100%", height: "100%", display: "grid", gridTemplateColumns: `repeat(${N},1fr)`, gridTemplateRows: `repeat(${N},1fr)`, gap: 1.5 }}>
+        {cells.map((on, i) => <div key={i} style={{ background: on ? "#0F0E0D" : "transparent", borderRadius: 1 }} />)}
+      </div>
+    </div>
+  );
+}
+
+// ── map pin (pulse motif) ────────────────────────────────────
+function Pin({ active, onClick, label }) {
+  const T = useT();
+  return (
+    <button onClick={onClick} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, position: "relative", display: "flex", flexDirection: "column", alignItems: "center" }}>
+      {active && <div style={{ position: "absolute", top: -7, width: 38, height: 38, borderRadius: "50%", border: `2px solid ${T.accent}`, opacity: 0.5 }} />}
+      <div style={{
+        background: T.accent, color: T.accentInk, fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 12,
+        height: active ? 30 : 26, padding: "0 10px", borderRadius: 999, display: "flex", alignItems: "center",
+        boxShadow: "0 3px 10px rgba(0,0,0,0.35)", transition: "all .15s", whiteSpace: "nowrap",
+      }}>{label}</div>
+      <div style={{ width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderTop: `7px solid ${T.accent}`, marginTop: -1 }} />
+    </button>
+  );
+}
+
+// ── bottom sheet / pushed screen wrapper ─────────────────────
+function Sheet({ children, onClose, title }) {
+  const T = useT();
+  return (
+    <div style={{ position: "absolute", inset: 0, zIndex: 40, background: T.bg, display: "flex", flexDirection: "column", animation: "imp-slide .26s cubic-bezier(.2,.8,.2,1)" }}>
+      {children}
+    </div>
+  );
+}
+
+Object.assign(window, { FONT_UI, FONT_DISPLAY, FONT_MONO, Logo, PulseMark, Btn, Chip, Placeholder, PriceBlock, MetaLine, RatingDot, CountdownPill, DropCardEditorial, DropCardCompact, TabBar, Switch, Stepper, FauxQR, Pin, Sheet });
+
+</script>
+
+<script type="text/babel" data-src="app-screens.jsx">
+// app-screens.jsx — Impulse app screens
+const { useT, DROPS, CATEGORIES, money, pct, fmtCountdown, useCountdown, applyFilters, activeFilterCount } = window;
+const { FONT_UI, FONT_DISPLAY, FONT_MONO, Logo, PulseMark, Btn, Chip, Placeholder,
+  PriceBlock, MetaLine, RatingDot, CountdownPill, DropCardEditorial, DropCardCompact,
+  Stepper, FauxQR, Pin } = window;
+
+const TOP = 54; // status-bar clearance
+const BOTTOM = 104; // tab-bar clearance
+
+function Avatar({ size = 36 }) {
+  const T = useT();
+  return (
+    <div style={{ width: size, height: size, borderRadius: "50%", background: T.surface2, border: `1px solid ${T.line}`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14, color: T.text }}>JL</div>
+  );
+}
+
+function LocPill() {
+  const T = useT();
+  return (
+    <button style={{ display: "inline-flex", alignItems: "center", gap: 6, background: T.chipBg, border: "none", borderRadius: 999, padding: "7px 13px", cursor: "pointer", fontFamily: FONT_UI, fontWeight: 500, fontSize: 14, color: T.text }}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={T.accent} strokeWidth="2.4"><path d="M12 21c4.5-4.2 7-7.6 7-11a7 7 0 10-14 0c0 3.4 2.5 6.8 7 11z" /><circle cx="12" cy="10" r="2.4" fill={T.accent} stroke="none" /></svg>
+      Sydney · CBD
+      <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke={T.muted} strokeWidth="1.8" strokeLinecap="round"><path d="M2 4l4 4 4-4" /></svg>
+    </button>
+  );
+}
+
+function SectionHead({ title, count }) {
+  const T = useT();
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", gap: 9, margin: "26px 4px 13px" }}>
+      <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 19, color: T.text, letterSpacing: "-0.02em" }}>{title}</span>
+      <span style={{ fontFamily: FONT_MONO, fontSize: 12, color: T.faint }}>{count}</span>
+    </div>
+  );
+}
+
+// quick-filter button with active-count badge
+function FilterButton({ count, onClick }) {
+  const T = useT();
+  return (
+    <button onClick={onClick} style={{
+      position: "relative", flex: "0 0 auto", height: 36, padding: "0 15px 0 13px", borderRadius: 999, cursor: "pointer",
+      border: "none", background: count ? T.accent : T.chipBg, color: count ? T.accentInk : T.text,
+      fontFamily: FONT_UI, fontWeight: 600, fontSize: 14.5, letterSpacing: "-0.01em",
+      display: "inline-flex", alignItems: "center", gap: 7, transition: "background .14s, color .14s",
+    }}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 5h18M6 12h12M10 19h4" /></svg>
+      Filters{count ? ` · ${count}` : ""}
+    </button>
+  );
+}
+
+// ── Tonight feed ─────────────────────────────────────────────
+function TonightScreen({ layout, filters, onSetFilters, onOpenFilters, onOpen }) {
+  const T = useT();
+  const quickCat = (c) => {
+    if (c === "All") onSetFilters({ ...filters, cats: [] });
+    else onSetFilters({ ...filters, cats: filters.cats.includes(c) && filters.cats.length === 1 ? [] : [c] });
+  };
+  const isChipOn = (c) => c === "All" ? filters.cats.length === 0 : filters.cats.includes(c);
+  const filtered = applyFilters(DROPS, filters);
+  const now = filtered.filter((d) => d.status === "now");
+  const later = filtered.filter((d) => d.status === "later");
+  const activeCount = activeFilterCount(filters);
+  const Card = layout === "compact" ? DropCardCompact : DropCardEditorial;
+  const gap = layout === "compact" ? 11 : 16;
+
+  const Section = ({ title, list }) =>
+    list.length ? (
+      <>
+        <SectionHead title={title} count={`${list.length} ${list.length === 1 ? "drop" : "drops"}`} />
+        <div style={{ display: "flex", flexDirection: "column", gap }}>
+          {list.map((d) => <Card key={d.id} d={d} onClick={() => onOpen(d.id)} />)}
+        </div>
+      </>
+    ) : null;
+
+  return (
+    <div style={{ height: "100%", overflowY: "auto", background: T.bg }}>
+      <div style={{ paddingTop: TOP }}>
+        <div style={{ padding: "0 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <PulseMark size={28} radius={8} />
+            <Logo size={20} />
+          </div>
+          <Avatar />
+        </div>
+        <div style={{ padding: "0 18px", display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginTop: 18 }}>
+          <h1 style={{ margin: 0, fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 33, color: T.text, letterSpacing: "-0.03em" }}>What's on?</h1>
+          <LocPill />
+        </div>
+      </div>
+
+      {/* filter rail */}
+      <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "16px 18px 4px", scrollbarWidth: "none" }}>
+        <FilterButton count={activeCount} onClick={onOpenFilters} />
+        <div style={{ width: 1, flex: "0 0 1px", background: T.line, margin: "6px 2px" }} />
+        {CATEGORIES.map((c) => <Chip key={c} active={isChipOn(c)} onClick={() => quickCat(c)}>{c}</Chip>)}
+      </div>
+
+      <div style={{ padding: `0 18px ${BOTTOM}px` }}>
+        <Section title="On now" list={now} />
+        <Section title="Later tonight" list={later} />
+        {filtered.length === 0 && (
+          <div style={{ textAlign: "center", marginTop: 64, padding: "0 40px" }}>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 19, color: T.text, letterSpacing: "-0.02em" }}>Nothing matches yet</div>
+            <div style={{ fontFamily: FONT_UI, fontSize: 14.5, color: T.muted, marginTop: 6, lineHeight: 1.45 }}>Try widening your filters — drop a suburb or nudge the price up.</div>
+            <button onClick={() => onSetFilters(window.DEFAULT_FILTERS)} style={{ marginTop: 16, background: "none", border: "none", cursor: "pointer", fontFamily: FONT_UI, fontWeight: 600, fontSize: 15, color: T.accent }}>Clear filters</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Map ──────────────────────────────────────────────────────
+const PIN_POS = { pins: [38, 30], lockup: [70, 22], sidepocket: [22, 58], puttlane: [55, 44], echoroom: [48, 64], frontroom: [78, 52], frequency: [30, 78], bullseye: [62, 70] };
+
+function MapScreen({ filters, onOpenFilters, onOpen }) {
+  const T = useT();
+  const [sel, setSel] = React.useState(null);
+  const selDrop = DROPS.find((d) => d.id === sel);
+  const matchIds = new Set(applyFilters(DROPS, filters).map((d) => d.id));
+  const activeCount = activeFilterCount(filters);
+  return (
+    <div style={{ height: "100%", position: "relative", overflow: "hidden", background: T.mapBg }}>
+      {/* faux map: grid + blocks */}
+      <div style={{ position: "absolute", inset: 0, backgroundImage: `linear-gradient(${T.mapLine} 1px, transparent 1px), linear-gradient(90deg, ${T.mapLine} 1px, transparent 1px)`, backgroundSize: "46px 46px" }} />
+      <div style={{ position: "absolute", left: "8%", top: "12%", width: "34%", height: "22%", background: T.mapBlock, borderRadius: 8 }} />
+      <div style={{ position: "absolute", left: "58%", top: "30%", width: "30%", height: "30%", background: T.mapBlock, borderRadius: 8 }} />
+      <div style={{ position: "absolute", left: "15%", top: "62%", width: "40%", height: "26%", background: T.mapBlock, borderRadius: 8 }} />
+      {/* a couple of "roads" */}
+      <div style={{ position: "absolute", left: 0, right: 0, top: "47%", height: 6, background: T.mapLine }} />
+      <div style={{ position: "absolute", top: 0, bottom: 0, left: "46%", width: 6, background: T.mapLine }} />
+      <span style={{ position: "absolute", right: 12, bottom: BOTTOM + 4, fontFamily: FONT_MONO, fontSize: 9.5, letterSpacing: "0.08em", textTransform: "uppercase", color: T.phText }}>map placeholder</span>
+
+      {/* pins */}
+      {DROPS.map((d) => {
+        const [x, y] = PIN_POS[d.id] || [50, 50];
+        const match = matchIds.has(d.id);
+        return (
+          <div key={d.id} style={{ position: "absolute", left: `${x}%`, top: `${y}%`, transform: "translate(-50%,-100%)", zIndex: sel === d.id ? 5 : match ? 2 : 1, opacity: match ? 1 : 0.32, filter: match ? "none" : "grayscale(1)", transition: "opacity .2s, filter .2s", pointerEvents: match ? "auto" : "none" }}>
+            <Pin active={sel === d.id} label={money(d.now)} onClick={() => setSel(d.id)} />
+          </div>
+        );
+      })}
+
+      {/* top search + filter row */}
+      <div style={{ position: "absolute", top: TOP, left: 18, right: 18, zIndex: 8, display: "flex", gap: 9 }}>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 9, background: T.surface, borderRadius: 14, padding: "12px 15px", boxShadow: T.shadow }}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" strokeLinecap="round" /></svg>
+          <span style={{ fontFamily: FONT_UI, fontSize: 15, color: T.muted }}>Search Sydney</span>
+        </div>
+        <button onClick={onOpenFilters} style={{
+          flex: "0 0 auto", width: 48, borderRadius: 14, cursor: "pointer", border: "none", position: "relative",
+          background: activeCount ? T.accent : T.surface, color: activeCount ? T.accentInk : T.text, boxShadow: T.shadow,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 5h18M6 12h12M10 19h4" /></svg>
+        </button>
+      </div>
+
+      {/* selected mini card */}
+      {selDrop && (
+        <div style={{ position: "absolute", left: 14, right: 14, bottom: BOTTOM, zIndex: 9, animation: "imp-pop .22s cubic-bezier(.2,.8,.2,1)" }}>
+          <DropCardCompact d={selDrop} onClick={() => onOpen(selDrop.id)} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── My Plans ─────────────────────────────────────────────────
+function PlansScreen({ plans, onTonight, onOpenPlan }) {
+  const T = useT();
+  return (
+    <div style={{ height: "100%", overflowY: "auto", background: T.bg }}>
+      <div style={{ paddingTop: TOP, padding: `${TOP}px 18px 0` }}>
+        <h1 style={{ margin: "0 0 4px", fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 33, color: T.text, letterSpacing: "-0.03em" }}>Plans</h1>
+      </div>
+      {plans.length === 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "62%", textAlign: "center", padding: "0 40px", gap: 14 }}>
+          <div style={{ opacity: 0.5 }}><PulseMark size={56} radius={15} /></div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 21, color: T.text, letterSpacing: "-0.02em" }}>No plans yet</div>
+          <div style={{ fontFamily: FONT_UI, fontSize: 15, color: T.muted, lineHeight: 1.45 }}>When you claim a slot it shows up here, code and all.</div>
+          <div style={{ marginTop: 8 }}><Btn onClick={onTonight}>Find something tonight</Btn></div>
+        </div>
+      ) : (
+        <div style={{ padding: `18px 18px ${BOTTOM}px`, display: "flex", flexDirection: "column", gap: 13 }}>
+          {plans.map((p) => (
+            <div key={p.code} onClick={() => onOpenPlan(p)} style={{ background: T.surface, borderRadius: 18, padding: 16, boxShadow: T.shadow, cursor: "pointer", display: "flex", gap: 14, alignItems: "center" }}>
+              <div style={{ flex: "0 0 auto" }}><FauxQR code={p.code} size={72} /></div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                  <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 16.5, color: T.text, letterSpacing: "-0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>{p.venue}</div>
+                  <span style={{ flex: "0 0 auto", fontFamily: FONT_UI, fontWeight: 600, fontSize: 11.5, color: T.accent, background: T.accentSoft, padding: "4px 9px", borderRadius: 999 }}>Claimed</span>
+                </div>
+                <div style={{ fontFamily: FONT_UI, fontSize: 13.5, color: T.muted, marginTop: 3 }}>{p.cat} · {p.party} {p.party === 1 ? "person" : "people"}</div>
+                <div style={{ fontFamily: FONT_MONO, fontSize: 13, color: T.text, marginTop: 8, letterSpacing: "0.04em" }}>{p.code}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── back / close header for pushed screens ───────────────────
+function PushHead({ onBack, dark, floating }) {
+  const T = useT();
+  const bg = floating ? "rgba(15,14,13,0.5)" : T.chipBg;
+  const ink = floating ? "#fff" : T.text;
+  return (
+    <button onClick={onBack} style={{ position: "absolute", top: TOP, left: 16, zIndex: 10, width: 40, height: 40, borderRadius: 999, border: "none", cursor: "pointer", background: bg, backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <svg width="11" height="18" viewBox="0 0 12 20" fill="none"><path d="M10 2L2 10l8 8" stroke={ink} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+    </button>
+  );
+}
+
+// ── Drop detail ──────────────────────────────────────────────
+function DetailScreen({ d, onBack, onClaim }) {
+  const T = useT();
+  return (
+    <div style={{ position: "absolute", inset: 0, zIndex: 40, background: T.bg, display: "flex", flexDirection: "column", animation: "imp-slide .26s cubic-bezier(.2,.8,.2,1)" }}>
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        <div style={{ position: "relative" }}>
+          <Placeholder label={d.cat + " · venue photo"} style={{ height: 300 }} />
+          <PushHead onBack={onBack} floating />
+          <div style={{ position: "absolute", top: TOP, right: 16, display: "flex", gap: 7 }}>
+            {d.target && <span><CountdownPill d={d} /></span>}
+          </div>
+        </div>
+        <div style={{ padding: "20px 20px 140px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+            <div>
+              <h1 style={{ margin: 0, fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 28, color: T.text, letterSpacing: "-0.03em" }}>{d.venue}</h1>
+              <MetaLine d={d} style={{ marginTop: 5, fontSize: 14.5 }} />
+            </div>
+            <RatingDot d={d} />
+          </div>
+
+          <div style={{ marginTop: 20, padding: "16px 18px", background: T.surface, borderRadius: 18, boxShadow: T.shadow }}>
+            <PriceBlock d={d} big />
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.line}`, fontFamily: FONT_UI, fontSize: 14, color: T.muted, display: "flex", alignItems: "center", gap: 7 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: d.status === "now" ? T.accent : T.faint }} />
+              {d.window}
+            </div>
+          </div>
+
+          <p style={{ marginTop: 22, fontFamily: FONT_UI, fontSize: 16, lineHeight: 1.55, color: T.text }}>{d.blurb}</p>
+
+          <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 1, background: T.line, borderRadius: 16, overflow: "hidden" }}>
+            {[["What you get", d.gets], ["Where", d.addr]].map(([k, v]) => (
+              <div key={k} style={{ background: T.surface, padding: "14px 16px", display: "flex", justifyContent: "space-between", gap: 16 }}>
+                <span style={{ fontFamily: FONT_UI, fontSize: 14, color: T.muted, flex: "0 0 auto" }}>{k}</span>
+                <span style={{ fontFamily: FONT_UI, fontSize: 14.5, color: T.text, textAlign: "right" }}>{v}</span>
+              </div>
+            ))}
+          </div>
+
+          <Placeholder label="map" style={{ height: 120, borderRadius: 16, marginTop: 14 }} />
+        </div>
+      </div>
+
+      {/* sticky claim bar */}
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "14px 20px 30px", background: T.bg, borderTop: `0.5px solid ${T.line}`, display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ flex: "0 0 auto" }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 22, color: T.text }}>{money(d.now)}<span style={{ fontSize: 12, color: T.muted, fontWeight: 500 }}>{d.unit}</span></div>
+          <div style={{ fontFamily: FONT_UI, fontSize: 12, color: T.faint, textDecoration: "line-through" }}>usually {money(d.usual)}</div>
+        </div>
+        <Btn full onClick={() => onClaim(d)} style={{ flex: 1 }}>Claim slot</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ── Claim (party size + time) ────────────────────────────────
+function ClaimScreen({ d, onBack, onConfirm }) {
+  const T = useT();
+  const [party, setParty] = React.useState(2);
+  const times = d.status === "now"
+    ? ["Now", "7:30pm", "8:30pm"]
+    : ["7:00pm", "8:00pm", "9:00pm"];
+  const [time, setTime] = React.useState(times[0]);
+  const perPerson = d.unit === "pp";
+  const total = perPerson ? d.now * party : d.now;
+  return (
+    <div style={{ position: "absolute", inset: 0, zIndex: 45, background: T.bg, display: "flex", flexDirection: "column", animation: "imp-slide .26s cubic-bezier(.2,.8,.2,1)" }}>
+      <PushHead onBack={onBack} />
+      <div style={{ flex: 1, overflowY: "auto", padding: `${TOP + 52}px 22px 140px` }}>
+        <h1 style={{ margin: 0, fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 28, color: T.text, letterSpacing: "-0.03em" }}>Claim your slot</h1>
+        <div style={{ fontFamily: FONT_UI, fontSize: 15, color: T.muted, marginTop: 6 }}>{d.venue} · {d.suburb}</div>
+
+        <div style={{ marginTop: 30 }}>
+          <div style={{ fontFamily: FONT_UI, fontWeight: 600, fontSize: 17, color: T.text }}>How many?</div>
+          <div style={{ fontFamily: FONT_UI, fontSize: 13.5, color: T.faint, marginTop: 2, marginBottom: 16 }}>{d.gets}</div>
+          <Stepper value={party} onChange={setParty} />
+        </div>
+
+        <div style={{ marginTop: 34 }}>
+          <div style={{ fontFamily: FONT_UI, fontWeight: 600, fontSize: 17, color: T.text, marginBottom: 14 }}>Pick a time</div>
+          <div style={{ display: "flex", gap: 9 }}>
+            {times.map((t) => <Chip key={t} active={time === t} onClick={() => setTime(t)}>{t}</Chip>)}
+          </div>
+        </div>
+
+        <div style={{ marginTop: 36, padding: "16px 18px", background: T.surface, borderRadius: 18, boxShadow: T.shadow }}>
+          {[["Tonight's price", `${money(d.now)}${d.unit}`], [perPerson ? `${party} × people` : "Slot", perPerson ? `× ${party}` : "1"]].map(([k, v]) => (
+            <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 12, whiteSpace: "nowrap", fontFamily: FONT_UI, fontSize: 14.5, color: T.muted, marginBottom: 10 }}>
+              <span>{k}</span><span style={{ color: T.text }}>{v}</span>
+            </div>
+          ))}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", paddingTop: 12, borderTop: `1px solid ${T.line}` }}>
+            <span style={{ fontFamily: FONT_UI, fontWeight: 600, fontSize: 16, color: T.text }}>Total</span>
+            <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 26, color: T.text }}>{money(total)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "14px 22px 30px", background: T.bg, borderTop: `0.5px solid ${T.line}` }}>
+        <Btn full onClick={() => onConfirm({ d, party, time, total })}>Confirm &amp; claim</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ── Confirmation ─────────────────────────────────────────────
+function ConfirmScreen({ claim, onPlans, onDone }) {
+  const T = useT();
+  const { d, party, time, code } = claim;
+  return (
+    <div style={{ position: "absolute", inset: 0, zIndex: 50, background: T.bg, display: "flex", flexDirection: "column", animation: "imp-rise .3s cubic-bezier(.2,.8,.2,1)" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: `${TOP + 30}px 24px 150px`, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+        <div style={{ animation: "imp-pop .4s cubic-bezier(.2,.9,.3,1.4)" }}><PulseMark size={64} radius={17} /></div>
+        <h1 style={{ margin: "20px 0 0", fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 32, color: T.text, letterSpacing: "-0.03em" }}>You're on.</h1>
+        <div style={{ fontFamily: FONT_UI, fontSize: 16, color: T.muted, marginTop: 8, lineHeight: 1.45 }}>
+          {d.venue} · {time} · {party} {party === 1 ? "person" : "people"}
+        </div>
+
+        <div style={{ marginTop: 28, padding: 22, background: T.surface, borderRadius: 24, boxShadow: T.shadow, display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+          <FauxQR code={code} size={168} />
+          <div style={{ fontFamily: FONT_MONO, fontWeight: 700, fontSize: 22, color: T.text, letterSpacing: "0.12em" }}>{code}</div>
+          <div style={{ fontFamily: FONT_UI, fontSize: 13.5, color: T.faint, maxWidth: 230, lineHeight: 1.45 }}>Show this at the door at {d.venue}. Your slot's held for 20 minutes.</div>
+        </div>
+      </div>
+
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "14px 22px 30px", background: T.bg, borderTop: `0.5px solid ${T.line}`, display: "flex", flexDirection: "column", gap: 10 }}>
+        <Btn full onClick={onPlans}>View in plans</Btn>
+        <Btn full variant="ghost" onClick={onDone}>Back to tonight</Btn>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { TonightScreen, MapScreen, PlansScreen, DetailScreen, ClaimScreen, ConfirmScreen });
+
+</script>
+
+<script type="text/babel" data-src="app-filters.jsx">
+// app-filters.jsx — Impulse filters bottom-sheet
+const { useT, CATEGORIES, AREAS, DEFAULT_FILTERS, applyFilters, money } = window;
+const { FONT_UI, FONT_DISPLAY, FONT_MONO, Btn } = window;
+
+const ACTS = CATEGORIES.filter((c) => c !== "All");
+
+// ── a small labelled section ─────────────────────────────────
+function FRow({ label, hint, children }) {
+  const T = useT();
+  return (
+    <div style={{ padding: "20px 22px", borderBottom: `1px solid ${T.line}` }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 }}>
+        <span style={{ fontFamily: FONT_UI, fontWeight: 600, fontSize: 16.5, color: T.text }}>{label}</span>
+        {hint && <span style={{ fontFamily: FONT_UI, fontSize: 13.5, color: T.faint }}>{hint}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// pill toggle used for multi-selects + segmented choices
+function FPill({ children, on, onClick, dot }) {
+  const T = useT();
+  return (
+    <button onClick={onClick} style={{
+      height: 40, padding: "0 16px", borderRadius: 12, cursor: "pointer", border: "none",
+      fontFamily: FONT_UI, fontWeight: 500, fontSize: 14.5, letterSpacing: "-0.01em", whiteSpace: "nowrap",
+      background: on ? T.accent : T.chipBg, color: on ? T.accentInk : T.text,
+      display: "inline-flex", alignItems: "center", gap: 8, transition: "background .14s, color .14s",
+    }}>
+      {dot && <span style={{ width: 7, height: 7, borderRadius: "50%", background: on ? T.accentInk : T.faint }} />}
+      {children}
+    </button>
+  );
+}
+
+// segmented control (When)
+function Segmented({ value, options, onChange }) {
+  const T = useT();
+  return (
+    <div style={{ display: "flex", background: T.chipBg, borderRadius: 13, padding: 4, gap: 4 }}>
+      {options.map((o) => {
+        const on = value === o.id;
+        return (
+          <button key={o.id} onClick={() => onChange(o.id)} style={{
+            flex: 1, height: 40, borderRadius: 10, border: "none", cursor: "pointer",
+            fontFamily: FONT_UI, fontWeight: on ? 600 : 500, fontSize: 14.5,
+            background: on ? T.surface : "transparent", color: on ? T.text : T.muted,
+            boxShadow: on ? T.shadow : "none", transition: "background .14s, color .14s",
+          }}>{o.label}</button>
+        );
+      })}
+    </div>
+  );
+}
+
+// party-size stepper, compact inline
+function PartyInline({ value, onChange }) {
+  const T = useT();
+  const btn = (label, fn, dis) => (
+    <button onClick={fn} disabled={dis} style={{
+      width: 40, height: 40, borderRadius: 11, border: `1.5px solid ${T.line2}`, background: "transparent",
+      color: dis ? T.faint : T.text, fontSize: 22, cursor: dis ? "default" : "pointer",
+      display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, opacity: dis ? 0.45 : 1,
+    }}>{label}</button>
+  );
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <span style={{ fontFamily: FONT_UI, fontSize: 15, color: T.muted }}>{value === 1 ? "Just me" : `${value} people`}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        {btn("−", () => onChange(Math.max(1, value - 1)), value <= 1)}
+        <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 20, color: T.text, minWidth: 20, textAlign: "center" }}>{value}</span>
+        {btn("+", () => onChange(Math.min(10, value + 1)), value >= 10)}
+      </div>
+    </div>
+  );
+}
+
+// price ceiling slider (native range, themed)
+function PriceSlider({ value, onChange }) {
+  const T = useT();
+  const max = 40;
+  const fillPct = ((value - 10) / (max - 10)) * 100;
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+        <span style={{ fontFamily: FONT_UI, fontSize: 15, color: T.muted }}>Up to</span>
+        <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 20, color: T.text }}>
+          {value >= max ? "Any price" : `${money(value)}`}
+        </span>
+      </div>
+      <input type="range" min={10} max={max} step={1} value={value}
+        onChange={(e) => onChange(+e.target.value)}
+        style={{
+          width: "100%", height: 6, borderRadius: 6, appearance: "none", WebkitAppearance: "none", cursor: "pointer",
+          background: `linear-gradient(to right, ${T.accent} ${fillPct}%, ${T.chipBg} ${fillPct}%)`,
+          outline: "none",
+        }} />
+    </div>
+  );
+}
+
+const SORTS = [
+  { id: "closest", label: "Closest" },
+  { id: "price", label: "Lowest price" },
+  { id: "rating", label: "Top rated" },
+];
+
+// ── the sheet ────────────────────────────────────────────────
+function FiltersSheet({ initial, onApply, onClose }) {
+  const T = useT();
+  const [f, setF] = React.useState(initial);
+  const set = (patch) => setF((p) => ({ ...p, ...patch }));
+  const toggle = (key, val) => setF((p) => ({ ...p, [key]: p[key].includes(val) ? p[key].filter((x) => x !== val) : [...p[key], val] }));
+
+  const count = applyFilters(window.DROPS, f).length;
+  const isDefault = JSON.stringify(f) === JSON.stringify(DEFAULT_FILTERS);
+
+  return (
+    <div style={{ position: "absolute", inset: 0, zIndex: 60, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+      {/* scrim */}
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", animation: "imp-fade .2s ease" }} />
+
+      {/* sheet body */}
+      <div style={{
+        position: "relative", background: T.bg, borderRadius: "26px 26px 0 0", maxHeight: "86%",
+        display: "flex", flexDirection: "column", animation: "imp-rise .3s cubic-bezier(.2,.8,.2,1)",
+        boxShadow: "0 -18px 50px rgba(0,0,0,0.4)",
+      }}>
+        {/* grabber + header */}
+        <div style={{ flex: "0 0 auto" }}>
+          <div style={{ width: 38, height: 5, borderRadius: 3, background: T.line2, margin: "10px auto 0" }} />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 22px 14px" }}>
+            <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 22, color: T.text, letterSpacing: "-0.02em" }}>Filters</span>
+            <button onClick={() => setF(DEFAULT_FILTERS)} disabled={isDefault} style={{
+              background: "none", border: "none", cursor: isDefault ? "default" : "pointer",
+              fontFamily: FONT_UI, fontWeight: 500, fontSize: 15, color: isDefault ? T.faint : T.accent, opacity: isDefault ? 0.5 : 1, padding: 0,
+            }}>Clear all</button>
+          </div>
+        </div>
+
+        {/* scroll area */}
+        <div style={{ overflowY: "auto", flex: 1, borderTop: `1px solid ${T.line}` }}>
+          <FRow label="What" hint={f.cats.length ? `${f.cats.length} selected` : "Anything"}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 9 }}>
+              {ACTS.map((a) => <FPill key={a} dot on={f.cats.includes(a)} onClick={() => toggle("cats", a)}>{a}</FPill>)}
+            </div>
+          </FRow>
+
+          <FRow label="When">
+            <Segmented value={f.when} onChange={(v) => set({ when: v })}
+              options={[{ id: "all", label: "Anytime" }, { id: "now", label: "On now" }, { id: "later", label: "Later tonight" }]} />
+          </FRow>
+
+          <FRow label="Where" hint={f.areas.length ? `${f.areas.length} areas` : "All of Sydney"}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 9 }}>
+              {AREAS.map((s) => <FPill key={s} on={f.areas.includes(s)} onClick={() => toggle("areas", s)}>{s}</FPill>)}
+            </div>
+          </FRow>
+
+          <FRow label="Party size">
+            <PartyInline value={f.party} onChange={(v) => set({ party: v })} />
+          </FRow>
+
+          <FRow label="Price">
+            <PriceSlider value={f.maxPrice} onChange={(v) => set({ maxPrice: v })} />
+          </FRow>
+
+          <FRow label="Sort by">
+            <div style={{ display: "flex", gap: 9 }}>
+              {SORTS.map((s) => <FPill key={s.id} on={f.sort === s.id} onClick={() => set({ sort: s.id })}>{s.label}</FPill>)}
+            </div>
+          </FRow>
+        </div>
+
+        {/* sticky apply */}
+        <div style={{ flex: "0 0 auto", padding: "14px 22px 30px", borderTop: `0.5px solid ${T.line}`, background: T.bg }}>
+          <Btn full onClick={() => onApply(f)} disabled={count === 0}>
+            {count === 0 ? "No drops match" : `Show ${count} ${count === 1 ? "drop" : "drops"}`}
+          </Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { FiltersSheet });
+
+</script>
+
+<script type="text/babel" data-src="app-profile.jsx">
+// app-profile.jsx — Impulse profile + settings
+const { useT } = window;
+const { FONT_UI, FONT_DISPLAY, FONT_MONO, PulseMark, Switch, Btn } = window;
+
+const PTOP = 54, PBOTTOM = 104;
+
+// ── grouped settings list ────────────────────────────────────
+function Group({ label, children }) {
+  const T = useT();
+  return (
+    <div style={{ marginTop: 26 }}>
+      {label && <div style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: T.faint, margin: "0 6px 10px" }}>{label}</div>}
+      <div style={{ background: T.surface, borderRadius: 18, overflow: "hidden", boxShadow: T.shadow }}>
+        {React.Children.toArray(children).filter(Boolean).map((c, i, arr) => (
+          <div key={i}>
+            {c}
+            {i < arr.length - 1 && <div style={{ height: 1, background: T.line, marginLeft: 54 }} />}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RowIcon({ children }) {
+  const T = useT();
+  return (
+    <span style={{ width: 30, height: 30, borderRadius: 9, background: T.accentSoft, display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto" }}>
+      {children}
+    </span>
+  );
+}
+
+function Row({ icon, label, value, trailing, onClick, last }) {
+  const T = useT();
+  const [press, setPress] = React.useState(false);
+  const tappable = !!onClick;
+  return (
+    <div
+      onClick={onClick}
+      onPointerDown={() => tappable && setPress(true)} onPointerUp={() => setPress(false)} onPointerLeave={() => setPress(false)}
+      style={{
+        display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", minHeight: 30,
+        cursor: tappable ? "pointer" : "default", background: press ? T.chipBg : "transparent", transition: "background .12s",
+      }}>
+      {icon && <RowIcon>{icon}</RowIcon>}
+      <span style={{ fontFamily: FONT_UI, fontSize: 16, color: T.text, flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
+      {value != null && <span style={{ fontFamily: FONT_UI, fontSize: 15.5, color: T.muted, whiteSpace: "nowrap", flex: "0 0 auto" }}>{value}</span>}
+      {trailing}
+      {tappable && !trailing && (
+        <svg width="8" height="14" viewBox="0 0 8 14" fill="none" style={{ flex: "0 0 auto" }}><path d="M1 1l6 6-6 6" stroke={T.faint} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      )}
+    </div>
+  );
+}
+
+const ic = {
+  pin: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinejoin="round"><path d="M12 21c4.5-4.2 7-7.6 7-11a7 7 0 10-14 0c0 3.4 2.5 6.8 7 11z" /><circle cx="12" cy="10" r="2.2" fill={c} stroke="none" /></svg>,
+  star: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2"><circle cx="12" cy="12" r="3" fill={c} stroke="none" /><circle cx="12" cy="12" r="8" /></svg>,
+  people: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3" /><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5" /><path d="M16 5.5a3 3 0 010 5.4M17 15c2.5.4 4 2.3 4 5" /></svg>,
+  bell: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 10a6 6 0 1112 0c0 5 2 6 2 6H4s2-1 2-6z" /><path d="M10 20a2 2 0 004 0" /></svg>,
+  clock: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="8.5" /><path d="M12 8v4.5l3 2" /></svg>,
+  mail: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2.5" /><path d="M4 7l8 5.5L20 7" /></svg>,
+  moon: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinejoin="round"><path d="M20 14.5A8 8 0 019.5 4 7 7 0 1020 14.5z" /></svg>,
+  card: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinejoin="round"><rect x="3" y="6" width="18" height="12" rx="2.5" /><path d="M3 10h18" /></svg>,
+  help: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="8.5" /><path d="M9.5 9.5a2.5 2.5 0 014.3 1.7c0 1.7-2.3 1.8-2.3 3.3" /><circle cx="11.5" cy="17.5" r=".6" fill={c} stroke="none" /></svg>,
+  doc: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h8l4 4v14H6z" /><path d="M9 11h6M9 15h4" /></svg>,
+  shield: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z" /></svg>,
+};
+
+function StatTile({ big, label }) {
+  const T = useT();
+  return (
+    <div style={{ flex: 1, background: T.surface, borderRadius: 16, padding: "15px 16px", boxShadow: T.shadow }}>
+      <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24, color: T.text, letterSpacing: "-0.02em", lineHeight: 1 }}>{big}</div>
+      <div style={{ fontFamily: FONT_UI, fontSize: 13, color: T.muted, marginTop: 6 }}>{label}</div>
+    </div>
+  );
+}
+
+function ProfileScreen({ profile, setProfile, plansCount, dark, onToggleDark, onSignOut }) {
+  const T = useT();
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState(profile.name);
+  const [notif, setNotif] = React.useState({ near: true, reminders: true, weekly: false });
+  const setN = (k, v) => setNotif((p) => ({ ...p, [k]: v }));
+
+  const acts = profile.acts || [];
+  const actLabel = acts.length === 0 ? "Everything" : acts.length === 1 ? acts[0] : `${acts[0]} +${acts.length - 1}`;
+
+  const saveName = () => { const v = draft.trim(); if (v) setProfile((p) => ({ ...p, name: v })); setEditing(false); };
+
+  return (
+    <div style={{ height: "100%", overflowY: "auto", background: T.bg }}>
+      <div style={{ padding: `${PTOP}px 18px ${PBOTTOM}px` }}>
+        {/* header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h1 style={{ margin: 0, fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 33, color: T.text, letterSpacing: "-0.03em" }}>You</h1>
+          <button onClick={() => { setDraft(profile.name); setEditing((e) => !e); }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: FONT_UI, fontWeight: 600, fontSize: 15, color: T.accent }}>
+            {editing ? "Done" : "Edit"}
+          </button>
+        </div>
+
+        {/* identity card */}
+        <div style={{ display: "flex", alignItems: "center", gap: 15, marginTop: 18 }}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", background: T.accentSoft, border: `1.5px solid ${T.accent}`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24, color: T.accent, flex: "0 0 auto" }}>
+            {profile.name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            {editing ? (
+              <input value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={saveName}
+                onKeyDown={(e) => e.key === "Enter" && saveName()} autoFocus
+                style={{ width: "100%", fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 22, letterSpacing: "-0.02em", color: T.text, background: "transparent", border: "none", borderBottom: `2px solid ${T.accent}`, outline: "none", padding: "0 0 3px" }} />
+            ) : (
+              <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 22, color: T.text, letterSpacing: "-0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{profile.name}</div>
+            )}
+            <div style={{ fontFamily: FONT_UI, fontSize: 14.5, color: T.muted, marginTop: 3 }}>{profile.phone}</div>
+          </div>
+        </div>
+
+        {/* stats */}
+        <div style={{ display: "flex", gap: 11, marginTop: 20 }}>
+          <StatTile big={plansCount} label={plansCount === 1 ? "Plan claimed" : "Plans claimed"} />
+          <StatTile big={profile.suburb || "Sydney"} label="Home base" />
+        </div>
+
+        {/* going out */}
+        <Group label="Going out">
+          <Row icon={ic.pin(T.accent)} label="Home suburb" value={profile.suburb || "Set suburb"} onClick={() => {}} />
+          <Row icon={ic.star(T.accent)} label="Favourites" value={actLabel} onClick={() => {}} />
+          <Row icon={ic.people(T.accent)} label="Usual party size" value={`${profile.party} ${profile.party === 1 ? "person" : "people"}`} onClick={() => {}} />
+        </Group>
+
+        {/* notifications */}
+        <Group label="Notifications">
+          <Row icon={ic.bell(T.accent)} label="Drops near me" trailing={<Switch on={notif.near} onChange={(v) => setN("near", v)} />} />
+          <Row icon={ic.clock(T.accent)} label="Slot reminders" trailing={<Switch on={notif.reminders} onChange={(v) => setN("reminders", v)} />} />
+          <Row icon={ic.mail(T.accent)} label="Weekly what's-on" trailing={<Switch on={notif.weekly} onChange={(v) => setN("weekly", v)} />} />
+        </Group>
+
+        {/* appearance + payment */}
+        <Group label="App">
+          <Row icon={ic.moon(T.accent)} label="Nocturnal theme" trailing={<Switch on={dark} onChange={onToggleDark} />} />
+          <Row icon={ic.card(T.accent)} label="Payment" value="•••• 4242" onClick={() => {}} />
+        </Group>
+
+        {/* support */}
+        <Group label="Support">
+          <Row icon={ic.help(T.accent)} label="Help & support" onClick={() => {}} />
+          <Row icon={ic.doc(T.accent)} label="Terms of service" onClick={() => {}} />
+          <Row icon={ic.shield(T.accent)} label="Privacy" onClick={() => {}} />
+        </Group>
+
+        {/* sign out */}
+        <div style={{ marginTop: 22 }}>
+          <button onClick={onSignOut} style={{ width: "100%", height: 52, borderRadius: 16, border: "none", cursor: "pointer", background: T.chipBg, color: T.text, fontFamily: FONT_UI, fontWeight: 600, fontSize: 16 }}>
+            Sign out
+          </button>
+        </div>
+
+        <div style={{ textAlign: "center", marginTop: 22, fontFamily: FONT_MONO, fontSize: 11, color: T.faint, letterSpacing: "0.04em" }}>
+          impulse · v1.0.0 · made in sydney
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { ProfileScreen });
+
+</script>
+
+<script type="text/babel" data-src="app-onboarding.jsx">
+// app-onboarding.jsx — Impulse first-run flow (swipeable carousel)
+const { useT, CATEGORIES } = window;
+const { FONT_UI, FONT_DISPLAY, FONT_MONO, Logo, PulseMark, Btn, Chip, Placeholder } = window;
+
+const OB_TOP = 56;     // status-bar clearance
+const OB_BOTTOM = 36;  // home-indicator clearance
+
+const SUBURBS = ["Sydney CBD", "Surry Hills", "Newtown", "Bondi", "Marrickville", "Enmore", "Darlinghurst", "Redfern", "Chippendale", "Glebe", "Paddington", "Manly"];
+const ACTIVITIES = CATEGORIES.filter((c) => c !== "All");
+
+// ── shared panel shell: scrollable body + sticky footer ──────
+function Panel({ children, footer }) {
+  const T = useT();
+  return (
+    <div style={{ width: "100%", height: "100%", flex: "0 0 100%", display: "flex", flexDirection: "column", position: "relative" }}>
+      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>{children}</div>
+      {footer && (
+        <div style={{ padding: `12px 22px ${OB_BOTTOM}px`, display: "flex", flexDirection: "column", gap: 10, flex: "0 0 auto" }}>
+          {footer}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Lede({ kicker, title, body }) {
+  const T = useT();
+  return (
+    <div style={{ padding: "0 24px" }}>
+      {kicker && <div style={{ fontFamily: FONT_MONO, fontSize: 11.5, letterSpacing: "0.12em", textTransform: "uppercase", color: T.accent, marginBottom: 14 }}>{kicker}</div>}
+      <h1 style={{ margin: 0, fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 32, lineHeight: 1.08, letterSpacing: "-0.03em", color: T.text }}>{title}</h1>
+      {body && <p style={{ margin: "14px 0 0", fontFamily: FONT_UI, fontSize: 16.5, lineHeight: 1.5, color: T.muted, maxWidth: 330 }}>{body}</p>}
+    </div>
+  );
+}
+
+// big iconographic glyph for permission cards (simple shapes only)
+function GlyphPin() {
+  const T = useT();
+  return (
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke={T.accent} strokeWidth="1.6" strokeLinejoin="round">
+      <path d="M12 21.5c5-4.6 7.5-8.3 7.5-12A7.5 7.5 0 1 0 4.5 9.5c0 3.7 2.5 7.4 7.5 12z" />
+      <circle cx="12" cy="9.5" r="2.6" fill={T.accent} stroke="none" />
+    </svg>
+  );
+}
+function GlyphBell() {
+  const T = useT();
+  return (
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke={T.accent} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 10a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6z" />
+      <path d="M10 20a2 2 0 0 0 4 0" />
+      <circle cx="18" cy="6" r="2.4" fill={T.accent} stroke="none" />
+    </svg>
+  );
+}
+function GlyphAge() {
+  const T = useT();
+  return (
+    <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 46, letterSpacing: "-0.04em", color: T.accent, lineHeight: 1 }}>18<span style={{ fontSize: 28 }}>+</span></div>
+  );
+}
+
+function PermIcon({ children }) {
+  const T = useT();
+  return (
+    <div style={{ width: 116, height: 116, borderRadius: 30, background: T.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 30 }}>
+      {children}
+    </div>
+  );
+}
+
+// ── step 0: brand splash (two tones) ─────────────────────────
+function HeroSplash({ tone, onStart, onSignin }) {
+  const T = useT();
+  const editorial = tone === "Editorial";
+  return (
+    <Panel footer={
+      <>
+        <Btn full onClick={onStart}>Get started</Btn>
+        <button onClick={onSignin} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: FONT_UI, fontSize: 15, color: T.muted, padding: "6px 0" }}>
+          I already have an account
+        </button>
+      </>
+    }>
+      {editorial ? (
+        <div style={{ flex: 1, position: "relative", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+          <Placeholder label="hero · night out in sydney" style={{ position: "absolute", inset: 0 }} />
+          <div style={{ position: "absolute", inset: 0, background: `linear-gradient(to top, ${T.bg} 8%, ${T.bg}cc 30%, transparent 68%)` }} />
+          <div style={{ position: "relative", padding: "0 24px 8px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 18 }}>
+              <PulseMark size={30} radius={8} /><Logo size={21} />
+            </div>
+            <h1 style={{ margin: 0, fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 34, lineHeight: 1.05, letterSpacing: "-0.03em", color: T.text }}>
+              The good stuff,<br />sorted by price.
+            </h1>
+            <p style={{ margin: "14px 0 0", fontFamily: FONT_UI, fontSize: 16.5, lineHeight: 1.5, color: T.muted, maxWidth: 320 }}>
+              Real-time drops on bowling, karaoke, escape rooms and more — across Sydney, tonight.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div style={{ flex: 1, position: "relative", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: `${OB_TOP + 8}px 24px 8px` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <PulseMark size={28} radius={8} /><Logo size={20} />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1 }}>
+            <div style={{ position: "relative", width: 150, height: 150, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {[0, 1, 2].map((i) => (
+                <span key={i} style={{ position: "absolute", width: 150, height: 150, borderRadius: "50%", border: `1.5px solid ${T.accent}`, opacity: 0, animation: `imp-ring 2.6s cubic-bezier(.2,.6,.3,1) ${i * 0.86}s infinite` }} />
+              ))}
+              <span style={{ width: 56, height: 56, borderRadius: "50%", background: T.accent }} />
+            </div>
+          </div>
+          <div>
+            <h1 style={{ margin: 0, fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 52, lineHeight: 0.98, letterSpacing: "-0.04em", color: T.text }}>
+              Plans,<br />on impulse.
+            </h1>
+            <p style={{ margin: "16px 0 0", fontFamily: FONT_UI, fontSize: 16.5, lineHeight: 1.45, color: T.muted, maxWidth: 300 }}>
+              Last-minute things to do in Sydney, with the price already worked out.
+            </p>
+          </div>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+// ── step 1: sign in ──────────────────────────────────────────
+function SocialBtn({ kind, onClick }) {
+  const T = useT();
+  const apple = kind === "apple";
+  return (
+    <button onClick={onClick} style={{
+      width: "100%", height: 54, borderRadius: 16, cursor: "pointer", border: "none",
+      background: apple ? (T.dark ? "#fff" : "#000") : T.surface,
+      color: apple ? (T.dark ? "#000" : "#fff") : T.text,
+      boxShadow: apple ? "none" : `inset 0 0 0 1.5px ${T.line2}`,
+      fontFamily: FONT_UI, fontWeight: 600, fontSize: 16.5, whiteSpace: "nowrap",
+      display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+    }}>
+      {apple ? (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 12.7c-.03-2.4 1.96-3.55 2.05-3.6-1.12-1.64-2.86-1.86-3.48-1.89-1.48-.15-2.89.87-3.64.87-.75 0-1.91-.85-3.14-.83-1.62.03-3.11.94-3.94 2.39-1.68 2.92-.43 7.24 1.2 9.61.8 1.16 1.75 2.46 3 2.41 1.21-.05 1.66-.78 3.12-.78 1.46 0 1.87.78 3.14.76 1.3-.02 2.12-1.18 2.91-2.35.92-1.35 1.3-2.66 1.32-2.73-.03-.01-2.53-.97-2.56-3.85zM14.7 5.6c.66-.8 1.11-1.92.99-3.03-.95.04-2.1.63-2.79 1.43-.61.71-1.15 1.84-1 2.92 1.06.08 2.14-.54 2.8-1.32z"/></svg>
+      ) : (
+        <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.5 12.2c0-.7-.06-1.4-.18-2.05H12v3.9h5.9a5 5 0 0 1-2.18 3.3v2.74h3.52c2.06-1.9 3.26-4.7 3.26-7.89z"/><path fill="#34A853" d="M12 23c2.94 0 5.4-.97 7.2-2.64l-3.52-2.73c-.98.66-2.23 1.05-3.68 1.05-2.83 0-5.23-1.91-6.09-4.48H2.27v2.82A10.99 10.99 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.91 14.2a6.6 6.6 0 0 1 0-4.2V7.18H2.27a11 11 0 0 0 0 9.84l3.64-2.82z"/><path fill="#EA4335" d="M12 5.5c1.6 0 3.03.55 4.16 1.62l3.12-3.12A10.98 10.98 0 0 0 12 1 10.99 10.99 0 0 0 2.27 7.18l3.64 2.82C6.77 7.42 9.17 5.5 12 5.5z"/></svg>
+      )}
+      Continue with {apple ? "Apple" : "Google"}
+    </button>
+  );
+}
+
+function SignInStep({ onContinue }) {
+  const T = useT();
+  return (
+    <Panel footer={
+      <p style={{ margin: 0, fontFamily: FONT_UI, fontSize: 12, lineHeight: 1.45, color: T.faint, textAlign: "center" }}>
+        By continuing you agree to our <span style={{ color: T.muted }}>Terms</span> and <span style={{ color: T.muted }}>Privacy Policy</span>.
+      </p>
+    }>
+      <div style={{ paddingTop: OB_TOP + 14 }}>
+        <Lede kicker="Welcome in" title="Get in." body="One tap and you're set. We'll only ever use your number to hold your slots." />
+      </div>
+      <div style={{ padding: "34px 24px 0", display: "flex", flexDirection: "column", gap: 11 }}>
+        <SocialBtn kind="apple" onClick={onContinue} />
+        <SocialBtn kind="google" onClick={onContinue} />
+        <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "8px 0" }}>
+          <div style={{ flex: 1, height: 1, background: T.line }} />
+          <span style={{ fontFamily: FONT_MONO, fontSize: 11, color: T.faint, letterSpacing: "0.06em" }}>OR</span>
+          <div style={{ flex: 1, height: 1, background: T.line }} />
+        </div>
+        <Btn full variant="secondary" onClick={onContinue}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="3" /><path d="M11 18.5h2" strokeLinecap="round" /></svg>
+          Continue with phone
+        </Btn>
+      </div>
+    </Panel>
+  );
+}
+
+// ── permission steps ─────────────────────────────────────────
+function PermissionStep({ glyph, kicker, title, body, allowLabel, onAllow, onSkip, extra }) {
+  const T = useT();
+  return (
+    <Panel footer={
+      <>
+        <Btn full onClick={onAllow}>{allowLabel}</Btn>
+        <button onClick={onSkip} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: FONT_UI, fontSize: 15, color: T.muted, padding: "6px 0" }}>Not now</button>
+      </>
+    }>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "flex-start", padding: "0 24px" }}>
+        <PermIcon>{glyph}</PermIcon>
+        <div style={{ fontFamily: FONT_MONO, fontSize: 11.5, letterSpacing: "0.12em", textTransform: "uppercase", color: T.accent, marginBottom: 12 }}>{kicker}</div>
+        <h1 style={{ margin: 0, fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 30, lineHeight: 1.1, letterSpacing: "-0.03em", color: T.text }}>{title}</h1>
+        <p style={{ margin: "13px 0 0", fontFamily: FONT_UI, fontSize: 16.5, lineHeight: 1.5, color: T.muted, maxWidth: 320 }}>{body}</p>
+        {extra}
+      </div>
+    </Panel>
+  );
+}
+
+// ── 18+ step ─────────────────────────────────────────────────
+function AgeStep({ onYes, onNo, declined }) {
+  const T = useT();
+  return (
+    <Panel footer={
+      <>
+        <Btn full onClick={onYes}>Yes, I'm 18 or over</Btn>
+        <button onClick={onNo} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: FONT_UI, fontSize: 15, color: T.muted, padding: "6px 0" }}>I'm under 18</button>
+      </>
+    }>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "flex-start", padding: "0 24px" }}>
+        <PermIcon><GlyphAge /></PermIcon>
+        <div style={{ fontFamily: FONT_MONO, fontSize: 11.5, letterSpacing: "0.12em", textTransform: "uppercase", color: T.accent, marginBottom: 12 }}>Quick one</div>
+        <h1 style={{ margin: 0, fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 30, lineHeight: 1.1, letterSpacing: "-0.03em", color: T.text }}>Are you 18 or over?</h1>
+        <p style={{ margin: "13px 0 0", fontFamily: FONT_UI, fontSize: 16.5, lineHeight: 1.5, color: T.muted, maxWidth: 320 }}>
+          Some venues serve alcohol, so we check once. We'll still show you the all-ages stuff either way.
+        </p>
+        {declined && (
+          <div style={{ marginTop: 18, padding: "12px 14px", background: T.accentSoft, borderRadius: 12, fontFamily: FONT_UI, fontSize: 14, color: T.text, maxWidth: 320 }}>
+            No worries — we'll hide 18+ venues and show you everything else.
+          </div>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+// ── suburb step ──────────────────────────────────────────────
+function SuburbStep({ value, onPick, onContinue }) {
+  const T = useT();
+  return (
+    <Panel footer={<Btn full onClick={onContinue} disabled={!value}>{value ? `Set to ${value}` : "Pick your suburb"}</Btn>}>
+      <div style={{ paddingTop: OB_TOP + 14 }}>
+        <Lede kicker="Home base" title="Where do you call home?" body="We'll sort drops by what's closest. Change it any time." />
+      </div>
+      <div style={{ padding: "20px 22px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, background: T.surface, borderRadius: 14, padding: "12px 15px", marginBottom: 16, boxShadow: T.shadow }}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" strokeLinecap="round" /></svg>
+          <span style={{ fontFamily: FONT_UI, fontSize: 15, color: T.faint, whiteSpace: "nowrap" }}>Search Sydney suburbs</span>
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 9 }}>
+          {SUBURBS.map((s) => <Chip key={s} active={value === s} onClick={() => onPick(s)}>{s}</Chip>)}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+// ── activities step ──────────────────────────────────────────
+function ActivitiesStep({ selected, onToggle, onDone }) {
+  const T = useT();
+  const n = selected.length;
+  return (
+    <Panel footer={
+      <>
+        <Btn full onClick={onDone} disabled={n === 0}>{n === 0 ? "Pick a few" : `Done — ${n} picked`}</Btn>
+        <button onClick={onDone} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: FONT_UI, fontSize: 15, color: T.muted, padding: "6px 0" }}>Skip — show me everything</button>
+      </>
+    }>
+      <div style={{ paddingTop: OB_TOP + 14 }}>
+        <Lede kicker="Last bit" title="What are you into?" body="We'll bump these to the top. You can change it later." />
+      </div>
+      <div style={{ padding: "22px 22px 0", display: "flex", flexWrap: "wrap", gap: 10 }}>
+        {ACTIVITIES.map((a) => {
+          const on = selected.includes(a);
+          return (
+            <button key={a} onClick={() => onToggle(a)} style={{
+              padding: "11px 16px", borderRadius: 14, cursor: "pointer", border: "none",
+              fontFamily: FONT_UI, fontWeight: 500, fontSize: 15.5, letterSpacing: "-0.01em",
+              background: on ? T.accent : T.chipBg, color: on ? T.accentInk : T.text, whiteSpace: "nowrap",
+              display: "inline-flex", alignItems: "center", gap: 8, transition: "background .15s, color .15s, transform .1s",
+            }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: on ? T.accentInk : T.faint }} />
+              {a}
+            </button>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
+// ── flow controller (swipeable track + dots) ─────────────────
+function Onboarding({ tone, onComplete }) {
+  const T = useT();
+  const [step, setStep] = React.useState(0);
+  const [drag, setDrag] = React.useState(0);
+  const [w, setW] = React.useState(402);
+  const wrapRef = React.useRef(null);
+  const dragState = React.useRef({ active: false, x0: 0, moved: false });
+
+  React.useLayoutEffect(() => {
+    const measure = () => { if (wrapRef.current) setW(wrapRef.current.clientWidth); };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+
+  const [suburb, setSuburb] = React.useState(null);
+  const [acts, setActs] = React.useState([]);
+  const [ageDeclined, setAgeDeclined] = React.useState(false);
+
+  const STEPS = ["hero", "signin", "location", "notifications", "age", "suburb", "activities"];
+  const n = STEPS.length;
+  const go = (i) => setStep(Math.max(0, Math.min(n - 1, i)));
+  const next = () => go(step + 1);
+
+  // swipe handlers (only horizontal intent; clicks pass through)
+  const onDown = (e) => { dragState.current = { active: true, x0: e.clientX, moved: false }; };
+  const onMove = (e) => {
+    const s = dragState.current; if (!s.active) return;
+    const dx = e.clientX - s.x0;
+    if (Math.abs(dx) > 6) s.moved = true;
+    // resist at edges
+    let d = dx;
+    if ((step === 0 && dx > 0) || (step === n - 1 && dx < 0)) d = dx * 0.32;
+    setDrag(d);
+  };
+  const onUp = () => {
+    const s = dragState.current; if (!s.active) return;
+    s.active = false;
+    if (drag < -64) go(step + 1);
+    else if (drag > 64) go(step - 1);
+    setDrag(0);
+  };
+
+  const toggleAct = (a) => setActs((p) => p.includes(a) ? p.filter((x) => x !== a) : [...p, a]);
+
+  const panels = [
+    <HeroSplash key="hero" tone={tone} onStart={next} onSignin={next} />,
+    <SignInStep key="signin" onContinue={next} />,
+    <PermissionStep key="loc" glyph={<GlyphPin />} kicker="Find your area"
+      title="What's on near you" body="Impulse uses your location to surface drops within a few suburbs — never in the background, only while you're looking."
+      allowLabel="Allow location" onAllow={next} onSkip={next} />,
+    <PermissionStep key="notif" glyph={<GlyphBell />} kicker="Stay in the loop"
+      title="Get the drop" body="A nudge when something good opens up near you tonight. No daily blast, no noise — just the ones worth leaving the house for."
+      allowLabel="Turn on notifications" onAllow={next} onSkip={next} />,
+    <AgeStep key="age" declined={ageDeclined} onYes={next} onNo={() => { setAgeDeclined(true); setTimeout(next, 650); }} />,
+    <SuburbStep key="suburb" value={suburb} onPick={setSuburb} onContinue={next} />,
+    <ActivitiesStep key="acts" selected={acts} onToggle={toggleAct} onDone={() => onComplete({ suburb, acts })} />,
+  ];
+
+  return (
+    <div style={{ position: "absolute", inset: 0, background: T.bg, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      {/* progress dots + skip */}
+      <div style={{ position: "absolute", top: OB_TOP - 4, left: 0, right: 0, zIndex: 20, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 22px", pointerEvents: "none" }}>
+        <div style={{ display: "flex", gap: 6, pointerEvents: "auto" }}>
+          {STEPS.map((_, i) => (
+            <button key={i} onClick={() => go(i)} style={{
+              width: i === step ? 22 : 7, height: 7, borderRadius: 4, border: "none", padding: 0, cursor: "pointer",
+              background: i === step ? T.accent : T.line2, transition: "width .25s, background .25s",
+            }} />
+          ))}
+        </div>
+        <button onClick={onComplete} style={{ pointerEvents: "auto", background: "none", border: "none", cursor: "pointer", fontFamily: FONT_UI, fontWeight: 500, fontSize: 14, color: T.faint }}>
+          {step === n - 1 ? "" : "Skip"}
+        </button>
+      </div>
+
+      {/* swipeable track */}
+      <div ref={wrapRef} style={{ flex: 1, overflow: "hidden" }}>
+        <div
+          onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}
+          style={{ display: "flex", height: "100%", width: w * n, touchAction: "pan-y",
+            transform: `translateX(${-step * w + drag}px)`,
+            transition: dragState.current.active ? "none" : "transform .34s cubic-bezier(.25,.8,.3,1)",
+          }}>
+          {panels.map((p, i) => (
+            <div key={i} style={{ flex: `0 0 ${w}px`, width: w, height: "100%" }}>{p}</div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { Onboarding });
+
+</script>
+
+<script type="text/babel" data-src="app-main.jsx">
+// app-main.jsx — Impulse app: router, theme, tweaks, device mount
+const { tokens, ThemeCtx, DROPS, DEFAULT_FILTERS } = window;
+const { TonightScreen, MapScreen, PlansScreen, DetailScreen, ClaimScreen, ConfirmScreen, TabBar, Onboarding, FiltersSheet, ProfileScreen } = window;
+const { IOSDevice } = window;
+const { useTweaks, TweaksPanel, TweakSection, TweakRadio, TweakToggle, TweakColor, TweakButton } = window;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "dark": true,
+  "accent": "#FF5A4D",
+  "intro": "Minimal",
+  "home": "Editorial"
+}/*EDITMODE-END*/;
+
+const genCode = () => "IMP-" + Math.floor(1000 + Math.random() * 9000);
+
+function App() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const T = tokens(t.dark, t.accent);
+
+  const [onboarded, setOnboarded] = React.useState(false);
+  const [tab, setTab] = React.useState("tonight");
+  const [detailId, setDetailId] = React.useState(null);
+  const [claimDrop, setClaimDrop] = React.useState(null);
+  const [confirm, setConfirm] = React.useState(null);
+  const [plans, setPlans] = React.useState([]);
+  const [filters, setFilters] = React.useState(DEFAULT_FILTERS);
+  const [filtersOpen, setFiltersOpen] = React.useState(false);
+  const [profile, setProfile] = React.useState({ name: "Jordan Lee", phone: "+61 4XX XXX 891", suburb: "Surry Hills", acts: ["Bowling", "Karaoke", "Live music"], party: 2 });
+
+  const detail = DROPS.find((d) => d.id === detailId) || null;
+
+  const openDrop = (id) => setDetailId(id);
+  const doConfirm = ({ d, party, time, total }) => {
+    const code = genCode();
+    const plan = { code, d, venue: d.venue, cat: d.cat, party, time, total };
+    setPlans((p) => [plan, ...p]);
+    setConfirm(plan);
+  };
+  const goPlans = () => { setConfirm(null); setClaimDrop(null); setDetailId(null); setTab("plans"); };
+  const goTonight = () => { setConfirm(null); setClaimDrop(null); setDetailId(null); setTab("tonight"); };
+  const completeOnboarding = (data) => {
+    if (data && (data.suburb || (data.acts && data.acts.length)))
+      setProfile((p) => ({ ...p, suburb: data.suburb || p.suburb, acts: data.acts && data.acts.length ? data.acts : p.acts }));
+    setOnboarded(true);
+  };
+  const signOut = () => { setTab("tonight"); setDetailId(null); setClaimDrop(null); setConfirm(null); setFilters(DEFAULT_FILTERS); setOnboarded(false); };
+
+  const screen = tab === "tonight"
+    ? <TonightScreen layout={t.home === "Compact" ? "compact" : "editorial"} filters={filters} onSetFilters={setFilters} onOpenFilters={() => setFiltersOpen(true)} onOpen={openDrop} />
+    : tab === "map"
+      ? <MapScreen filters={filters} onOpenFilters={() => setFiltersOpen(true)} onOpen={openDrop} />
+      : tab === "plans"
+        ? <PlansScreen plans={plans} onTonight={() => setTab("tonight")} onOpenPlan={(p) => setConfirm(p)} />
+        : <ProfileScreen profile={profile} setProfile={setProfile} plansCount={plans.length} dark={t.dark} onToggleDark={(v) => setTweak("dark", v)} onSignOut={signOut} />;
+
+  return (
+    <ThemeCtx.Provider value={T}>
+      <div style={{
+        minHeight: "100vh", width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+        background: "radial-gradient(120% 100% at 50% 0%, #211d1a 0%, #131110 60%, #0b0a09 100%)",
+        padding: 24, boxSizing: "border-box", fontFamily: "'Archivo', system-ui, sans-serif",
+      }}>
+        <IOSDevice dark={t.dark}>
+          <div style={{ position: "relative", height: "100%", overflow: "hidden", background: T.bg }}>
+            {onboarded ? (
+              <>
+                {screen}
+                <TabBar tab={tab} onTab={(id) => { setDetailId(null); setTab(id); }} />
+                {detail && (
+                  <DetailScreen d={detail} onBack={() => setDetailId(null)} onClaim={(d) => setClaimDrop(d)} />
+                )}
+                {claimDrop && (
+                  <ClaimScreen d={claimDrop} onBack={() => setClaimDrop(null)} onConfirm={doConfirm} />
+                )}
+                {confirm && (
+                  <ConfirmScreen claim={confirm} onPlans={goPlans} onDone={goTonight} />
+                )}
+                {filtersOpen && (
+                  <FiltersSheet initial={filters} onClose={() => setFiltersOpen(false)}
+                    onApply={(f) => { setFilters(f); setFiltersOpen(false); }} />
+                )}
+              </>
+            ) : (
+              <Onboarding key={t.intro} tone={t.intro} onComplete={completeOnboarding} />
+            )}
+          </div>
+        </IOSDevice>
+
+        <TweaksPanel>
+          <TweakSection label="Theme" />
+          <TweakToggle label="Nocturnal (dark)" value={t.dark} onChange={(v) => setTweak("dark", v)} />
+          <TweakColor label="Accent" value={t.accent}
+            options={["#FF5A4D", "#FF7A1A", "#D6149A"]}
+            onChange={(v) => setTweak("accent", v)} />
+          <TweakSection label="Onboarding" />
+          <TweakRadio label="Intro tone" value={t.intro} options={["Minimal", "Editorial"]}
+            onChange={(v) => { setTweak("intro", v); setOnboarded(false); }} />
+          <TweakButton label="Replay onboarding" onClick={() => setOnboarded(false)} />
+          <TweakSection label="Home feed" />
+          <TweakRadio label="Layout" value={t.home} options={["Editorial", "Compact"]}
+            onChange={(v) => setTweak("home", v)} />
+        </TweaksPanel>
+      </div>
+    </ThemeCtx.Provider>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+
+</script>
+</body>
+</html>
