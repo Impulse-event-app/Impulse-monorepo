@@ -28,6 +28,10 @@ yarn-error.*
 
 # macOS
 .DS_Store
+
+# Environment variables (local overrides — .env is committed since it holds public keys only)
+.env.local
+.env.*.local
 *.pem
 
 # local env files

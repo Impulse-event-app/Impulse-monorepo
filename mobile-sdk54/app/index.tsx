@@ -1,13 +1,22 @@
+import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fontDisplay, fontUI, tokens } from '../src/theme';
+import { supabase } from '../src/supabase';
 
 const T = tokens(true);
 
 export default function RoleSelector() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+
+  // If the user already has a valid session, skip the role selector and onboarding.
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) router.replace('/(user)/home');
+    });
+  }, []);
 
   return (
     <View
