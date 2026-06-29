@@ -84,11 +84,15 @@ export async function syncUserProfile(updates: {
 } = {}) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
-  await supabase.from('users').upsert({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase.from('users') as any).upsert({
     id: user.id,
     email: user.email ?? null,
     phone: user.phone ?? null,
-    ...updates,
+    full_name: updates.full_name ?? null,
+    suburb: updates.suburb ?? null,
+    acts: updates.acts ?? null,
+    party_size: updates.party_size ?? null,
     updated_at: new Date().toISOString(),
   });
 }

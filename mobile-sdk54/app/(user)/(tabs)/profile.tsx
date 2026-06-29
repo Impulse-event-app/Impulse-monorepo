@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fontDisplay, fontMono, fontUI, useApp } from '../../../src/theme';
 import { Switch } from '../../../src/components';
 import { ChevronRight, RowIcons } from '../../../src/icons';
+import { signOut as supabaseSignOut } from '../../../src/auth';
 
 function Group({ label, children }: { label?: string; children: React.ReactNode }) {
   const { T } = useApp();
@@ -95,6 +96,7 @@ export default function ProfileScreen() {
   };
 
   const signOut = () => {
+    supabaseSignOut().catch(console.warn);
     reset();
     router.replace('/');
   };
