@@ -146,10 +146,25 @@ export const DROPS: Drop[] = RAW.map((d) => ({
   cap: CAPS[d.id],
 }));
 
-// pin coordinates (% of map) for the Map screen
-export const PIN_POS: Record<string, [number, number]> = {
-  pins: [38, 30], lockup: [70, 22], sidepocket: [22, 58], puttlane: [55, 44],
-  echoroom: [48, 64], frontroom: [78, 52], frequency: [30, 78], bullseye: [62, 70],
+// real Sydney coordinates for each drop (drives the Map screen)
+export type LatLng = { latitude: number; longitude: number };
+export const LATLNG: Record<string, LatLng> = {
+  pins: { latitude: -33.8975, longitude: 151.2236 },       // Moore Park
+  lockup: { latitude: -33.8990, longitude: 151.1790 },     // Newtown
+  sidepocket: { latitude: -33.9015, longitude: 151.1718 }, // Enmore
+  puttlane: { latitude: -33.8788, longitude: 151.2188 },   // Darlinghurst
+  echoroom: { latitude: -33.8779, longitude: 151.2031 },   // CBD
+  frontroom: { latitude: -33.8965, longitude: 151.1801 },  // Newtown
+  frequency: { latitude: -33.9112, longitude: 151.1558 },  // Marrickville
+  bullseye: { latitude: -33.8885, longitude: 151.1985 },   // Chippendale
+};
+
+// region that frames all of the drops (Sydney inner-city)
+export const SYDNEY_REGION = {
+  latitude: -33.892,
+  longitude: 151.195,
+  latitudeDelta: 0.075,
+  longitudeDelta: 0.075,
 };
 
 // areas present in the dataset (for the filter sheet)
