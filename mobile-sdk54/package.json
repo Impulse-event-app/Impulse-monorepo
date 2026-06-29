@@ -25,8 +25,8 @@
     "react-native-svg": "15.12.1"
   },
   "devDependencies": {
-    "@types/react": "~19.2.2",
-    "typescript": "~6.0.3"
+    "@types/react": "~19.1.10",
+    "typescript": "~5.9.2"
   },
   "scripts": {
     "start": "expo start",
