@@ -1,67 +1,93 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Dimensions, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { DROPS, PIN_POS, activeFilterCount, applyFilters, money } from '../../../src/data';
-import { fontMono, fontUI, useApp } from '../../../src/theme';
+import MapView, { Marker } from 'react-native-maps';
+import { DROPS, LATLNG, SYDNEY_REGION, activeFilterCount, applyFilters, money } from '../../../src/data';
+import { fontUI, useApp } from '../../../src/theme';
 import { DropCardCompact, Pin } from '../../../src/components';
 import { Filter, Search } from '../../../src/icons';
+import { FLOATING_TAB_CLEARANCE } from './_layout';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+// Custom marker. react-native-maps caches the rendered child as a static
+// image, so we briefly enable tracksViewChanges whenever the pin's look
+// changes (selection), then disable it again to keep the map smooth.
+function DropMarker({
+  id, label, active, dim, onPress,
+}: {
+  id: string;
+  label: string;
+  active: boolean;
+  dim: boolean;
+  onPress: () => void;
+}) {
+  const [track, setTrack] = useState(true);
+  useEffect(() => {
+    setTrack(true);
+    const t = setTimeout(() => setTrack(false), 500);
+    return () => clearTimeout(t);
+  }, [active, dim]);
+
+  return (
+    <Marker
+      coordinate={LATLNG[id]}
+      anchor={{ x: 0.5, y: 1 }}
+      tracksViewChanges={track}
+      onPress={dim ? undefined : onPress}
+      zIndex={active ? 5 : dim ? 1 : 2}
+    >
+      <View style={{ opacity: dim ? 0.35 : 1 }}>
+        <Pin active={active} label={label} />
+      </View>
+    </Marker>
+  );
+}
 
 export default function MapScreen() {
   const { T, filters } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const mapRef = useRef<MapView>(null);
   const [sel, setSel] = useState<string | null>(null);
 
   const selDrop = DROPS.find((d) => d.id === sel) || null;
   const matchIds = new Set(applyFilters(DROPS, filters).map((d) => d.id));
   const activeCount = activeFilterCount(filters);
 
-  const GRID = 46;
-  const cols = Math.ceil(SCREEN_W / GRID) + 1;
-  const rows = Math.ceil(SCREEN_H / GRID) + 1;
+  const select = (id: string) => {
+    setSel(id);
+    const c = LATLNG[id];
+    if (c) mapRef.current?.animateCamera({ center: c }, { duration: 350 });
+  };
+
+  // Sit the selected card just above the floating tab bar.
+  const barTop = (insets.bottom > 0 ? insets.bottom : 16) + 56;
 
   return (
-    <View style={{ flex: 1, backgroundColor: T.mapBg, overflow: 'hidden' }}>
-      {/* faux map: grid */}
-      {[...Array(cols)].map((_, i) => (
-        <View key={`v${i}`} style={{ position: 'absolute', top: 0, bottom: 0, left: i * GRID, width: 1, backgroundColor: T.mapLine }} />
-      ))}
-      {[...Array(rows)].map((_, i) => (
-        <View key={`h${i}`} style={{ position: 'absolute', left: 0, right: 0, top: i * GRID, height: 1, backgroundColor: T.mapLine }} />
-      ))}
-      {/* blocks */}
-      <View style={{ position: 'absolute', left: '8%', top: '12%', width: '34%', height: '22%', backgroundColor: T.mapBlock, borderRadius: 8 }} />
-      <View style={{ position: 'absolute', left: '58%', top: '30%', width: '30%', height: '30%', backgroundColor: T.mapBlock, borderRadius: 8 }} />
-      <View style={{ position: 'absolute', left: '15%', top: '62%', width: '40%', height: '26%', backgroundColor: T.mapBlock, borderRadius: 8 }} />
-      {/* roads */}
-      <View style={{ position: 'absolute', left: 0, right: 0, top: '47%', height: 6, backgroundColor: T.mapLine }} />
-      <View style={{ position: 'absolute', top: 0, bottom: 0, left: '46%', width: 6, backgroundColor: T.mapLine }} />
-
-      <Text style={{ position: 'absolute', right: 12, bottom: 8, fontFamily: fontMono(400), fontSize: 9.5, letterSpacing: 0.8, textTransform: 'uppercase', color: T.phText }}>
-        map placeholder
-      </Text>
-
-      {/* pins */}
-      {DROPS.map((d) => {
-        const [x, y] = PIN_POS[d.id] || [50, 50];
-        const match = matchIds.has(d.id);
-        return (
-          <View
+    <View style={{ flex: 1, backgroundColor: T.mapBg }}>
+      <MapView
+        ref={mapRef}
+        style={{ flex: 1 }}
+        initialRegion={SYDNEY_REGION}
+        userInterfaceStyle={T.dark ? 'dark' : 'light'}
+        showsCompass={false}
+        showsPointsOfInterest={false}
+        showsMyLocationButton={false}
+        toolbarEnabled={false}
+        onPress={() => setSel(null)}
+        mapPadding={{ top: insets.top + 56, right: 0, bottom: barTop, left: 0 }}
+      >
+        {DROPS.map((d) => (
+          <DropMarker
             key={d.id}
-            pointerEvents={match ? 'auto' : 'none'}
-            style={{
-              position: 'absolute', left: `${x}%`, top: `${y}%`,
-              transform: [{ translateX: -24 }, { translateY: -36 }],
-              opacity: match ? 1 : 0.32, zIndex: sel === d.id ? 5 : match ? 2 : 1,
-            }}
-          >
-            <Pin active={sel === d.id} label={money(d.now)} onPress={() => setSel(d.id)} />
-          </View>
-        );
-      })}
+            id={d.id}
+            label={money(d.now)}
+            active={sel === d.id}
+            dim={!matchIds.has(d.id)}
+            onPress={() => select(d.id)}
+          />
+        ))}
+      </MapView>
 
       {/* top search + filter row */}
       <View style={{ position: 'absolute', top: insets.top + 4, left: 18, right: 18, flexDirection: 'row', gap: 9 }}>
@@ -79,7 +105,7 @@ export default function MapScreen() {
 
       {/* selected mini card */}
       {selDrop && (
-        <View style={{ position: 'absolute', left: 14, right: 14, bottom: 16 }}>
+        <View style={{ position: 'absolute', left: 14, right: 14, bottom: barTop + 8 }}>
           <DropCardCompact d={selDrop} onPress={() => router.push(`/(user)/event/${selDrop.id}`)} />
         </View>
       )}

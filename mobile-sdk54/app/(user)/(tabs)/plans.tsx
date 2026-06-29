@@ -3,6 +3,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fontDisplay, fontMono, fontUI, useApp } from '../../../src/theme';
 import { Btn, FauxQR, PulseMark } from '../../../src/components';
+import { FLOATING_TAB_CLEARANCE } from './_layout';
 
 export default function PlansScreen() {
   const { T, plans } = useApp();
@@ -30,7 +31,7 @@ export default function PlansScreen() {
             </View>
           </View>
         ) : (
-          <View style={{ paddingHorizontal: 18, paddingTop: 18, paddingBottom: 24, gap: 13 }}>
+          <View style={{ paddingHorizontal: 18, paddingTop: 18, paddingBottom: 24 + FLOATING_TAB_CLEARANCE, gap: 13 }}>
             {plans.map((p) => (
               <Pressable
                 key={p.code}

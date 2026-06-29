@@ -6,6 +6,7 @@ import { fontDisplay, fontMono, fontUI, useApp } from '../../../src/theme';
 import { Switch } from '../../../src/components';
 import { ChevronRight, RowIcons } from '../../../src/icons';
 import { signOut as supabaseSignOut } from '../../../src/auth';
+import { FLOATING_TAB_CLEARANCE } from './_layout';
 
 function Group({ label, children }: { label?: string; children: React.ReactNode }) {
   const { T } = useApp();
@@ -103,7 +104,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: 18, paddingBottom: 40 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: 18, paddingBottom: 40 + FLOATING_TAB_CLEARANCE }}>
         {/* header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={{ fontFamily: fontDisplay(700), fontSize: 33, color: T.text, letterSpacing: -1 }}>You</Text>

@@ -18,6 +18,7 @@ import {
   PulseMark,
 } from '../../../src/components';
 import { Filter } from '../../../src/icons';
+import { FLOATING_TAB_CLEARANCE } from './_layout';
 
 function FilterButton({ count, onPress }: { count: number; onPress: () => void }) {
   const { T } = useApp();
@@ -84,7 +85,7 @@ export default function HomeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 + FLOATING_TAB_CLEARANCE }}>
         <View style={{ paddingTop: insets.top + 8 }}>
           <View style={{ paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
