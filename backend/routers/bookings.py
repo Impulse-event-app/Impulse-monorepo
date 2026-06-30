@@ -4,12 +4,12 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from auth import get_current_user
 from database import get_db
 from models import Booking, Deal, Venue
-from schemas import BookingCreate, BookingResponse, RedeemResponse
+from schemas import BookingCreate, BookingResponse, BookingWithDetailsResponse, RedeemResponse
 
 router = APIRouter()
 
@@ -22,18 +22,20 @@ def _generate_code() -> str:
 # NOTE: /me must be declared before /{booking_id} to prevent FastAPI
 # treating the literal string "me" as a booking ID.
 
-@router.get("/me", response_model=List[BookingResponse])
+@router.get("/me", response_model=List[BookingWithDetailsResponse])
 def get_my_bookings(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
     """User: all bookings belonging to the calling user."""
-    return (
+    bookings = (
         db.query(Booking)
+        .options(joinedload(Booking.deal).joinedload(Deal.venue))
         .filter(Booking.user_id == user["sub"])
         .order_by(Booking.created_at.desc())
         .all()
     )
+    return [BookingWithDetailsResponse.from_booking(b) for b in bookings]
 
 
 @router.get("", response_model=List[BookingResponse])
@@ -62,7 +64,7 @@ def list_bookings_for_deal(
     )
 
 
-@router.post("", response_model=BookingResponse, status_code=201)
+@router.post("", response_model=BookingWithDetailsResponse, status_code=201)
 def create_booking(
     body: BookingCreate,
     db: Session = Depends(get_db),
@@ -120,7 +122,14 @@ def create_booking(
     db.add(booking)
     db.commit()
     db.refresh(booking)
-    return booking
+    # Reload with relationships for the response
+    booking = (
+        db.query(Booking)
+        .options(joinedload(Booking.deal).joinedload(Deal.venue))
+        .filter(Booking.id == booking.id)
+        .first()
+    )
+    return BookingWithDetailsResponse.from_booking(booking)
 
 
 @router.get("/{booking_id}", response_model=BookingResponse)

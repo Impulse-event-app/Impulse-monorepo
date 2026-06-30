@@ -1,12 +1,12 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from auth import get_current_user
 from database import get_db
 from models import Deal, Venue
-from schemas import DealCreate, DealResponse, DealUpdate
+from schemas import DealCreate, DealResponse, DealUpdate, DealWithVenueResponse
 
 router = APIRouter()
 
@@ -24,7 +24,7 @@ def _assert_deal_owner(deal: Deal, user: dict, db: Session) -> None:
         raise HTTPException(status_code=403, detail="Not authorized for this deal")
 
 
-@router.get("", response_model=List[DealResponse])
+@router.get("", response_model=List[DealWithVenueResponse])
 def list_deals(
     suburb: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
@@ -32,8 +32,8 @@ def list_deals(
     active_only: bool = Query(True),
     db: Session = Depends(get_db),
 ):
-    """Public: browse active deals with optional filters."""
-    q = db.query(Deal).join(Venue, Deal.venue_id == Venue.id)
+    """Public: browse active deals with venue info included."""
+    q = db.query(Deal).options(joinedload(Deal.venue)).join(Venue, Deal.venue_id == Venue.id)
     if active_only:
         q = q.filter(Deal.is_active == True, Deal.spots_remaining > 0)
     if suburb:
@@ -42,7 +42,8 @@ def list_deals(
         q = q.filter(Deal.category.ilike(f"%{category}%"))
     if date:
         q = q.filter(Deal.date == date)
-    return q.order_by(Deal.created_at.desc()).all()
+    deals = q.order_by(Deal.created_at.desc()).all()
+    return [DealWithVenueResponse.from_deal(d) for d in deals]
 
 
 @router.post("", response_model=DealResponse, status_code=201)
@@ -73,9 +74,17 @@ def create_deal(
     return deal
 
 
-@router.get("/{deal_id}", response_model=DealResponse)
+@router.get("/{deal_id}", response_model=DealWithVenueResponse)
 def get_deal(deal_id: str, db: Session = Depends(get_db)):
-    return _get_deal_or_404(deal_id, db)
+    deal = (
+        db.query(Deal)
+        .options(joinedload(Deal.venue))
+        .filter(Deal.id == deal_id)
+        .first()
+    )
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    return DealWithVenueResponse.from_deal(deal)
 
 
 @router.patch("/{deal_id}", response_model=DealResponse)

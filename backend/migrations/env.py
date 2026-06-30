@@ -14,7 +14,9 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Override sqlalchemy.url from the environment — never hardcode creds in alembic.ini
-config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
+# Escape % signs so configparser doesn't treat them as interpolation markers.
+db_url = os.environ["DATABASE_URL"].replace("%", "%%")
+config.set_main_option("sqlalchemy.url", db_url)
 
 # Point Alembic at all SQLAlchemy models so autogenerate works
 from database import Base  # noqa: E402

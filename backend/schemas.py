@@ -93,6 +93,7 @@ class DealCreate(BaseModel):
     title: str
     category: str
     description: Optional[str] = None
+    unit: Optional[str] = None         # pricing unit, e.g. "pp", "/lane", "/room·hr"
     original_price: float
     discount_pct: float
     date: str
@@ -106,6 +107,7 @@ class DealCreate(BaseModel):
 class DealUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
+    unit: Optional[str] = None
     original_price: Optional[float] = None
     discount_pct: Optional[float] = None
     date: Optional[str] = None
@@ -124,6 +126,7 @@ class DealResponse(BaseModel):
     title: str
     category: str
     description: Optional[str]
+    unit: Optional[str]
     original_price: float
     discount_pct: float
     deal_price: float
@@ -135,6 +138,48 @@ class DealResponse(BaseModel):
     is_active: bool
     expires_at: Optional[datetime]
     created_at: datetime
+
+
+class DealWithVenueResponse(DealResponse):
+    """Extends DealResponse with joined venue fields for the mobile feed."""
+    venue_name: str
+    venue_address: Optional[str]
+    venue_suburb: Optional[str]
+    venue_lat: Optional[float]
+    venue_lng: Optional[float]
+    venue_avg_rating: float
+
+    @classmethod
+    def from_deal(cls, deal: object) -> "DealWithVenueResponse":
+        """Build from a Deal ORM object that has its .venue relationship loaded."""
+        d = deal  # type: ignore[assignment]
+        return cls(
+            # deal fields
+            id=d.id,
+            venue_id=d.venue_id,
+            title=d.title,
+            category=d.category,
+            description=d.description,
+            unit=d.unit,
+            original_price=float(d.original_price),
+            discount_pct=float(d.discount_pct),
+            deal_price=float(d.deal_price),
+            date=d.date,
+            slots=d.slots,
+            max_group_size=d.max_group_size,
+            total_spots=d.total_spots,
+            spots_remaining=d.spots_remaining,
+            is_active=d.is_active,
+            expires_at=d.expires_at,
+            created_at=d.created_at,
+            # venue fields
+            venue_name=d.venue.name,
+            venue_address=d.venue.address,
+            venue_suburb=d.venue.suburb,
+            venue_lat=d.venue.lat,
+            venue_lng=d.venue.lng,
+            venue_avg_rating=float(d.venue.avg_rating),
+        )
 
 
 # ── Booking ───────────────────────────────────────────────────────────────────
@@ -158,6 +203,34 @@ class BookingResponse(BaseModel):
     status: str
     redeemed_at: Optional[datetime]
     created_at: datetime
+
+
+class BookingWithDetailsResponse(BookingResponse):
+    """Extends BookingResponse with deal + venue info for the Plans screen."""
+    venue_id: str
+    venue_name: str
+    deal_title: str
+    deal_category: str
+
+    @classmethod
+    def from_booking(cls, booking: object) -> "BookingWithDetailsResponse":
+        b = booking  # type: ignore[assignment]
+        return cls(
+            id=b.id,
+            deal_id=b.deal_id,
+            user_id=b.user_id,
+            slot_time=b.slot_time,
+            num_people=b.num_people,
+            total_paid=float(b.total_paid),
+            confirmation_code=b.confirmation_code,
+            status=b.status,
+            redeemed_at=b.redeemed_at,
+            created_at=b.created_at,
+            venue_id=b.deal.venue_id,
+            venue_name=b.deal.venue.name,
+            deal_title=b.deal.title,
+            deal_category=b.deal.category,
+        )
 
 
 class RedeemResponse(BaseModel):
