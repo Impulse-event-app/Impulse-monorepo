@@ -1,8 +1,10 @@
+import { useEffect } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { DROPS, money } from '../../../src/data';
+import { money, apiDealToDrop } from '../../../src/data';
 import { fontDisplay, fontUI, useApp } from '../../../src/theme';
+import { logInteraction } from '../../../src/api';
 import {
   Btn,
   CountdownPill,
@@ -34,10 +36,19 @@ function PushHead({ onBack, floating }: { onBack: () => void; floating?: boolean
 
 export default function DetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { T } = useApp();
+  const { T, apiDeals } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const d = DROPS.find((x) => x.id === id) || null;
+
+  const apiDeal = id ? apiDeals[id] ?? null : null;
+  const d = apiDeal ? apiDealToDrop(apiDeal) : null;
+
+  // Log a "view" interaction once when the screen mounts
+  useEffect(() => {
+    if (apiDeal?.venue_id) {
+      logInteraction(apiDeal.venue_id, 'view').catch(() => {/* fire-and-forget */});
+    }
+  }, [apiDeal?.venue_id]);
 
   if (!d) {
     return (

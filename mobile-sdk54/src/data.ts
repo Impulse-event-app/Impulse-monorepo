@@ -213,6 +213,7 @@ export function activeFilterCount(f: Filters): number {
 // ── plan (claimed slot) ──────────────────────────────────────
 export type Plan = {
   code: string;
+  bookingId?: string;  // backend booking ID (set when booked via API)
   dropId: string;
   venue: string;
   cat: string;
@@ -222,3 +223,79 @@ export type Plan = {
 };
 
 export const genCode = () => 'IMP-' + Math.floor(1000 + Math.random() * 9000);
+
+// ── API → Drop adapter ───────────────────────────────────────
+// Converts a backend ApiDeal (from GET /deals) into the Drop shape used
+// by the UI, filters, and map. Import ApiDeal from './api'.
+import type { ApiDeal, ApiBooking } from './api';
+
+export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): Drop {
+  // Distance from user (requires venue coordinates and user location)
+  let km = 0;
+  if (
+    userLat !== undefined && userLng !== undefined &&
+    d.venue_lat !== null && d.venue_lng !== null
+  ) {
+    km = haversineKm(userLat, userLng, d.venue_lat, d.venue_lng);
+  }
+
+  // expires_at drives the "hot" countdown and now/later status
+  const expiresMs = d.expires_at ? new Date(d.expires_at).getTime() : null;
+  const msLeft = expiresMs ? expiresMs - Date.now() : null;
+  const status: 'now' | 'later' = msLeft !== null && msLeft > 0 ? 'now' : 'later';
+  const hotMin = msLeft !== null && msLeft > 0 ? Math.round(msLeft / 60_000) : null;
+
+  // Human-readable availability window
+  const window =
+    d.slots.length > 0
+      ? status === 'now'
+        ? `On now · ${d.slots.join(', ')}`
+        : `From ${d.slots[0]} tonight`
+      : d.date;
+
+  return {
+    id: d.id,
+    venue: d.venue_name,
+    cat: d.category,
+    suburb: d.venue_suburb ?? '',
+    km: Math.round(km * 10) / 10,
+    now: d.deal_price,
+    usual: d.original_price,
+    unit: d.unit ?? 'pp',
+    status,
+    window,
+    hotMin,
+    rating: d.venue_avg_rating,
+    blurb: d.description ?? d.title,
+    gets: d.title,
+    addr: d.venue_address ?? '',
+    target: expiresMs,
+    cap: d.max_group_size,
+  };
+}
+
+/** Convert a backend ApiBooking into the Plan shape used by PlansScreen. */
+export function apiBookingToPlan(b: ApiBooking): Plan {
+  return {
+    code: b.confirmation_code,
+    bookingId: b.id,
+    dropId: b.deal_id,
+    venue: b.venue_name,
+    cat: b.deal_category,
+    party: b.num_people,
+    time: b.slot_time,
+    total: b.total_paid,
+  };
+}
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}

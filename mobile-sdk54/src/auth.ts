@@ -7,6 +7,7 @@
 //   Phone  → Auth > Providers > Phone  → enable, configure Twilio / MessageBird
 //
 import { supabase } from './supabase';
+import { ApiError, UserProfileUpdate, getMe, patchMe } from './api';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
@@ -73,9 +74,22 @@ export async function signOut() {
   if (error) throw error;
 }
 
-// ── Sync profile to public.users ─────────────────────────────
-// Upserts the current user's profile data. Safe to call even if the
-// user is not yet authenticated (returns silently).
+// ── Fetch profile from the backend API ───────────────────────
+// Returns the UserProfile from /users/me, or null if not found / not authed.
+export async function fetchUserProfile() {
+  try {
+    return await getMe();
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+// ── Sync profile to backend API ──────────────────────────────
+// Upserts the current user's profile data via PATCH /users/me.
+// On first sign-in the backend row may not exist yet (created by a Supabase
+// trigger on auth.users). If we get a 404, we fall back to a direct Supabase
+// upsert to create the row, then retry the PATCH.
 export async function syncUserProfile(updates: {
   suburb?: string;
   acts?: string[];
@@ -84,15 +98,37 @@ export async function syncUserProfile(updates: {
 } = {}) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase.from('users') as any).upsert({
-    id: user.id,
-    email: user.email ?? null,
-    phone: user.phone ?? null,
-    full_name: updates.full_name ?? null,
-    suburb: updates.suburb ?? null,
-    acts: updates.acts ?? null,
-    party_size: updates.party_size ?? null,
-    updated_at: new Date().toISOString(),
-  });
+
+  const apiUpdates: UserProfileUpdate = {
+    ...(updates.full_name !== undefined ? { full_name: updates.full_name } : {}),
+    ...(updates.suburb !== undefined ? { home_suburb: updates.suburb } : {}),
+    ...(updates.acts !== undefined ? { preferred_acts: updates.acts } : {}),
+    ...(updates.party_size !== undefined ? { party_size: updates.party_size } : {}),
+  };
+
+  try {
+    await patchMe(apiUpdates);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      // Profile row doesn't exist yet — create it via direct Supabase upsert,
+      // then retry the PATCH.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase.from('users') as any).upsert({
+        id: user.id,
+        email: user.email ?? null,
+        phone: user.phone ?? null,
+        full_name: updates.full_name ?? null,
+        home_suburb: updates.suburb ?? null,
+        preferred_acts: updates.acts ?? null,
+        party_size: updates.party_size ?? null,
+        updated_at: new Date().toISOString(),
+      });
+      // Now the row exists — apply any extra fields via the API
+      if (Object.keys(apiUpdates).length > 0) {
+        await patchMe(apiUpdates).catch(() => {/* best effort */});
+      }
+    } else {
+      throw err;
+    }
+  }
 }

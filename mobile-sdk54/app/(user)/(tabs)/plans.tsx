@@ -1,18 +1,28 @@
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fontDisplay, fontMono, fontUI, useApp } from '../../../src/theme';
 import { Btn, FauxQR, PulseMark } from '../../../src/components';
 import { FLOATING_TAB_CLEARANCE } from './_layout';
 
 export default function PlansScreen() {
-  const { T, plans } = useApp();
+  const { T, plans, bookingsLoading, refreshBookings } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ flexGrow: 1 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={bookingsLoading}
+            onRefresh={refreshBookings}
+            tintColor={T.accent}
+          />
+        }
+      >
         <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 18 }}>
           <Text style={{ fontFamily: fontDisplay(700), fontSize: 33, color: T.text, letterSpacing: -1, marginBottom: 4 }}>Plans</Text>
         </View>

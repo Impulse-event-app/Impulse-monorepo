@@ -1,7 +1,9 @@
 // theme.tsx — Impulse: theme tokens, fonts, and the app-wide state provider.
 // Ported from the Impulse design handoff (app-data.jsx / app-main.jsx).
-import React, { createContext, useContext, useMemo, useState } from 'react';
-import { DEFAULT_FILTERS, Filters, Plan } from './data';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { DEFAULT_FILTERS, Drop, Filters, Plan, apiBookingToPlan, apiDealToDrop } from './data';
+import { ApiDeal, listDeals, getMyBookings } from './api';
+import { supabase } from './supabase';
 
 // ── fonts ────────────────────────────────────────────────────
 // Each weight is its own family in React Native. These keys must match the
@@ -136,8 +138,17 @@ type AppState = {
   accent: string;
   filters: Filters;
   setFilters: (f: Filters) => void;
+  // Live deal feed (Drop shape for filter/map compat)
+  drops: Drop[];
+  // Raw API deals (keyed by id for O(1) lookup in detail screens)
+  apiDeals: Record<string, ApiDeal>;
+  dealsLoading: boolean;
+  refreshDeals: () => Promise<void>;
+  // Bookings / plans
   plans: Plan[];
   addPlan: (p: Plan) => void;
+  bookingsLoading: boolean;
+  refreshBookings: () => Promise<void>;
   profile: Profile;
   setProfile: React.Dispatch<React.SetStateAction<Profile>>;
   reset: () => void;
@@ -151,14 +162,76 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
+  const [rawDeals, setRawDeals] = useState<ApiDeal[]>([]);
+  const [dealsLoading, setDealsLoading] = useState(false);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
 
   const T = useMemo(() => tokens(dark, accent), [dark, accent]);
+
+  // Convert raw API deals → Drop array whenever deals change
+  const drops: Drop[] = useMemo(() => rawDeals.map((d) => apiDealToDrop(d)), [rawDeals]);
+
+  // O(1) lookup map for detail screens
+  const apiDeals: Record<string, ApiDeal> = useMemo(
+    () => Object.fromEntries(rawDeals.map((d) => [d.id, d])),
+    [rawDeals],
+  );
+
+  const refreshDeals = async () => {
+    setDealsLoading(true);
+    try {
+      const data = await listDeals();
+      setRawDeals(data);
+    } catch {
+      // Keep stale data on error; screens handle empty state
+    } finally {
+      setDealsLoading(false);
+    }
+  };
+
+  const refreshBookings = async () => {
+    setBookingsLoading(true);
+    try {
+      const data = await getMyBookings();
+      setPlans(data.map(apiBookingToPlan));
+    } catch {
+      // Not authenticated yet or network error — keep existing plans
+    } finally {
+      setBookingsLoading(false);
+    }
+  };
+
+  // Load deals when the user has a session; reload bookings on auth change
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        refreshDeals();
+        refreshBookings();
+      } else {
+        setRawDeals([]);
+        setPlans([]);
+      }
+    });
+
+    // Also try loading immediately in case there's already a session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        refreshDeals();
+        refreshBookings();
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const value: AppState = {
     T, dark, setDark, accent,
     filters, setFilters,
+    drops, apiDeals, dealsLoading, refreshDeals,
     plans,
     addPlan: (p) => setPlans((prev) => [p, ...prev]),
+    bookingsLoading, refreshBookings,
     profile, setProfile,
     reset: () => {
       setFilters(DEFAULT_FILTERS);

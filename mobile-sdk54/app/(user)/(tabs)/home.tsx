@@ -1,10 +1,9 @@
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   CATEGORIES,
   DEFAULT_FILTERS,
-  DROPS,
   activeFilterCount,
   applyFilters,
 } from '../../../src/data';
@@ -50,7 +49,7 @@ function SectionHead({ title, count }: { title: string; count: string }) {
 }
 
 export default function HomeScreen() {
-  const { T, filters, setFilters } = useApp();
+  const { T, filters, setFilters, drops, dealsLoading, refreshDeals } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -64,14 +63,14 @@ export default function HomeScreen() {
   };
   const isChipOn = (c: string) => (c === 'All' ? filters.cats.length === 0 : filters.cats.includes(c));
 
-  const filtered = applyFilters(DROPS, filters);
+  const filtered = applyFilters(drops, filters);
   const now = filtered.filter((d) => d.status === 'now');
   const later = filtered.filter((d) => d.status === 'later');
   const activeCount = activeFilterCount(filters);
 
   const openDrop = (id: string) => router.push(`/(user)/event/${id}`);
 
-  const Section = ({ title, list }: { title: string; list: typeof DROPS }) =>
+  const Section = ({ title, list }: { title: string; list: typeof drops }) =>
     list.length ? (
       <>
         <SectionHead title={title} count={`${list.length} ${list.length === 1 ? 'drop' : 'drops'}`} />
@@ -85,7 +84,17 @@ export default function HomeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 + FLOATING_TAB_CLEARANCE }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 40 + FLOATING_TAB_CLEARANCE }}
+        refreshControl={
+          <RefreshControl
+            refreshing={dealsLoading}
+            onRefresh={refreshDeals}
+            tintColor={T.accent}
+          />
+        }
+      >
         <View style={{ paddingTop: insets.top + 8 }}>
           <View style={{ paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
@@ -116,20 +125,28 @@ export default function HomeScreen() {
         </ScrollView>
 
         <View style={{ paddingHorizontal: 18 }}>
-          <Section title="On now" list={now} />
-          <Section title="Later tonight" list={later} />
-          {filtered.length === 0 && (
-            <View style={{ alignItems: 'center', marginTop: 64, paddingHorizontal: 40 }}>
-              <Text style={{ fontFamily: fontDisplay(600), fontSize: 19, color: T.text, letterSpacing: -0.38, textAlign: 'center' }}>
-                Nothing matches yet
-              </Text>
-              <Text style={{ fontFamily: fontUI(400), fontSize: 14.5, color: T.muted, marginTop: 6, lineHeight: 21, textAlign: 'center' }}>
-                Try widening your filters — drop a suburb or nudge the price up.
-              </Text>
-              <Pressable onPress={() => setFilters(DEFAULT_FILTERS)} style={{ marginTop: 16 }}>
-                <Text style={{ fontFamily: fontUI(600), fontSize: 15, color: T.accent }}>Clear filters</Text>
-              </Pressable>
+          {dealsLoading && drops.length === 0 ? (
+            <View style={{ alignItems: 'center', marginTop: 80 }}>
+              <ActivityIndicator color={T.accent} />
             </View>
+          ) : (
+            <>
+              <Section title="On now" list={now} />
+              <Section title="Later tonight" list={later} />
+              {filtered.length === 0 && (
+                <View style={{ alignItems: 'center', marginTop: 64, paddingHorizontal: 40 }}>
+                  <Text style={{ fontFamily: fontDisplay(600), fontSize: 19, color: T.text, letterSpacing: -0.38, textAlign: 'center' }}>
+                    Nothing matches yet
+                  </Text>
+                  <Text style={{ fontFamily: fontUI(400), fontSize: 14.5, color: T.muted, marginTop: 6, lineHeight: 21, textAlign: 'center' }}>
+                    Try widening your filters — drop a suburb or nudge the price up.
+                  </Text>
+                  <Pressable onPress={() => setFilters(DEFAULT_FILTERS)} style={{ marginTop: 16 }}>
+                    <Text style={{ fontFamily: fontUI(600), fontSize: 15, color: T.accent }}>Clear filters</Text>
+                  </Pressable>
+                </View>
+              )}
+            </>
           )}
         </View>
       </ScrollView>
