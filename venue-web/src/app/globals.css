@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+/* ── Impulse design tokens (mirrors mobile-sdk54/src/theme.tsx dark mode) ── */
+:root {
+  --bg:        #0F0E0D;
+  --surface:   #1A1817;
+  --surface2:  #232120;
+  --sunken:    #0A0908;
+  --text:      #F4F1EA;
+  --muted:     rgba(244,241,234,0.60);
+  --faint:     rgba(244,241,234,0.38);
+  --line:      rgba(244,241,234,0.10);
+  --line2:     rgba(244,241,234,0.16);
+  --accent:    #FF5A4D;
+  --accent-ink:#1A0B08;
+  --accent-soft:rgba(255,90,77,0.17);
+  --chip-bg:   rgba(244,241,234,0.07);
+  --ph:        #211E1C;
+}
+
+@theme inline {
+  --color-bg:           var(--bg);
+  --color-surface:      var(--surface);
+  --color-surface2:     var(--surface2);
+  --color-sunken:       var(--sunken);
+  --color-ink:          var(--text);
+  --color-muted:        var(--muted);
+  --color-faint:        var(--faint);
+  --color-line:         var(--line);
+  --color-line2:        var(--line2);
+  --color-accent:       var(--accent);
+  --color-accent-ink:   var(--accent-ink);
+  --color-accent-soft:  var(--accent-soft);
+  --color-chip:         var(--chip-bg);
+  --color-ph:           var(--ph);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
