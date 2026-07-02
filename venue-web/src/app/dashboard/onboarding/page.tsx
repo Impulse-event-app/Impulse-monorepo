@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { venueApi, type VenueCreate } from "@/lib/api";
 import { useVenue } from "@/providers/VenueProvider";
@@ -125,8 +125,13 @@ export default function VenueOnboardingPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!loading && venue) {
+      router.replace("/dashboard");
+    }
+  }, [loading, venue, router]);
+
   if (!loading && venue) {
-    router.replace("/dashboard");
     return null;
   }
 

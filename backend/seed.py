@@ -11,7 +11,7 @@ or by calling GET /users/me.
 
 Options:
     --owner-id   UUID of the user who will own all seeded venues (required)
-    --wipe       Drop all seeded rows before re-inserting (safe re-run)
+    --wipe       Drop all seeded rows before re-inserting (safe re-run
 """
 
 import argparse
