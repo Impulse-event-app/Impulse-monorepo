@@ -7,11 +7,11 @@ import { supabase } from '../src/supabase';
 
 const T = tokens(true);
 
-export default function RoleSelector() {
+export default function Landing() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  // If the user already has a valid session, skip the role selector and onboarding.
+  // If the user already has a valid session, skip the landing and onboarding.
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) router.replace('/(user)/home');
@@ -51,13 +51,6 @@ export default function RoleSelector() {
           style={{ backgroundColor: T.accent, height: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}
         >
           <Text style={{ fontFamily: fontUI(600), fontSize: 17, color: T.accentInk }}>Browse what's on</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => router.replace('/(admin)/dashboard')}
-          style={{ backgroundColor: T.chipBg, height: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Text style={{ fontFamily: fontUI(600), fontSize: 17, color: T.muted }}>Venue admin</Text>
         </Pressable>
       </View>
     </View>
