@@ -121,6 +121,8 @@ export interface StatsResponse {
 export const venueApi = {
   create: (body: VenueCreate) =>
     request<Venue>("POST", "/venues", body),
+  mine: () =>
+    request<Venue>("GET", "/venues/mine"),
   get: (id: string) =>
     request<Venue>("GET", `/venues/${id}`),
   update: (id: string, body: VenueUpdate) =>

@@ -27,10 +27,12 @@ def update_me(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Update the calling user's onboarding / profile fields."""
+    """Update (or create) the calling user's onboarding / profile fields."""
     row = db.query(User).filter(User.id == user["sub"]).first()
     if not row:
-        raise HTTPException(status_code=404, detail="User profile not found")
+        # First-time sign-in via email/password — create the row now.
+        row = User(id=user["sub"], email=user.get("email"))
+        db.add(row)
     for key, value in body.model_dump(exclude_unset=True).items():
         setattr(row, key, value)
     db.commit()

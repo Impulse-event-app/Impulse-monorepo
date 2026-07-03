@@ -18,8 +18,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CATEGORIES } from '../../src/data';
 import { fontDisplay, fontMono, fontUI, useApp } from '../../src/theme';
 import { Btn, Logo, PulseMark } from '../../src/components';
-import { AppleLogo, GlyphBell, GlyphPin, GoogleLogo, PhoneGlyph, Search } from '../../src/icons';
-import { sendPhoneOtp, signInWithApple, signInWithGoogle, syncUserProfile, verifyPhoneOtp } from '../../src/auth';
+import { AppleLogo, GlyphBell, GlyphPin, GoogleLogo, MailGlyph, PhoneGlyph, Search } from '../../src/icons';
+import { sendPhoneOtp, signInWithApple, signInWithGoogle, signInWithEmail, signUpWithEmail, syncUserProfile, verifyPhoneOtp } from '../../src/auth';
 
 const { width: W } = Dimensions.get('window');
 const SUBURBS = ['Sydney CBD', 'Surry Hills', 'Newtown', 'Bondi', 'Marrickville', 'Enmore', 'Darlinghurst', 'Redfern', 'Chippendale', 'Glebe', 'Paddington', 'Manly'];
@@ -124,10 +124,13 @@ export default function Onboarding() {
   const [acts, setActs] = useState<string[]>([]);
   const [ageDeclined, setAgeDeclined] = useState(false);
 
-  // Phone OTP sub-flow (within the sign-in step)
-  const [phoneView, setPhoneView] = useState<'buttons' | 'phone' | 'otp'>('buttons');
+  // Auth sub-flow (within the sign-in step)
+  const [phoneView, setPhoneView] = useState<'buttons' | 'phone' | 'otp' | 'email'>('buttons');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otpCode, setOtpCode] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [emailMode, setEmailMode] = useState<'signin' | 'signup'>('signin');
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -185,6 +188,14 @@ export default function Onboarding() {
       const user = await verifyPhoneOtp(phoneNumber, otpCode);
       if (user) { setPhoneView('buttons'); setPhoneNumber(''); setOtpCode(''); next(); }
     }).catch((e) => setAuthError(e.message ?? 'Invalid code. Please try again.'));
+
+  const handleEmailAuth = () =>
+    withAuth(async () => {
+      const user = emailMode === 'signin'
+        ? await signInWithEmail(email, password)
+        : await signUpWithEmail(email, password);
+      if (user) { setPhoneView('buttons'); setEmail(''); setPassword(''); next(); }
+    }).catch((e) => setAuthError(e.message ?? 'Authentication failed. Check your details.'));
 
   const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     setPage(Math.round(e.nativeEvent.contentOffset.x / W));
@@ -278,6 +289,10 @@ export default function Onboarding() {
                   <PhoneGlyph size={17} color={T.text} />
                   <Text style={{ fontFamily: fontUI(600), fontSize: 17, color: T.text }}>Continue with phone</Text>
                 </Btn>
+                <Btn full variant="secondary" onPress={() => { setAuthError(null); setEmailMode('signin'); setPhoneView('email'); }} disabled={authLoading}>
+                  <MailGlyph size={17} color={T.text} />
+                  <Text style={{ fontFamily: fontUI(600), fontSize: 17, color: T.text }}>Continue with email</Text>
+                </Btn>
                 {authError ? (
                   <Text style={{ fontFamily: fontUI(400), fontSize: 13.5, color: '#FF5A4D', textAlign: 'center' }}>{authError}</Text>
                 ) : null}
@@ -341,6 +356,52 @@ export default function Onboarding() {
                 </Btn>
                 <Pressable onPress={() => { setPhoneView('phone'); setOtpCode(''); setAuthError(null); }} style={{ alignItems: 'center', paddingVertical: 6 }}>
                   <Text style={{ fontFamily: fontUI(400), fontSize: 15, color: T.muted }}>Resend / change number</Text>
+                </Pressable>
+              </View>
+            </KeyboardAvoidingView>
+          )}
+
+          {phoneView === 'email' && (
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+              <Lede
+                kicker={emailMode === 'signin' ? 'Welcome back' : 'Create account'}
+                title={emailMode === 'signin' ? 'Sign in.' : 'Join Impulse.'}
+                body={emailMode === 'signin' ? 'Enter your email and password.' : 'Pick an email and a password to get started.'}
+              />
+              <View style={{ paddingHorizontal: 24, paddingTop: 30, gap: 12 }}>
+                <TextInput
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="you@example.com"
+                  placeholderTextColor={T.faint}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoFocus
+                  style={{ fontFamily: fontUI(400), fontSize: 17, color: T.text, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14 }}
+                />
+                <TextInput
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Password"
+                  placeholderTextColor={T.faint}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  style={{ fontFamily: fontUI(400), fontSize: 17, color: T.text, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14 }}
+                />
+                {authError ? (
+                  <Text style={{ fontFamily: fontUI(400), fontSize: 13.5, color: '#FF5A4D' }}>{authError}</Text>
+                ) : null}
+                <Btn full onPress={handleEmailAuth} disabled={!email || password.length < 6 || authLoading}>
+                  {authLoading ? 'Please wait…' : emailMode === 'signin' ? 'Sign in' : 'Create account'}
+                </Btn>
+                <Pressable onPress={() => { setEmailMode(emailMode === 'signin' ? 'signup' : 'signin'); setAuthError(null); }} style={{ alignItems: 'center', paddingVertical: 4 }}>
+                  <Text style={{ fontFamily: fontUI(400), fontSize: 15, color: T.muted }}>
+                    {emailMode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+                  </Text>
+                </Pressable>
+                <Pressable onPress={() => { setPhoneView('buttons'); setAuthError(null); }} style={{ alignItems: 'center', paddingVertical: 4 }}>
+                  <Text style={{ fontFamily: fontUI(400), fontSize: 15, color: T.faint }}>Back</Text>
                 </Pressable>
               </View>
             </KeyboardAvoidingView>

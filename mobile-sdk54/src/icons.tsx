@@ -200,6 +200,15 @@ export function PhoneGlyph({ size = 17, color = '#000' }: IconProps) {
   );
 }
 
+export function MailGlyph({ size = 17, color = '#000' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinejoin="round">
+      <Rect x={2} y={4} width={20} height={16} rx={3} />
+      <Path d="M2 7l10 7 10-7" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 // ── map pin marker triangle (filled, used by Pin) ────────────
 export function PinTriangle({ color = '#FF5A4D' }: IconProps) {
   return (

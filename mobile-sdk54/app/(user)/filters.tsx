@@ -100,7 +100,7 @@ function PartyInline({ value, onChange }: { value: number; onChange: (v: number)
 function PriceSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const { T } = useApp();
   const MIN = 10;
-  const MAX = 40;
+  const MAX = 200;
   const widthRef = useRef(1);
   const setFromX = (x: number) => {
     const w = widthRef.current;

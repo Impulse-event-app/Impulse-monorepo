@@ -52,7 +52,15 @@ export function VenueProvider({ children }: { children: React.ReactNode }) {
     if (stored) {
       fetchVenue(stored);
     } else {
-      setLoading(false);
+      // No stored id — check if this user already owns a venue on the server.
+      venueApi.mine().then((v) => {
+        sessionStorage.setItem(VENUE_KEY, v.id);
+        setVenueState(v);
+      }).catch(() => {
+        // 404 = genuinely no venue yet → show onboarding
+      }).finally(() => {
+        setLoading(false);
+      });
     }
   }, [session, fetchVenue]);
 

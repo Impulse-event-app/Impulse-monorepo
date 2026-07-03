@@ -181,7 +181,7 @@ export type Filters = {
 };
 
 export const DEFAULT_FILTERS: Filters = {
-  cats: [], areas: [], when: 'all', party: 1, maxPrice: 40, sort: 'closest',
+  cats: [], areas: [], when: 'all', party: 1, maxPrice: 200, sort: 'closest',
 };
 
 export function applyFilters(list: Drop[], f: Filters): Drop[] {
@@ -205,7 +205,7 @@ export function activeFilterCount(f: Filters): number {
   n += f.areas.length ? 1 : 0;
   n += f.when !== 'all' ? 1 : 0;
   n += f.party > 1 ? 1 : 0;
-  n += f.maxPrice < 40 ? 1 : 0;
+  n += f.maxPrice < 200 ? 1 : 0;
   n += f.sort !== 'closest' ? 1 : 0;
   return n;
 }

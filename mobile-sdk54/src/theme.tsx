@@ -201,23 +201,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Load deals when the user has a session; reload bookings on auth change
+  // Deals are public — load immediately on mount regardless of auth.
+  // Bookings require a session — load/clear on auth state changes.
   useEffect(() => {
+    refreshDeals();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
         refreshDeals();
         refreshBookings();
       } else {
-        setRawDeals([]);
         setPlans([]);
-      }
-    });
-
-    // Also try loading immediately in case there's already a session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        refreshDeals();
-        refreshBookings();
       }
     });
 

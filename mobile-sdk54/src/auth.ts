@@ -54,6 +54,19 @@ export async function signInWithGoogle() {
   return user;
 }
 
+// ── Email / Password ───────────────────────────────────────
+export async function signInWithEmail(email: string, password: string) {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  return data.user;
+}
+
+export async function signUpWithEmail(email: string, password: string) {
+  const { data, error } = await supabase.auth.signUp({ email, password });
+  if (error) throw error;
+  return data.user;
+}
+
 // ── Phone OTP: send code ─────────────────────────────────────
 // phone must be in E.164 format, e.g. "+61412345678"
 export async function sendPhoneOtp(phone: string) {

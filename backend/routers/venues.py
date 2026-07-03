@@ -38,6 +38,22 @@ def create_venue(
     return venue
 
 
+@router.get("/mine", response_model=VenueResponse)
+def get_my_venue(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Return the active venue owned by the current user, or 404."""
+    venue = (
+        db.query(Venue)
+        .filter(Venue.owner_id == user["sub"], Venue.is_active == True)
+        .first()
+    )
+    if not venue:
+        raise HTTPException(status_code=404, detail="No venue found for this user")
+    return venue
+
+
 @router.get("/{venue_id}", response_model=VenueResponse)
 def get_venue(venue_id: str, db: Session = Depends(get_db)):
     return _get_venue_or_404(venue_id, db)

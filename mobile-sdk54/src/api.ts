@@ -46,6 +46,23 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** Like request() but attaches the token only if a session exists — for public endpoints. */
+async function publicRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: { ...headers, ...(init.headers as Record<string, string> | undefined) },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new ApiError(body.detail ?? 'API error', res.status);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
 // ── types (mirror backend schemas.py) ───────────────────────
 
 export type UserProfile = {
@@ -146,7 +163,7 @@ export type DealFilters = {
   active_only?: boolean;
 };
 
-/** List active deals, with optional filters. Public endpoint (still needs token). */
+/** List active deals, with optional filters. Public endpoint — no login required. */
 export async function listDeals(filters: DealFilters = {}): Promise<ApiDeal[]> {
   const params = new URLSearchParams();
   if (filters.suburb) params.set('suburb', filters.suburb);
@@ -154,7 +171,7 @@ export async function listDeals(filters: DealFilters = {}): Promise<ApiDeal[]> {
   if (filters.date) params.set('date', filters.date);
   if (filters.active_only !== undefined) params.set('active_only', String(filters.active_only));
   const qs = params.toString();
-  return request<ApiDeal[]>(`/deals${qs ? `?${qs}` : ''}`);
+  return publicRequest<ApiDeal[]>(`/deals${qs ? `?${qs}` : ''}`);
 }
 
 /** Fetch a single deal by ID. */

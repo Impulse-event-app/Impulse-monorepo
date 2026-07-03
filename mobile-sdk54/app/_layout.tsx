@@ -45,7 +45,6 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(user)" />
-        <Stack.Screen name="(admin)" />
       </Stack>
     </SafeAreaProvider>
   );
