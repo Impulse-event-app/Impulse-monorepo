@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fontDisplay, fontMono, fontUI, useApp } from '../../src/theme';
-import { Btn, FauxQR, PulseMark } from '../../src/components';
+import { Btn, PulseMark } from '../../src/components';
 
 export default function ConfirmScreen() {
   const { code } = useLocalSearchParams<{ code: string }>();
@@ -31,11 +31,11 @@ export default function ConfirmScreen() {
           {plan.venue} · {plan.time} · {plan.party} {plan.party === 1 ? 'person' : 'people'}
         </Text>
 
-        <View style={[{ marginTop: 28, padding: 22, backgroundColor: T.surface, borderRadius: 24, alignItems: 'center', gap: 16 }, T.shadow]}>
-          <FauxQR code={plan.code} size={168} />
-          <Text style={{ fontFamily: fontMono(700), fontSize: 22, color: T.text, letterSpacing: 2.6 }}>{plan.code}</Text>
-          <Text style={{ fontFamily: fontUI(400), fontSize: 13.5, color: T.faint, maxWidth: 230, lineHeight: 20, textAlign: 'center' }}>
-            Show this at the door at {plan.venue}. Your slot's held for 20 minutes.
+        <View style={[{ marginTop: 28, paddingVertical: 30, paddingHorizontal: 24, backgroundColor: T.surface, borderRadius: 24, alignItems: 'center', gap: 14, alignSelf: 'stretch' }, T.shadow]}>
+          <Text style={{ fontFamily: fontMono(400), fontSize: 11.5, letterSpacing: 1.6, textTransform: 'uppercase', color: T.faint }}>Your code</Text>
+          <Text style={{ fontFamily: fontMono(700), fontSize: 52, color: T.text, letterSpacing: 10, marginLeft: 10 }}>{plan.code}</Text>
+          <Text style={{ fontFamily: fontUI(400), fontSize: 13.5, color: T.faint, maxWidth: 240, lineHeight: 20, textAlign: 'center' }}>
+            Give this code at the door at {plan.venue}. Your slot's held for 20 minutes.
           </Text>
         </View>
       </ScrollView>

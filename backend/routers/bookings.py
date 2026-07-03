@@ -15,8 +15,8 @@ router = APIRouter()
 
 
 def _generate_code() -> str:
-    alphabet = string.ascii_uppercase + string.digits
-    return "IMP-" + "".join(secrets.choice(alphabet) for _ in range(6))
+    """A 6-digit numeric code the customer reads out / the venue types in."""
+    return "".join(secrets.choice(string.digits) for _ in range(6))
 
 
 # NOTE: /me must be declared before /{booking_id} to prevent FastAPI
@@ -163,7 +163,7 @@ def redeem_booking(
 ):
     """
     Venue admin: validate and redeem a ticket by its confirmation code.
-    The venue scans the QR code which encodes the confirmation_code string.
+    The venue types in the customer's 6-digit code.
     - 200: valid, now marked attended
     - 409: already redeemed or cancelled
     - 404: code not found
