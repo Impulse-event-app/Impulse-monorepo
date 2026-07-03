@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fontDisplay, fontMono, fontUI, useApp } from '../../../src/theme';
-import { Btn, FauxQR, PulseMark } from '../../../src/components';
+import { Btn, PulseMark } from '../../../src/components';
 import { FLOATING_TAB_CLEARANCE } from './_layout';
 
 export default function PlansScreen() {
@@ -46,22 +46,24 @@ export default function PlansScreen() {
               <Pressable
                 key={p.code}
                 onPress={() => router.push(`/(user)/confirm?code=${encodeURIComponent(p.code)}`)}
-                style={[{ backgroundColor: T.surface, borderRadius: 18, padding: 16, flexDirection: 'row', gap: 14, alignItems: 'center' }, T.shadow]}
+                style={[{ backgroundColor: T.surface, borderRadius: 18, padding: 16, gap: 14 }, T.shadow]}
               >
-                <FauxQR code={p.code} size={72} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-                    <Text numberOfLines={1} style={{ fontFamily: fontDisplay(600), fontSize: 16.5, color: T.text, letterSpacing: -0.33, flex: 1 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text numberOfLines={1} style={{ fontFamily: fontDisplay(600), fontSize: 16.5, color: T.text, letterSpacing: -0.33 }}>
                       {p.venue}
                     </Text>
-                    <View style={{ backgroundColor: T.accentSoft, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 }}>
-                      <Text style={{ fontFamily: fontUI(600), fontSize: 11.5, color: T.accent }}>Claimed</Text>
-                    </View>
+                    <Text style={{ fontFamily: fontUI(400), fontSize: 13.5, color: T.muted, marginTop: 3 }}>
+                      {p.cat} · {p.party} {p.party === 1 ? 'person' : 'people'}
+                    </Text>
                   </View>
-                  <Text style={{ fontFamily: fontUI(400), fontSize: 13.5, color: T.muted, marginTop: 3 }}>
-                    {p.cat} · {p.party} {p.party === 1 ? 'person' : 'people'}
-                  </Text>
-                  <Text style={{ fontFamily: fontMono(400), fontSize: 13, color: T.text, marginTop: 8, letterSpacing: 0.5 }}>{p.code}</Text>
+                  <View style={{ backgroundColor: T.accentSoft, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 }}>
+                    <Text style={{ fontFamily: fontUI(600), fontSize: 11.5, color: T.accent }}>Claimed</Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: T.sunken, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 }}>
+                  <Text style={{ fontFamily: fontMono(400), fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: T.faint }}>Door code</Text>
+                  <Text style={{ fontFamily: fontMono(700), fontSize: 22, color: T.text, letterSpacing: 4 }}>{p.code}</Text>
                 </View>
               </Pressable>
             ))}

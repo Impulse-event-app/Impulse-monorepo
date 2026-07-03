@@ -1,7 +1,7 @@
 // api.ts — Impulse: typed HTTP client for the FastAPI backend.
 //
 // Every request automatically attaches the current Supabase access token as a
-// Bearer token. The backend validates this JWT against SUPABASE_JWT_SECRET.
+// Bearer token. The backend verifies this JWT via Supabase's JWKS (RS256).
 //
 // Set EXPO_PUBLIC_API_URL in your .env (e.g. http://localhost:8000 for dev).
 // In production point it at your deployed FastAPI server.

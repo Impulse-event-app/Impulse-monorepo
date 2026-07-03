@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { bookingApi, type RedeemResponse } from "@/lib/api";
-import { QrScanner } from "@/components/QrScanner";
 import { formatDate } from "@/lib/utils";
 import { CheckCircle, AlertTriangle, XCircle } from "lucide-react";
 
@@ -21,8 +20,8 @@ export default function RedeemPage() {
   const [state, setState] = useState<RedeemState>({ kind: "idle" });
 
   async function redeem(rawCode: string) {
-    const trimmed = rawCode.trim().toUpperCase();
-    if (!trimmed) return;
+    const trimmed = rawCode.replace(/\D/g, "").slice(0, 6);
+    if (trimmed.length < 6) return;
     setCode(trimmed);
     setState({ kind: "loading" });
 
@@ -94,7 +93,7 @@ export default function RedeemPage() {
       <div>
         <h1 className="text-2xl font-bold" style={{color:'var(--text)'}}>Redeem ticket</h1>
         <p className="mt-1 text-sm" style={{color:'var(--muted)'}}>
-          Enter the customer&apos;s code or scan their QR
+          Enter the customer&apos;s 6-digit code
         </p>
       </div>
 
@@ -103,30 +102,24 @@ export default function RedeemPage() {
         <form onSubmit={handleSubmit} className="flex gap-3">
           <input
             value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
-            className="flex-1 rounded-lg px-4 py-3 font-mono text-lg font-semibold tracking-widest focus:outline-none focus:ring-1"
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            inputMode="numeric"
+            autoFocus
+            className="flex-1 rounded-lg px-4 py-3 text-center font-mono text-2xl font-semibold tracking-[0.4em] focus:outline-none focus:ring-1"
             style={{background:'var(--ph)', border:'1px solid var(--line2)', color:'var(--text)', '--tw-ring-color':'var(--accent)'} as React.CSSProperties}
-            placeholder="IMP-XXXXXX"
-            maxLength={10}
+            placeholder="000000"
+            maxLength={6}
             spellCheck={false}
           />
           <button
             type="submit"
-            disabled={!code.trim() || state.kind === "loading"}
+            disabled={code.length < 6 || state.kind === "loading"}
             className="rounded-lg px-5 py-3 text-sm font-semibold transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
             style={{background:'var(--accent)', color:'var(--accent-ink)'}}
           >
             {state.kind === "loading" ? "Checking…" : "Redeem"}
           </button>
         </form>
-
-        <div className="flex items-center gap-3">
-          <div className="flex-1" style={{borderTop:'1px solid var(--line)'}} />
-          <span className="text-xs" style={{color:'var(--faint)'}}>or</span>
-          <div className="flex-1" style={{borderTop:'1px solid var(--line)'}} />
-        </div>
-
-        <QrScanner onScan={(scanned) => redeem(scanned)} />
       </div>
 
       {/* Result */}
@@ -177,7 +170,7 @@ function ResultCard({
         className="w-full rounded-lg py-2 text-sm font-semibold transition-opacity hover:opacity-80"
         style={{background:'var(--chip-bg)', color:'var(--muted)'}}
       >
-        Scan another
+        Check another
       </button>
     </div>
   );

@@ -12,7 +12,6 @@
     "@supabase/supabase-js": "^2.109.0",
     "@tanstack/react-query": "^5.101.2",
     "clsx": "^2.1.1",
-    "html5-qrcode": "^2.3.8",
     "lucide-react": "^1.22.0",
     "next": "16.2.9",
     "react": "19.2.4",
