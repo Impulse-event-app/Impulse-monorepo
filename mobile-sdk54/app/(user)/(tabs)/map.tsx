@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
-import { DROPS, LATLNG, SYDNEY_REGION, activeFilterCount, applyFilters, money } from '../../../src/data';
+import { SYDNEY_REGION, activeFilterCount, applyFilters, money } from '../../../src/data';
 import { fontUI, useApp } from '../../../src/theme';
 import { DropCardCompact, Pin } from '../../../src/components';
 import { Filter, Search } from '../../../src/icons';
@@ -13,9 +13,10 @@ import { FLOATING_TAB_CLEARANCE } from './_layout';
 // image, so we briefly enable tracksViewChanges whenever the pin's look
 // changes (selection), then disable it again to keep the map smooth.
 function DropMarker({
-  id, label, active, dim, onPress,
+  latitude, longitude, label, active, dim, onPress,
 }: {
-  id: string;
+  latitude: number;
+  longitude: number;
   label: string;
   active: boolean;
   dim: boolean;
@@ -30,7 +31,7 @@ function DropMarker({
 
   return (
     <Marker
-      coordinate={LATLNG[id]}
+      coordinate={{ latitude, longitude }}
       anchor={{ x: 0.5, y: 1 }}
       tracksViewChanges={track}
       onPress={dim ? undefined : onPress}
@@ -44,20 +45,24 @@ function DropMarker({
 }
 
 export default function MapScreen() {
-  const { T, filters } = useApp();
+  const { T, filters, drops } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const [sel, setSel] = useState<string | null>(null);
 
-  const selDrop = DROPS.find((d) => d.id === sel) || null;
-  const matchIds = new Set(applyFilters(DROPS, filters).map((d) => d.id));
+  // Only deals that actually carry venue coordinates are placed on the map.
+  const located = drops.filter((d) => d.latitude != null && d.longitude != null);
+  const selDrop = located.find((d) => d.id === sel) || null;
+  const matchIds = new Set(applyFilters(located, filters).map((d) => d.id));
   const activeCount = activeFilterCount(filters);
 
   const select = (id: string) => {
     setSel(id);
-    const c = LATLNG[id];
-    if (c) mapRef.current?.animateCamera({ center: c }, { duration: 350 });
+    const d = located.find((x) => x.id === id);
+    if (d && d.latitude != null && d.longitude != null) {
+      mapRef.current?.animateCamera({ center: { latitude: d.latitude, longitude: d.longitude } }, { duration: 350 });
+    }
   };
 
   // Sit the selected card just above the floating tab bar.
@@ -77,10 +82,11 @@ export default function MapScreen() {
         onPress={() => setSel(null)}
         mapPadding={{ top: insets.top + 56, right: 0, bottom: barTop, left: 0 }}
       >
-        {DROPS.map((d) => (
+        {located.map((d) => (
           <DropMarker
             key={d.id}
-            id={d.id}
+            latitude={d.latitude as number}
+            longitude={d.longitude as number}
             label={money(d.now)}
             active={sel === d.id}
             dim={!matchIds.has(d.id)}

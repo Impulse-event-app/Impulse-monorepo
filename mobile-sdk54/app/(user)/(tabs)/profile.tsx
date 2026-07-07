@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fontDisplay, fontMono, fontUI, useApp } from '../../../src/theme';
 import { Switch } from '../../../src/components';
 import { ChevronRight, RowIcons } from '../../../src/icons';
-import { signOut as supabaseSignOut } from '../../../src/auth';
+import { signOut as supabaseSignOut, syncUserProfile } from '../../../src/auth';
 import { FLOATING_TAB_CLEARANCE } from './_layout';
 
 function Group({ label, children }: { label?: string; children: React.ReactNode }) {
@@ -78,7 +78,7 @@ function StatTile({ big, label }: { big: string | number; label: string }) {
 }
 
 export default function ProfileScreen() {
-  const { T, dark, setDark, plans, profile, setProfile, reset } = useApp();
+  const { T, dark, setDark, plans, profile, setProfile, refreshProfile, reset } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [editing, setEditing] = useState(false);
@@ -86,13 +86,24 @@ export default function ProfileScreen() {
   const [notif, setNotif] = useState({ near: true, reminders: true, weekly: false });
   const setN = (k: keyof typeof notif, v: boolean) => setNotif((p) => ({ ...p, [k]: v }));
 
+  // Pull the latest profile from the backend whenever this tab opens.
+  useEffect(() => {
+    refreshProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const acts = profile.acts || [];
   const actLabel = acts.length === 0 ? 'Everything' : acts.length === 1 ? acts[0] : `${acts[0]} +${acts.length - 1}`;
   const plansCount = plans.length;
+  const displayName = profile.name || (profile.email ? profile.email.split('@')[0] : '') || 'You';
+  const initials = displayName.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase() || 'U';
 
   const saveName = () => {
     const v = draft.trim();
-    if (v) setProfile((p) => ({ ...p, name: v }));
+    if (v) {
+      setProfile((p) => ({ ...p, name: v }));
+      syncUserProfile({ full_name: v }).catch(console.warn);
+    }
     setEditing(false);
   };
 
@@ -112,7 +123,7 @@ export default function ProfileScreen() {
             onPress={() => {
               if (editing) saveName();
               else {
-                setDraft(profile.name);
+                setDraft(profile.name || displayName);
                 setEditing(true);
               }
             }}
@@ -125,7 +136,7 @@ export default function ProfileScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15, marginTop: 18 }}>
           <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: T.accentSoft, borderWidth: 1.5, borderColor: T.accent, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ fontFamily: fontDisplay(700), fontSize: 24, color: T.accent }}>
-              {profile.name.split(' ').map((w) => w[0]).slice(0, 2).join('')}
+              {initials}
             </Text>
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
@@ -139,9 +150,9 @@ export default function ProfileScreen() {
                 style={{ fontFamily: fontDisplay(700), fontSize: 22, letterSpacing: -0.44, color: T.text, borderBottomWidth: 2, borderBottomColor: T.accent, paddingBottom: 3 }}
               />
             ) : (
-              <Text numberOfLines={1} style={{ fontFamily: fontDisplay(700), fontSize: 22, color: T.text, letterSpacing: -0.44 }}>{profile.name}</Text>
+              <Text numberOfLines={1} style={{ fontFamily: fontDisplay(700), fontSize: 22, color: T.text, letterSpacing: -0.44 }}>{displayName}</Text>
             )}
-            <Text style={{ fontFamily: fontUI(400), fontSize: 14.5, color: T.muted, marginTop: 3 }}>{profile.phone}</Text>
+            <Text numberOfLines={1} style={{ fontFamily: fontUI(400), fontSize: 14.5, color: T.muted, marginTop: 3 }}>{profile.email || profile.phone}</Text>
           </View>
         </View>
 

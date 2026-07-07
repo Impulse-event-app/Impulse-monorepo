@@ -49,7 +49,9 @@ function SectionHead({ title, count }: { title: string; count: string }) {
 }
 
 export default function HomeScreen() {
-  const { T, filters, setFilters, drops, dealsLoading, refreshDeals } = useApp();
+  const { T, filters, setFilters, drops, dealsLoading, refreshDeals, profile } = useApp();
+  const displayName = profile.name || (profile.email ? profile.email.split('@')[0] : '') || 'You';
+  const initials = displayName.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase() || 'U';
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -101,7 +103,9 @@ export default function HomeScreen() {
               <PulseMark size={28} radius={8} />
               <Logo size={20} />
             </View>
-            <Avatar />
+            <Pressable onPress={() => router.push('/(user)/(tabs)/profile')}>
+              <Avatar initials={initials} />
+            </Pressable>
           </View>
           <View style={{ paddingHorizontal: 18, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 18 }}>
             <Text style={{ fontFamily: fontDisplay(700), fontSize: 33, color: T.text, letterSpacing: -1 }}>What's on?</Text>

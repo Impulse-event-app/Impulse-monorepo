@@ -59,6 +59,8 @@ export type Drop = {
   addr: string;
   target: number | null;
   cap: number;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 // max party each venue fits (drives the party-size filter)
@@ -71,7 +73,7 @@ const CAPS: Record<string, number> = {
 // on the most time-critical drops). window → human label for the rest.
 const T0 = Date.now();
 
-type RawDrop = Omit<Drop, 'target' | 'cap'>;
+type RawDrop = Omit<Drop, 'target' | 'cap' | 'latitude' | 'longitude'>;
 
 const RAW: RawDrop[] = [
   {
@@ -140,13 +142,7 @@ const RAW: RawDrop[] = [
   },
 ];
 
-export const DROPS: Drop[] = RAW.map((d) => ({
-  ...d,
-  target: d.hotMin ? T0 + d.hotMin * 60000 : null,
-  cap: CAPS[d.id],
-}));
-
-// real Sydney coordinates for each drop (drives the Map screen)
+// real Sydney coordinates for each seed drop
 export type LatLng = { latitude: number; longitude: number };
 export const LATLNG: Record<string, LatLng> = {
   pins: { latitude: -33.8975, longitude: 151.2236 },       // Moore Park
@@ -158,6 +154,14 @@ export const LATLNG: Record<string, LatLng> = {
   frequency: { latitude: -33.9112, longitude: 151.1558 },  // Marrickville
   bullseye: { latitude: -33.8885, longitude: 151.1985 },   // Chippendale
 };
+
+export const DROPS: Drop[] = RAW.map((d) => ({
+  ...d,
+  target: d.hotMin ? T0 + d.hotMin * 60000 : null,
+  cap: CAPS[d.id],
+  latitude: LATLNG[d.id]?.latitude ?? null,
+  longitude: LATLNG[d.id]?.longitude ?? null,
+}));
 
 // region that frames all of the drops (Sydney inner-city)
 export const SYDNEY_REGION = {
@@ -271,6 +275,8 @@ export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): D
     addr: d.venue_address ?? '',
     target: expiresMs,
     cap: d.max_group_size,
+    latitude: d.venue_lat,
+    longitude: d.venue_lng,
   };
 }
 

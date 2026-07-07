@@ -19,7 +19,7 @@ import { CATEGORIES } from '../../src/data';
 import { fontDisplay, fontMono, fontUI, useApp } from '../../src/theme';
 import { Btn, Logo, PulseMark } from '../../src/components';
 import { AppleLogo, GlyphBell, GlyphPin, GoogleLogo, MailGlyph, PhoneGlyph, Search } from '../../src/icons';
-import { sendPhoneOtp, signInWithApple, signInWithGoogle, signInWithEmail, signUpWithEmail, syncUserProfile, verifyPhoneOtp } from '../../src/auth';
+import { fetchUserProfile, sendPhoneOtp, signInWithApple, signInWithGoogle, signInWithEmail, signUpWithEmail, syncUserProfile, verifyPhoneOtp } from '../../src/auth';
 
 const { width: W } = Dimensions.get('window');
 const SUBURBS = ['Sydney CBD', 'Surry Hills', 'Newtown', 'Bondi', 'Marrickville', 'Enmore', 'Darlinghurst', 'Redfern', 'Chippendale', 'Glebe', 'Paddington', 'Manly'];
@@ -130,16 +130,35 @@ export default function Onboarding() {
   const [otpCode, setOtpCode] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [emailMode, setEmailMode] = useState<'signin' | 'signup'>('signin');
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  // Set once the user has authenticated — locks off the hero + sign-in panels.
+  const [authed, setAuthed] = useState(false);
 
   const goTo = (i: number) => {
-    const p = Math.max(0, Math.min(STEPS - 1, i));
+    // Once authenticated you can't go back to panels 0 (hero) or 1 (sign-in).
+    const p = Math.max(authed ? 2 : 0, Math.min(STEPS - 1, i));
     scrollRef.current?.scrollTo({ x: p * W, animated: true });
     setPage(p);
   };
   const next = () => goTo(page + 1);
+  const goToApp = () => router.replace('/(user)/home');
+
+  // After auth: a returning (already-onboarded) user goes straight to the app;
+  // a brand-new user continues through the onboarding steps.
+  const continueOrEnter = async () => {
+    const existing = await fetchUserProfile().catch(() => null);
+    const onboarded = !!(existing && (existing.home_suburb || (existing.preferred_acts?.length ?? 0) > 0));
+    if (onboarded) {
+      goToApp();
+      return;
+    }
+    setAuthed(true);
+    next();
+  };
 
   const complete = () => {
     if (suburb || acts.length) {
@@ -167,13 +186,13 @@ export default function Onboarding() {
         if (e.code !== 'ERR_REQUEST_CANCELED') throw e;
         return null;
       });
-      if (user) next();
+      if (user) await continueOrEnter();
     }).catch((e) => setAuthError(e.message ?? 'Apple sign-in failed.'));
 
   const handleGoogle = () =>
     withAuth(async () => {
       const user = await signInWithGoogle();
-      if (user) next();
+      if (user) await continueOrEnter();
     }).catch((e) => setAuthError(e.message ?? 'Google sign-in failed.'));
 
   const handleSendOtp = () =>
@@ -186,15 +205,31 @@ export default function Onboarding() {
   const handleVerifyOtp = () =>
     withAuth(async () => {
       const user = await verifyPhoneOtp(phoneNumber, otpCode);
-      if (user) { setPhoneView('buttons'); setPhoneNumber(''); setOtpCode(''); next(); }
+      if (user) { setPhoneView('buttons'); setPhoneNumber(''); setOtpCode(''); await continueOrEnter(); }
     }).catch((e) => setAuthError(e.message ?? 'Invalid code. Please try again.'));
 
   const handleEmailAuth = () =>
     withAuth(async () => {
-      const user = emailMode === 'signin'
-        ? await signInWithEmail(email, password)
-        : await signUpWithEmail(email, password);
-      if (user) { setPhoneView('buttons'); setEmail(''); setPassword(''); next(); }
+      if (emailMode === 'signin') {
+        const user = await signInWithEmail(email, password);
+        if (!user) return;
+        // Existing user logging in → straight to the app, no onboarding.
+        setEmail(''); setPassword('');
+        goToApp();
+        return;
+      }
+      // Sign-up → create the account, save their name, then onboard.
+      const user = await signUpWithEmail(email, password);
+      if (!user) return;
+      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+      if (fullName) {
+        setProfile((p) => ({ ...p, name: fullName }));
+        await syncUserProfile({ full_name: fullName }).catch(() => {/* best effort */});
+      }
+      setPhoneView('buttons');
+      setEmail(''); setPassword(''); setFirstName(''); setLastName('');
+      setAuthed(true);
+      next();
     }).catch((e) => setAuthError(e.message ?? 'Authentication failed. Check your details.'));
 
   const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -214,11 +249,14 @@ export default function Onboarding() {
       {/* progress dots + skip */}
       <View style={{ position: 'absolute', top: insets.top + 6, left: 0, right: 0, zIndex: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22 }}>
         <View style={{ flexDirection: 'row', gap: 6 }}>
-          {[...Array(STEPS)].map((_, i) => (
-            <Pressable key={i} onPress={() => goTo(i)} hitSlop={8}>
-              <View style={{ width: i === page ? 22 : 7, height: 7, borderRadius: 4, backgroundColor: i === page ? T.accent : T.line2 }} />
-            </Pressable>
-          ))}
+          {[...Array(STEPS)].map((_, i) => {
+            const locked = authed && i < 2; // hero + sign-in are done, no going back
+            return (
+              <Pressable key={i} onPress={() => goTo(i)} disabled={locked} hitSlop={8}>
+                <View style={{ width: i === page ? 22 : 7, height: 7, borderRadius: 4, backgroundColor: i === page ? T.accent : T.line2, opacity: locked ? 0.4 : 1 }} />
+              </Pressable>
+            );
+          })}
         </View>
         {page < STEPS - 1 ? (
           <Pressable onPress={complete}>
@@ -241,12 +279,7 @@ export default function Onboarding() {
         {/* 0 — hero (minimal) */}
         <Panel
           top={insets.top + 8}
-          footer={
-            <>
-              <Btn full onPress={next}>Get started</Btn>
-              {skipLink('I already have an account', next)}
-            </>
-          }
+          footer={<Btn full onPress={next}>Get started</Btn>}
         >
           <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 8, justifyContent: 'space-between' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
@@ -369,6 +402,29 @@ export default function Onboarding() {
                 body={emailMode === 'signin' ? 'Enter your email and password.' : 'Pick an email and a password to get started.'}
               />
               <View style={{ paddingHorizontal: 24, paddingTop: 30, gap: 12 }}>
+                {emailMode === 'signup' && (
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <TextInput
+                      value={firstName}
+                      onChangeText={setFirstName}
+                      placeholder="First name"
+                      placeholderTextColor={T.faint}
+                      autoCapitalize="words"
+                      autoCorrect={false}
+                      autoFocus
+                      style={{ flex: 1, fontFamily: fontUI(400), fontSize: 17, color: T.text, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14 }}
+                    />
+                    <TextInput
+                      value={lastName}
+                      onChangeText={setLastName}
+                      placeholder="Last name"
+                      placeholderTextColor={T.faint}
+                      autoCapitalize="words"
+                      autoCorrect={false}
+                      style={{ flex: 1, fontFamily: fontUI(400), fontSize: 17, color: T.text, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14 }}
+                    />
+                  </View>
+                )}
                 <TextInput
                   value={email}
                   onChangeText={setEmail}
@@ -377,7 +433,7 @@ export default function Onboarding() {
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
-                  autoFocus
+                  autoFocus={emailMode === 'signin'}
                   style={{ fontFamily: fontUI(400), fontSize: 17, color: T.text, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14 }}
                 />
                 <TextInput
@@ -392,7 +448,7 @@ export default function Onboarding() {
                 {authError ? (
                   <Text style={{ fontFamily: fontUI(400), fontSize: 13.5, color: '#FF5A4D' }}>{authError}</Text>
                 ) : null}
-                <Btn full onPress={handleEmailAuth} disabled={!email || password.length < 6 || authLoading}>
+                <Btn full onPress={handleEmailAuth} disabled={!email || password.length < 6 || (emailMode === 'signup' && (!firstName.trim() || !lastName.trim())) || authLoading}>
                   {authLoading ? 'Please wait…' : emailMode === 'signin' ? 'Sign in' : 'Create account'}
                 </Btn>
                 <Pressable onPress={() => { setEmailMode(emailMode === 'signin' ? 'signup' : 'signin'); setAuthError(null); }} style={{ alignItems: 'center', paddingVertical: 4 }}>

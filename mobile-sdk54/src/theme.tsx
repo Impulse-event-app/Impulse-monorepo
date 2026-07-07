@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { DEFAULT_FILTERS, Drop, Filters, Plan, apiBookingToPlan, apiDealToDrop } from './data';
 import { ApiDeal, listDeals, getMyBookings } from './api';
 import { supabase } from './supabase';
+import { fetchUserProfile } from './auth';
 
 // ── fonts ────────────────────────────────────────────────────
 // Each weight is its own family in React Native. These keys must match the
@@ -116,17 +117,20 @@ export function tokens(dark: boolean, accent = '#FF5A4D'): Theme {
 // ── profile ──────────────────────────────────────────────────
 export type Profile = {
   name: string;
+  email: string;
   phone: string;
   suburb: string;
   acts: string[];
   party: number;
 };
 
+// Empty until hydrated from the authenticated user (/users/me).
 const DEFAULT_PROFILE: Profile = {
-  name: 'Jordan Lee',
-  phone: '+61 4XX XXX 891',
-  suburb: 'Surry Hills',
-  acts: ['Bowling', 'Karaoke', 'Live music'],
+  name: '',
+  email: '',
+  phone: '',
+  suburb: '',
+  acts: [],
   party: 2,
 };
 
@@ -151,6 +155,8 @@ type AppState = {
   refreshBookings: () => Promise<void>;
   profile: Profile;
   setProfile: React.Dispatch<React.SetStateAction<Profile>>;
+  profileLoading: boolean;
+  refreshProfile: () => Promise<void>;
   reset: () => void;
 };
 
@@ -165,6 +171,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [rawDeals, setRawDeals] = useState<ApiDeal[]>([]);
   const [dealsLoading, setDealsLoading] = useState(false);
   const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   const T = useMemo(() => tokens(dark, accent), [dark, accent]);
 
@@ -201,6 +208,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Hydrate the profile from the signed-in user (/users/me), with the
+  // Supabase session's email as a fallback if the backend row doesn't exist yet.
+  const refreshProfile = async () => {
+    setProfileLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setProfile(DEFAULT_PROFILE);
+        return;
+      }
+      const up = await fetchUserProfile(); // null if the row doesn't exist yet
+      const email = up?.email ?? user.email ?? '';
+      const name = (up?.full_name?.trim() || (email ? email.split('@')[0] : '')) || 'You';
+      setProfile({
+        name,
+        email,
+        phone: up?.phone ?? user.phone ?? '',
+        suburb: up?.home_suburb ?? '',
+        acts: up?.preferred_acts ?? [],
+        party: up?.party_size ?? 2,
+      });
+    } catch {
+      // Keep whatever profile we already have on error
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
   // Deals are public — load immediately on mount regardless of auth.
   // Bookings require a session — load/clear on auth state changes.
   useEffect(() => {
@@ -210,8 +245,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (session) {
         refreshDeals();
         refreshBookings();
+        refreshProfile();
       } else {
         setPlans([]);
+        setProfile(DEFAULT_PROFILE);
       }
     });
 
@@ -226,7 +263,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     plans,
     addPlan: (p) => setPlans((prev) => [p, ...prev]),
     bookingsLoading, refreshBookings,
-    profile, setProfile,
+    profile, setProfile, profileLoading, refreshProfile,
     reset: () => {
       setFilters(DEFAULT_FILTERS);
       setPlans([]);
