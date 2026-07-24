@@ -1,12 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CATEGORIES } from '../../../src/data';
 import { fontDisplay, fontMono, fontUI, useApp } from '../../../src/theme';
-import { Switch } from '../../../src/components';
+import { Btn, Switch } from '../../../src/components';
 import { ChevronRight, RowIcons } from '../../../src/icons';
 import { signOut as supabaseSignOut, syncUserProfile } from '../../../src/auth';
 import { FLOATING_TAB_CLEARANCE } from './_layout';
+
+const SUBURBS = ['Sydney CBD', 'Surry Hills', 'Newtown', 'Bondi', 'Marrickville', 'Enmore', 'Darlinghurst', 'Redfern', 'Chippendale', 'Glebe', 'Paddington', 'Manly', 'Strathfield'];
+const ACTIVITIES = CATEGORIES.filter((c) => c !== 'All');
+
+type Editor = null | 'suburb' | 'favourites' | 'party' | 'payment';
+type Card = { last4: string; exp: string; name: string };
 
 function Group({ label, children }: { label?: string; children: React.ReactNode }) {
   const { T } = useApp();
@@ -86,6 +93,52 @@ export default function ProfileScreen() {
   const [notif, setNotif] = useState({ near: true, reminders: true, weekly: false });
   const setN = (k: keyof typeof notif, v: boolean) => setNotif((p) => ({ ...p, [k]: v }));
 
+  // Which field editor is open (bottom sheet), plus its working drafts.
+  const [editor, setEditor] = useState<Editor>(null);
+  const [draftSuburb, setDraftSuburb] = useState('');
+  const [draftActs, setDraftActs] = useState<string[]>([]);
+  const [draftParty, setDraftParty] = useState(2);
+  // Payment is a mock: stored in app state only (no real card is ever collected).
+  const [card, setCard] = useState<Card>({ last4: '4242', exp: '04/28', name: '' });
+  const [cardName, setCardName] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExp, setCardExp] = useState('');
+
+  const openSuburb = () => { setDraftSuburb(profile.suburb); setEditor('suburb'); };
+  const openFavourites = () => { setDraftActs(profile.acts || []); setEditor('favourites'); };
+  const openParty = () => { setDraftParty(profile.party || 2); setEditor('party'); };
+  const openPayment = () => { setCardName(card.name); setCardNumber(''); setCardExp(card.exp); setEditor('payment'); };
+  const close = () => setEditor(null);
+
+  const saveSuburb = () => {
+    setProfile((p) => ({ ...p, suburb: draftSuburb }));
+    syncUserProfile({ suburb: draftSuburb }).catch(console.warn);
+    close();
+  };
+  const saveFavourites = () => {
+    setProfile((p) => ({ ...p, acts: draftActs }));
+    syncUserProfile({ acts: draftActs }).catch(console.warn);
+    close();
+  };
+  const saveParty = () => {
+    setProfile((p) => ({ ...p, party: draftParty }));
+    syncUserProfile({ party_size: draftParty }).catch(console.warn);
+    close();
+  };
+  const savePayment = () => {
+    const digits = cardNumber.replace(/\D/g, '');
+    // Keep only the last 4 — the full number is never stored, synced, or sent.
+    setCard({
+      last4: digits.length >= 4 ? digits.slice(-4) : card.last4,
+      exp: cardExp.trim() || card.exp,
+      name: cardName.trim(),
+    });
+    setCardNumber(''); // drop the full PAN from memory immediately
+    close();
+  };
+  const toggleDraftAct = (a: string) =>
+    setDraftActs((p) => (p.includes(a) ? p.filter((x) => x !== a) : [...p, a]));
+
   // Pull the latest profile from the backend whenever this tab opens.
   useEffect(() => {
     refreshProfile();
@@ -163,9 +216,9 @@ export default function ProfileScreen() {
         </View>
 
         <Group label="Going out">
-          <Row icon={RowIcons.pin(T.accent)} label="Home suburb" value={profile.suburb || 'Set suburb'} onPress={() => {}} />
-          <Row icon={RowIcons.star(T.accent)} label="Favourites" value={actLabel} onPress={() => {}} />
-          <Row icon={RowIcons.people(T.accent)} label="Usual party size" value={`${profile.party} ${profile.party === 1 ? 'person' : 'people'}`} onPress={() => {}} />
+          <Row icon={RowIcons.pin(T.accent)} label="Home suburb" value={profile.suburb || 'Set suburb'} onPress={openSuburb} />
+          <Row icon={RowIcons.star(T.accent)} label="Favourites" value={actLabel} onPress={openFavourites} />
+          <Row icon={RowIcons.people(T.accent)} label="Usual party size" value={`${profile.party} ${profile.party === 1 ? 'person' : 'people'}`} onPress={openParty} />
         </Group>
 
         <Group label="Notifications">
@@ -176,13 +229,13 @@ export default function ProfileScreen() {
 
         <Group label="App">
           <Row icon={RowIcons.moon(T.accent)} label="Nocturnal theme" trailing={<Switch on={dark} onChange={setDark} />} />
-          <Row icon={RowIcons.card(T.accent)} label="Payment" value="•••• 4242" onPress={() => {}} />
+          <Row icon={RowIcons.card(T.accent)} label="Payment" value={`•••• ${card.last4}`} onPress={openPayment} />
         </Group>
 
         <Group label="Support">
-          <Row icon={RowIcons.help(T.accent)} label="Help & support" onPress={() => {}} />
-          <Row icon={RowIcons.doc(T.accent)} label="Terms of service" onPress={() => {}} />
-          <Row icon={RowIcons.shield(T.accent)} label="Privacy" onPress={() => {}} />
+          <Row icon={RowIcons.help(T.accent)} label="Help & support" onPress={() => router.push('/(user)/legal/help')} />
+          <Row icon={RowIcons.doc(T.accent)} label="Terms of service" onPress={() => router.push('/(user)/legal/terms')} />
+          <Row icon={RowIcons.shield(T.accent)} label="Privacy" onPress={() => router.push('/(user)/legal/privacy')} />
         </Group>
 
         <Pressable onPress={signOut} style={{ marginTop: 22, height: 52, borderRadius: 16, backgroundColor: T.chipBg, alignItems: 'center', justifyContent: 'center' }}>
@@ -193,6 +246,98 @@ export default function ProfileScreen() {
           impulse · v1.0.0 · made in sydney
         </Text>
       </ScrollView>
+
+      <Modal visible={editor !== null} transparent animationType="slide" onRequestClose={close}>
+        <Pressable onPress={close} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} />
+        <View style={{ backgroundColor: T.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 22, paddingTop: 10, paddingBottom: insets.bottom + 20 }}>
+          <View style={{ alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: T.line, marginBottom: 18 }} />
+
+          {editor === 'suburb' && (
+            <>
+              <Text style={{ fontFamily: fontDisplay(700), fontSize: 22, color: T.text, letterSpacing: -0.44, marginBottom: 16 }}>Home suburb</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginBottom: 20 }}>
+                {SUBURBS.map((s) => {
+                  const on = draftSuburb === s;
+                  return (
+                    <Pressable key={s} onPress={() => setDraftSuburb(s)} style={{ height: 38, paddingHorizontal: 16, borderRadius: 999, backgroundColor: on ? T.chipOn : T.chipBg, justifyContent: 'center' }}>
+                      <Text style={{ fontFamily: fontUI(500), fontSize: 14.5, color: on ? T.chipOnInk : T.chipText }}>{s}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Btn full onPress={saveSuburb} disabled={!draftSuburb}>Save</Btn>
+            </>
+          )}
+
+          {editor === 'favourites' && (
+            <>
+              <Text style={{ fontFamily: fontDisplay(700), fontSize: 22, color: T.text, letterSpacing: -0.44, marginBottom: 6 }}>Favourites</Text>
+              <Text style={{ fontFamily: fontUI(400), fontSize: 14.5, color: T.muted, marginBottom: 16 }}>We bump these to the top of your feed.</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginBottom: 20 }}>
+                {ACTIVITIES.map((a) => {
+                  const on = draftActs.includes(a);
+                  return (
+                    <Pressable key={a} onPress={() => toggleDraftAct(a)} style={{ paddingHorizontal: 15, paddingVertical: 10, borderRadius: 12, backgroundColor: on ? T.accent : T.chipBg, flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: on ? T.accentInk : T.faint }} />
+                      <Text style={{ fontFamily: fontUI(500), fontSize: 14.5, color: on ? T.accentInk : T.text }}>{a}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Btn full onPress={saveFavourites}>{draftActs.length ? `Save — ${draftActs.length} picked` : 'Save (show everything)'}</Btn>
+            </>
+          )}
+
+          {editor === 'party' && (
+            <>
+              <Text style={{ fontFamily: fontDisplay(700), fontSize: 22, color: T.text, letterSpacing: -0.44, marginBottom: 6 }}>Usual party size</Text>
+              <Text style={{ fontFamily: fontUI(400), fontSize: 14.5, color: T.muted, marginBottom: 22 }}>How many people you usually book for.</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 28, marginBottom: 26 }}>
+                <Pressable onPress={() => setDraftParty((n) => Math.max(1, n - 1))} style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: T.chipBg, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontFamily: fontDisplay(700), fontSize: 26, color: T.text, marginTop: -2 }}>−</Text>
+                </Pressable>
+                <Text style={{ fontFamily: fontDisplay(700), fontSize: 44, color: T.text, letterSpacing: -1, minWidth: 60, textAlign: 'center' }}>{draftParty}</Text>
+                <Pressable onPress={() => setDraftParty((n) => Math.min(12, n + 1))} style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: T.chipBg, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontFamily: fontDisplay(700), fontSize: 26, color: T.text, marginTop: -2 }}>+</Text>
+                </Pressable>
+              </View>
+              <Btn full onPress={saveParty}>Save</Btn>
+            </>
+          )}
+
+          {editor === 'payment' && (
+            <>
+              <Text style={{ fontFamily: fontDisplay(700), fontSize: 22, color: T.text, letterSpacing: -0.44, marginBottom: 6 }}>Payment method</Text>
+              <Text style={{ fontFamily: fontUI(400), fontSize: 13, color: T.faint, marginBottom: 18 }}>Demo only — don't enter a real card number.</Text>
+              <TextInput
+                value={cardName}
+                onChangeText={setCardName}
+                placeholder="Name on card"
+                placeholderTextColor={T.faint}
+                autoCapitalize="words"
+                style={{ fontFamily: fontUI(400), fontSize: 16, color: T.text, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14, marginBottom: 11 }}
+              />
+              <TextInput
+                value={cardNumber}
+                onChangeText={(t) => setCardNumber(t.replace(/[^\d ]/g, '').slice(0, 19))}
+                placeholder="Card number"
+                placeholderTextColor={T.faint}
+                keyboardType="number-pad"
+                style={{ fontFamily: fontUI(400), fontSize: 16, color: T.text, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14, marginBottom: 11 }}
+              />
+              <TextInput
+                value={cardExp}
+                onChangeText={(t) => setCardExp(t.replace(/[^\d/]/g, '').slice(0, 5))}
+                placeholder="MM/YY"
+                placeholderTextColor={T.faint}
+                keyboardType="number-pad"
+                style={{ fontFamily: fontUI(400), fontSize: 16, color: T.text, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14, marginBottom: 20 }}
+              />
+              <Btn full onPress={savePayment}>Save card</Btn>
+            </>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }

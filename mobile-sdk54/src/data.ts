@@ -171,6 +171,39 @@ export const SYDNEY_REGION = {
   longitudeDelta: 0.075,
 };
 
+// Approximate centre for Sydney suburbs, keyed by lowercase name. Backend deals
+// frequently arrive without venue coordinates, so we fall back to the suburb to
+// still place a pin (see dropCoords). Add suburbs here as new ones appear.
+export const SUBURB_COORDS: Record<string, LatLng> = {
+  'sydney cbd': { latitude: -33.8688, longitude: 151.2093 },
+  'cbd': { latitude: -33.8688, longitude: 151.2093 },
+  'sydney': { latitude: -33.8688, longitude: 151.2093 },
+  'surry hills': { latitude: -33.8846, longitude: 151.2110 },
+  'newtown': { latitude: -33.8983, longitude: 151.1793 },
+  'bondi': { latitude: -33.8915, longitude: 151.2767 },
+  'bondi beach': { latitude: -33.8908, longitude: 151.2743 },
+  'marrickville': { latitude: -33.9112, longitude: 151.1558 },
+  'enmore': { latitude: -33.9015, longitude: 151.1718 },
+  'darlinghurst': { latitude: -33.8788, longitude: 151.2188 },
+  'redfern': { latitude: -33.8926, longitude: 151.2043 },
+  'chippendale': { latitude: -33.8885, longitude: 151.1985 },
+  'glebe': { latitude: -33.8797, longitude: 151.1855 },
+  'paddington': { latitude: -33.8846, longitude: 151.2270 },
+  'manly': { latitude: -33.7969, longitude: 151.2870 },
+  'moore park': { latitude: -33.8975, longitude: 151.2236 },
+  'strathfield': { latitude: -33.8791, longitude: 151.0817 },
+};
+
+// Best-effort coordinates for a drop: exact venue location if the backend has
+// it, otherwise the centre of its suburb, otherwise null (can't be mapped).
+export function dropCoords(d: Drop): LatLng | null {
+  if (d.latitude != null && d.longitude != null) {
+    return { latitude: d.latitude, longitude: d.longitude };
+  }
+  const key = (d.suburb || '').trim().toLowerCase();
+  return SUBURB_COORDS[key] ?? null;
+}
+
 // areas present in the dataset (for the filter sheet)
 export const AREAS = Array.from(new Set(DROPS.map((d) => d.suburb)));
 

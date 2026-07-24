@@ -14,6 +14,7 @@ export default function UserLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="event/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="claim/[id]" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="legal/[doc]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="confirm" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
         <Stack.Screen
           name="filters"

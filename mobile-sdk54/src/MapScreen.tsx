@@ -7,11 +7,10 @@ import { useRouter } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
-import { SYDNEY_REGION, activeFilterCount, applyFilters, money } from './data';
+import { Drop, LatLng, SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, money } from './data';
 import { fontUI, useApp } from './theme';
 import { DropCardCompact, Pin } from './components';
 import { Filter, Search } from './icons';
-import { FLOATING_TAB_CLEARANCE } from '../app/(user)/(tabs)/_layout';
 
 // Custom marker. react-native-maps caches the rendered child as a static
 // image, so we briefly enable tracksViewChanges whenever the pin's look
@@ -55,17 +54,20 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const [sel, setSel] = useState<string | null>(null);
 
-  // Only deals that actually carry venue coordinates are placed on the map.
-  const located = drops.filter((d) => d.latitude != null && d.longitude != null);
-  const selDrop = located.find((d) => d.id === sel) || null;
-  const matchIds = new Set(applyFilters(located, filters).map((d) => d.id));
+  // Resolve a coordinate for every deal — exact venue location when the backend
+  // has it, otherwise the deal's suburb centre. Only mappable deals get a pin.
+  const located = drops
+    .map((d) => ({ d, coord: dropCoords(d) }))
+    .filter((x) => x.coord != null) as { d: Drop; coord: LatLng }[];
+  const selDrop = located.find((x) => x.d.id === sel)?.d ?? null;
+  const matchIds = new Set(applyFilters(located.map((x) => x.d), filters).map((d) => d.id));
   const activeCount = activeFilterCount(filters);
 
   const select = (id: string) => {
     setSel(id);
-    const d = located.find((x) => x.id === id);
-    if (d && d.latitude != null && d.longitude != null) {
-      mapRef.current?.animateCamera({ center: { latitude: d.latitude, longitude: d.longitude } }, { duration: 350 });
+    const entry = located.find((x) => x.d.id === id);
+    if (entry) {
+      mapRef.current?.animateCamera({ center: entry.coord }, { duration: 350 });
     }
   };
 
@@ -86,11 +88,11 @@ export default function MapScreen() {
         onPress={() => setSel(null)}
         mapPadding={{ top: insets.top + 56, right: 0, bottom: barTop, left: 0 }}
       >
-        {located.map((d) => (
+        {located.map(({ d, coord }) => (
           <DropMarker
             key={d.id}
-            latitude={d.latitude as number}
-            longitude={d.longitude as number}
+            latitude={coord.latitude}
+            longitude={coord.longitude}
             label={money(d.now)}
             active={sel === d.id}
             dim={!matchIds.has(d.id)}
