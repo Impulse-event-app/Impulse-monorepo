@@ -15,7 +15,8 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.impulse.app"
+      "bundleIdentifier": "com.impulse.app",
+      "usesAppleSignIn": true
     },
     "android": {
       "package": "com.impulse.app",
@@ -28,7 +29,15 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "favicon": "./assets/favicon.png",
+      "output": "single"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "bcd9318b-55fe-4ad0-83eb-18bb6e2f9232"
+      }
+    },
+    "owner": "manojvradan"
   }
 }

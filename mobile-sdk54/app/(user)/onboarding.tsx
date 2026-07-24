@@ -19,12 +19,18 @@ import { CATEGORIES } from '../../src/data';
 import { fontDisplay, fontMono, fontUI, useApp } from '../../src/theme';
 import { Btn, Logo, PulseMark } from '../../src/components';
 import { AppleLogo, GlyphBell, GlyphPin, GoogleLogo, MailGlyph, PhoneGlyph, Search } from '../../src/icons';
-import { fetchUserProfile, sendPhoneOtp, signInWithApple, signInWithGoogle, signInWithEmail, signUpWithEmail, syncUserProfile, verifyPhoneOtp } from '../../src/auth';
+import { fetchUserProfile, isOnboarded, markOnboarded, sendPhoneOtp, signInWithApple, signInWithGoogle, signInWithEmail, signUpWithEmail, syncUserProfile, verifyPhoneOtp } from '../../src/auth';
+import { supabase } from '../../src/supabase';
 
 const { width: W } = Dimensions.get('window');
 const SUBURBS = ['Sydney CBD', 'Surry Hills', 'Newtown', 'Bondi', 'Marrickville', 'Enmore', 'Darlinghurst', 'Redfern', 'Chippendale', 'Glebe', 'Paddington', 'Manly'];
 const ACTIVITIES = CATEGORIES.filter((c) => c !== 'All');
 const STEPS = 7;
+// Panels 0 (hero) and 1 (sign-in) come before onboarding proper. The real
+// onboarding steps (location, notifications, age, suburb, activities) start
+// here — this is where a user lands the moment they finish signing in, and
+// what the progress dots count.
+const FIRST_ONBOARDING_STEP = 2;
 
 function Panel({ children, footer, top = 0 }: { children: React.ReactNode; footer?: React.ReactNode; top?: number }) {
   const insets = useSafeAreaInsets();
@@ -138,34 +144,62 @@ export default function Onboarding() {
   // Set once the user has authenticated — locks off the hero + sign-in panels.
   const [authed, setAuthed] = useState(false);
 
-  const goTo = (i: number) => {
+  const goTo = (i: number, animated = true) => {
     // Once authenticated you can't go back to panels 0 (hero) or 1 (sign-in).
-    const p = Math.max(authed ? 2 : 0, Math.min(STEPS - 1, i));
-    scrollRef.current?.scrollTo({ x: p * W, animated: true });
+    const p = Math.max(authed ? FIRST_ONBOARDING_STEP : 0, Math.min(STEPS - 1, i));
+    scrollRef.current?.scrollTo({ x: p * W, animated });
     setPage(p);
   };
   const next = () => goTo(page + 1);
   const goToApp = () => router.replace('/(user)/home');
 
-  // After auth: a returning (already-onboarded) user goes straight to the app;
-  // a brand-new user continues through the onboarding steps.
+  // Resume-on-mount: if a session already exists when this screen loads, the
+  // user has passed the sign-in panel — most importantly after a web OAuth
+  // redirect, which reloads the whole app and lands back here. Skip the hero +
+  // sign-in panels and drop them straight onto the first onboarding step
+  // (or into the app if they're already onboarded), rather than at the start.
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return; // not signed in → begin at the hero
+      if (isOnboarded(session)) { goToApp(); return; }
+      setAuthed(true);
+      // Wait a frame so the horizontal pager is laid out before jumping.
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ x: FIRST_ONBOARDING_STEP * W, animated: false });
+        setPage(FIRST_ONBOARDING_STEP);
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // After auth (inline flows — phone, email, native Google/Apple): a returning,
+  // already-onboarded user goes straight to the app; anyone else continues into
+  // the onboarding steps. Web OAuth doesn't reach here (it reloads the app), so
+  // the resume-on-mount effect above covers it instead.
   const continueOrEnter = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session && isOnboarded(session)) { goToApp(); return; }
+    // Fallback for users who onboarded before the metadata flag existed: check
+    // the backend profile, and backfill the flag so future launches are fast.
     const existing = await fetchUserProfile().catch(() => null);
     const onboarded = !!(existing && (existing.home_suburb || (existing.preferred_acts?.length ?? 0) > 0));
     if (onboarded) {
+      await markOnboarded();
       goToApp();
       return;
     }
     setAuthed(true);
-    next();
+    goTo(FIRST_ONBOARDING_STEP);
   };
 
-  const complete = () => {
+  const complete = async () => {
     if (suburb || acts.length) {
       setProfile((p) => ({ ...p, suburb: suburb || p.suburb, acts: acts.length ? acts : p.acts }));
     }
     // Fire-and-forget profile sync to public.users
     syncUserProfile({ suburb: suburb ?? undefined, acts }).catch(console.warn);
+    // Record that onboarding is done so we never route them back here.
+    await markOnboarded();
     router.replace('/(user)/home');
   };
 
@@ -213,9 +247,9 @@ export default function Onboarding() {
       if (emailMode === 'signin') {
         const user = await signInWithEmail(email, password);
         if (!user) return;
-        // Existing user logging in → straight to the app, no onboarding.
+        // Onboarded → app; signed up but never finished → resume onboarding.
         setEmail(''); setPassword('');
-        goToApp();
+        await continueOrEnter();
         return;
       }
       // Sign-up → create the account, save their name, then onboard.
@@ -229,7 +263,7 @@ export default function Onboarding() {
       setPhoneView('buttons');
       setEmail(''); setPassword(''); setFirstName(''); setLastName('');
       setAuthed(true);
-      next();
+      goTo(FIRST_ONBOARDING_STEP);
     }).catch((e) => setAuthError(e.message ?? 'Authentication failed. Check your details.'));
 
   const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -246,26 +280,21 @@ export default function Onboarding() {
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      {/* progress dots + skip */}
-      <View style={{ position: 'absolute', top: insets.top + 6, left: 0, right: 0, zIndex: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22 }}>
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          {[...Array(STEPS)].map((_, i) => {
-            const locked = authed && i < 2; // hero + sign-in are done, no going back
-            return (
-              <Pressable key={i} onPress={() => goTo(i)} disabled={locked} hitSlop={8}>
-                <View style={{ width: i === page ? 22 : 7, height: 7, borderRadius: 4, backgroundColor: i === page ? T.accent : T.line2, opacity: locked ? 0.4 : 1 }} />
-              </Pressable>
-            );
-          })}
+      {/* Progress dots. Only shown once signed in — onboarding proper begins
+          after the sign-in panel. One dot per post-sign-in step, and they're a
+          read-only indicator (no tap-to-jump), so steps can't be skipped. */}
+      {authed && (
+        <View style={{ position: 'absolute', top: insets.top + 6, left: 0, right: 0, zIndex: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 22 }}>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            {[...Array(STEPS - FIRST_ONBOARDING_STEP)].map((_, i) => {
+              const active = i + FIRST_ONBOARDING_STEP === page;
+              return (
+                <View key={i} style={{ width: active ? 22 : 7, height: 7, borderRadius: 4, backgroundColor: active ? T.accent : T.line2 }} />
+              );
+            })}
+          </View>
         </View>
-        {page < STEPS - 1 ? (
-          <Pressable onPress={complete}>
-            <Text style={{ fontFamily: fontUI(500), fontSize: 14, color: T.faint }}>Skip</Text>
-          </Pressable>
-        ) : (
-          <View style={{ width: 30 }} />
-        )}
-      </View>
+      )}
 
       <ScrollView
         ref={scrollRef}
@@ -311,7 +340,9 @@ export default function Onboarding() {
             <>
               <Lede kicker="Welcome in" title="Get in." body="One tap and you're set. We'll only ever use your number to hold your slots." />
               <View style={{ paddingHorizontal: 24, paddingTop: 34, gap: 11 }}>
-                <SocialBtn kind="apple" onPress={handleApple} loading={authLoading} />
+                {/* expo-apple-authentication is iOS/tvOS only — there's no native
+                    Apple Sign In on Android or web, so the button doesn't render there. */}
+                {Platform.OS === 'ios' && <SocialBtn kind="apple" onPress={handleApple} loading={authLoading} />}
                 <SocialBtn kind="google" onPress={handleGoogle} loading={authLoading} />
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 8 }}>
                   <View style={{ flex: 1, height: 1, backgroundColor: T.line }} />

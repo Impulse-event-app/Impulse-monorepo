@@ -3,9 +3,14 @@
 // Supabase dashboard prerequisites (one-time setup):
 //   Apple  → Auth > Providers > Apple  → enable, add Service ID + key
 //   Google → Auth > Providers > Google → enable, add client ID/secret
-//            Auth > URL Configuration  → add "impulse://" to Redirect URLs
+//            Auth > URL Configuration  → add "impulse://" AND the deployed web
+//            origin(s) to Redirect URLs, e.g. "https://impulse--*.expo.app/**"
+//            (covers every EAS Hosting preview) and "https://impulse.expo.app/**"
+//            (production), plus "http://localhost:8081/**" for local web dev.
 //   Phone  → Auth > Providers > Phone  → enable, configure Twilio / MessageBird
 //
+import { Platform } from 'react-native';
+import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { ApiError, UserProfileUpdate, getMe, patchMe } from './api';
 import * as AppleAuthentication from 'expo-apple-authentication';
@@ -34,9 +39,31 @@ export async function signInWithApple() {
   return data.user;
 }
 
-// ── Google OAuth (PKCE via system browser) ───────────────────
-// Returns null if the user cancels the browser session.
+// ── Google OAuth (PKCE) ───────────────────────────────────────
+// Native: opens a system browser session tied to the "impulse://" deep link.
+// Web: a custom URL scheme can't redirect back into a browser tab, so instead
+// we do a normal full-page redirect back to wherever this build is hosted
+// (window.location.origin — works for the EAS Hosting preview URL, production
+// URL, or localhost during `expo start --web` without hardcoding any of them).
+// The app/index.tsx root route completes the sign-in by exchanging the "code"
+// query param that Supabase appends on that redirect.
+// Returns null if the user cancels the browser session (native only — on web
+// the page navigates away, so there's nothing left to return here).
 export async function signInWithGoogle() {
+  if (Platform.OS === 'web') {
+    // Trailing slash so the redirect reliably matches a Supabase allowlist entry
+    // like "https://impulse--*.expo.app/**". IMPORTANT: this URL must be in the
+    // Supabase dashboard's Auth → URL Configuration → Redirect URLs allowlist,
+    // otherwise Supabase ignores it and falls back to the project Site URL —
+    // which would land the user on whichever other app owns that Site URL.
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/` },
+    });
+    if (error) throw error;
+    return null;
+  }
+
   const redirectTo = makeRedirectUri({ scheme: 'impulse', path: 'auth/callback' });
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
@@ -79,6 +106,23 @@ export async function verifyPhoneOtp(phone: string, token: string) {
   const { data, error } = await supabase.auth.verifyOtp({ phone, token, type: 'sms' });
   if (error) throw error;
   return data.user;
+}
+
+// ── Onboarding status ────────────────────────────────────────
+// We record "has finished onboarding" as a flag on the Supabase user's
+// metadata rather than only in the backend profile. Metadata rides along on
+// the session object, so routing decisions on app launch (see app/index.tsx)
+// can read it synchronously — no backend round-trip that would stall the
+// splash screen while a cold-started API server wakes up.
+
+/** True once the user has completed onboarding at least once. */
+export function isOnboarded(session: Session | null): boolean {
+  return session?.user?.user_metadata?.onboarded === true;
+}
+
+/** Persist the "onboarded" flag on the current user. Best-effort. */
+export async function markOnboarded() {
+  await supabase.auth.updateUser({ data: { onboarded: true } }).catch(() => {/* best effort */});
 }
 
 // ── Sign out ─────────────────────────────────────────────────
