@@ -44,7 +44,7 @@ export default function PlansScreen() {
           <View style={{ paddingHorizontal: 18, paddingTop: 18, paddingBottom: 24 + FLOATING_TAB_CLEARANCE, gap: 13 }}>
             {plans.map((p) => (
               <Pressable
-                key={p.code}
+                key={p.bookingId ?? p.code}
                 onPress={() => router.push(`/(user)/confirm?code=${encodeURIComponent(p.code)}`)}
                 style={[{ backgroundColor: T.surface, borderRadius: 18, padding: 16, gap: 14 }, T.shadow]}
               >
@@ -57,14 +57,23 @@ export default function PlansScreen() {
                       {p.cat} · {p.party} {p.party === 1 ? 'person' : 'people'}
                     </Text>
                   </View>
-                  <View style={{ backgroundColor: T.accentSoft, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 }}>
-                    <Text style={{ fontFamily: fontUI(600), fontSize: 11.5, color: T.accent }}>Claimed</Text>
+                  <View style={{ backgroundColor: p.status === 'cancelled' ? T.sunken : T.accentSoft, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 }}>
+                    <Text style={{ fontFamily: fontUI(600), fontSize: 11.5, color: p.status === 'cancelled' ? T.muted : T.accent }}>
+                      {p.status === 'attended' ? 'Verified ✓' : p.status === 'cancelled' ? 'Cancelled' : 'Claimed'}
+                    </Text>
                   </View>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: T.sunken, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 }}>
-                  <Text style={{ fontFamily: fontMono(400), fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: T.faint }}>Door code</Text>
-                  <Text style={{ fontFamily: fontMono(700), fontSize: 22, color: T.text, letterSpacing: 4 }}>{p.code}</Text>
-                </View>
+                {p.status !== 'cancelled' && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: T.sunken, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 }}>
+                    <Text style={{ fontFamily: fontMono(400), fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: T.faint }}>Door code</Text>
+                    <Text style={{ fontFamily: fontMono(700), fontSize: 22, color: T.text, letterSpacing: 4 }}>{p.code}</Text>
+                  </View>
+                )}
+                {p.status === 'attended' && !!p.paymentNote && (
+                  <Text style={{ fontFamily: fontUI(400), fontSize: 13, color: T.muted, lineHeight: 19 }}>
+                    {p.paymentNote}
+                  </Text>
+                )}
               </Pressable>
             ))}
           </View>

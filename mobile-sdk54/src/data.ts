@@ -224,6 +224,8 @@ export type Plan = {
   party: number;
   time: string;
   total: number;
+  status: 'pending' | 'confirmed' | 'cancelled' | 'attended';
+  paymentNote: string | null;  // balance-charge outcome, set when the venue scans the code
 };
 
 export const genCode = () => 'IMP-' + Math.floor(1000 + Math.random() * 9000);
@@ -283,7 +285,7 @@ export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): D
 /** Convert a backend ApiBooking into the Plan shape used by PlansScreen. */
 export function apiBookingToPlan(b: ApiBooking): Plan {
   return {
-    code: b.confirmation_code,
+    code: b.confirmation_code ?? '',   // null only while the deposit is unpaid
     bookingId: b.id,
     dropId: b.deal_id,
     venue: b.venue_name,
@@ -291,6 +293,8 @@ export function apiBookingToPlan(b: ApiBooking): Plan {
     party: b.num_people,
     time: b.slot_time,
     total: b.total_paid,
+    status: b.status as Plan['status'],
+    paymentNote: b.payment_note,
   };
 }
 

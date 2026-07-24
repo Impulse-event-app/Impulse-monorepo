@@ -190,6 +190,15 @@ class BookingCreate(BaseModel):
     num_people: int
 
 
+class BookingPay(BaseModel):
+    """CaptureJs card token + payer details for the Pinch deposit charge."""
+    token: str
+    card_holder_name: str
+    email: str
+    first_name: str
+    last_name: str
+
+
 class BookingResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -199,10 +208,15 @@ class BookingResponse(BaseModel):
     slot_time: str
     num_people: int
     total_paid: float
-    confirmation_code: str
+    confirmation_code: Optional[str]   # null until the deposit is paid
     status: str
     redeemed_at: Optional[datetime]
     created_at: datetime
+    deposit_amount_cents: Optional[int] = None
+    balance_amount_cents: Optional[int] = None
+    payment_status: str = "unpaid"
+    payment_note: Optional[str] = None      # customer-facing balance-charge outcome
+    payment_followup: bool = False
 
 
 class BookingWithDetailsResponse(BookingResponse):
@@ -226,6 +240,11 @@ class BookingWithDetailsResponse(BookingResponse):
             status=b.status,
             redeemed_at=b.redeemed_at,
             created_at=b.created_at,
+            deposit_amount_cents=b.deposit_amount_cents,
+            balance_amount_cents=b.balance_amount_cents,
+            payment_status=b.payment_status,
+            payment_note=b.payment_note,
+            payment_followup=b.payment_followup,
             venue_id=b.deal.venue_id,
             venue_name=b.deal.venue.name,
             deal_title=b.deal.title,
@@ -242,6 +261,16 @@ class RedeemResponse(BaseModel):
     slot_time: str
     num_people: int
     redeemed_at: Optional[datetime]
+    payment_status: str = "unpaid"
+    balance_amount_cents: Optional[int] = None
+    # Set when the balance charge declined — venue collects payment directly
+    payment_warning: Optional[str] = None
+
+
+class CancelResponse(BaseModel):
+    cancelled: bool
+    depositForfeited: bool
+    depositAmountCents: int
 
 
 # ── User–Venue Interaction (recommender signal) ───────────────────────────────

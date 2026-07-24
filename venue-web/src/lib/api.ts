@@ -206,7 +206,7 @@ export interface Booking {
   slot_time: string;
   num_people: number;
   total_paid: number;
-  confirmation_code: string;
+  confirmation_code: string | null; // null until the Pinch deposit is paid
   status: "pending" | "confirmed" | "cancelled" | "attended";
   redeemed_at: string | null;
   created_at: string;
@@ -218,6 +218,10 @@ export interface RedeemResponse {
   slot_time: string;
   num_people: number;
   redeemed_at: string | null;
+  payment_status: "unpaid" | "deposit_paid" | "fully_paid" | "cancelled";
+  balance_amount_cents: number | null;
+  // Set when the balance charge declined — collect payment directly
+  payment_warning: string | null;
 }
 
 export const bookingApi = {

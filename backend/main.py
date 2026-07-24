@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import bookings, deals, interactions, users, venues
+from routers import bookings, deals, interactions, users, venues, webhooks
 
 app = FastAPI(title="Impulse API", version="1.0.0")
 
@@ -20,6 +20,7 @@ app.include_router(venues.router,       prefix="/venues",       tags=["venues"])
 app.include_router(deals.router,        prefix="/deals",        tags=["deals"])
 app.include_router(bookings.router,     prefix="/bookings",     tags=["bookings"])
 app.include_router(interactions.router, prefix="/interactions", tags=["interactions"])
+app.include_router(webhooks.router,     prefix="/webhooks",     tags=["webhooks"])
 
 
 @app.get("/health")

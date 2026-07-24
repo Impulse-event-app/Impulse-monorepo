@@ -48,6 +48,10 @@ export default function RedeemPage() {
 
         if (data?.status === "cancelled") {
           setState({ kind: "cancelled", code: trimmed });
+        } else if (!data?.status) {
+          // 409 without a booking payload — e.g. deposit not paid
+          const detail = (data as { detail?: string } | null)?.detail;
+          setState({ kind: "error", message: detail ?? "Ticket cannot be redeemed" });
         } else {
           setState({
             kind: "already_redeemed",
@@ -160,7 +164,25 @@ function ResultCard({
               <dd className="font-medium">{state.data.slot_time}</dd>
               <dt style={{color:'var(--faint)'}}>Party size</dt>
               <dd className="font-medium">{state.data.num_people}</dd>
+              {state.data.balance_amount_cents != null && (
+                <>
+                  <dt style={{color:'var(--faint)'}}>Balance</dt>
+                  <dd className="font-medium">
+                    ${(state.data.balance_amount_cents / 100).toFixed(2)}
+                    {state.data.payment_status === "fully_paid" ? " — charged" : ""}
+                  </dd>
+                </>
+              )}
             </dl>
+          )}
+
+          {state.kind === "success" && state.data.payment_warning && (
+            <p
+              className="mt-3 rounded-lg px-3 py-2 text-sm font-semibold"
+              style={{background:'rgba(251,191,36,0.15)', border:'1px solid rgba(251,191,36,0.35)'}}
+            >
+              {state.data.payment_warning}
+            </p>
           )}
         </div>
       </div>
