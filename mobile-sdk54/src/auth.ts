@@ -74,7 +74,10 @@ export async function signInWithGoogle() {
   const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
   if (result.type !== 'success') return null; // user cancelled
 
-  const { error: sessionError } = await supabase.auth.exchangeCodeForSession(result.url);
+  // exchangeCodeForSession takes the raw PKCE code, not the whole redirect URL.
+  const code = new URL(result.url).searchParams.get('code');
+  if (!code) throw new Error('No authorization code found in the redirect.');
+  const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
   if (sessionError) throw sessionError;
 
   const { data: { user } } = await supabase.auth.getUser();

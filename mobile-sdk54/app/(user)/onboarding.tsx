@@ -1,61 +1,24 @@
+// Post-login onboarding. This route is only ever reached with a live session
+// (app/index.tsx and app/(user)/sign-in.tsx route unauthenticated users to
+// /sign-in), so it's a plain forward-only flow that always starts at step 0 —
+// no sign-in panel, no scroll-resume, none of the state that a web OAuth reload
+// used to wipe. A guard below redirects anyone who lands here without a session
+// (or who's already onboarded) just in case.
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
-import {
-  Animated,
-  Dimensions,
-  Easing,
-  KeyboardAvoidingView,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CATEGORIES } from '../../src/data';
 import { fontDisplay, fontMono, fontUI, useApp } from '../../src/theme';
-import { Btn, Logo, PulseMark } from '../../src/components';
-import { AppleLogo, GlyphBell, GlyphPin, GoogleLogo, MailGlyph, PhoneGlyph, Search } from '../../src/icons';
-import { fetchUserProfile, isOnboarded, markOnboarded, sendPhoneOtp, signInWithApple, signInWithGoogle, signInWithEmail, signUpWithEmail, syncUserProfile, verifyPhoneOtp } from '../../src/auth';
+import { Btn } from '../../src/components';
+import { GlyphBell, GlyphPin, Search } from '../../src/icons';
+import { isOnboarded, markOnboarded, syncUserProfile } from '../../src/auth';
 import { supabase } from '../../src/supabase';
+import { Lede, Panel, SCREEN_W as W } from '../../src/onboardingUI';
 
-const { width: W } = Dimensions.get('window');
 const SUBURBS = ['Sydney CBD', 'Surry Hills', 'Newtown', 'Bondi', 'Marrickville', 'Enmore', 'Darlinghurst', 'Redfern', 'Chippendale', 'Glebe', 'Paddington', 'Manly'];
 const ACTIVITIES = CATEGORIES.filter((c) => c !== 'All');
-const STEPS = 7;
-// Panels 0 (hero) and 1 (sign-in) come before onboarding proper. The real
-// onboarding steps (location, notifications, age, suburb, activities) start
-// here — this is where a user lands the moment they finish signing in, and
-// what the progress dots count.
-const FIRST_ONBOARDING_STEP = 2;
-
-function Panel({ children, footer, top = 0 }: { children: React.ReactNode; footer?: React.ReactNode; top?: number }) {
-  const insets = useSafeAreaInsets();
-  return (
-    <View style={{ width: W, flex: 1 }}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingTop: top }} showsVerticalScrollIndicator={false}>
-        {children}
-      </ScrollView>
-      {footer && (
-        <View style={{ paddingHorizontal: 22, paddingTop: 12, paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 24, gap: 10 }}>{footer}</View>
-      )}
-    </View>
-  );
-}
-
-function Lede({ kicker, title, body }: { kicker?: string; title: string; body?: string }) {
-  const { T } = useApp();
-  return (
-    <View style={{ paddingHorizontal: 24 }}>
-      {kicker && <Text style={{ fontFamily: fontMono(400), fontSize: 11.5, letterSpacing: 1.4, textTransform: 'uppercase', color: T.accent, marginBottom: 14 }}>{kicker}</Text>}
-      <Text style={{ fontFamily: fontDisplay(700), fontSize: 32, lineHeight: 35, letterSpacing: -0.96, color: T.text }}>{title}</Text>
-      {body && <Text style={{ marginTop: 14, fontFamily: fontUI(400), fontSize: 16.5, lineHeight: 25, color: T.muted, maxWidth: 330 }}>{body}</Text>}
-    </View>
-  );
-}
+const STEPS = 5; // location, notifications, age, suburb, activities
 
 function PermIcon({ children }: { children: React.ReactNode }) {
   const { T } = useApp();
@@ -66,62 +29,8 @@ function PermIcon({ children }: { children: React.ReactNode }) {
   );
 }
 
-function PulseRings() {
-  const { T } = useApp();
-  const vals = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
-  useEffect(() => {
-    const loops = vals.map((v, i) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(i * 860),
-          Animated.timing(v, { toValue: 1, duration: 2600, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-        ]),
-      ),
-    );
-    loops.forEach((l) => l.start());
-    return () => loops.forEach((l) => l.stop());
-  }, [vals]);
-  return (
-    <View style={{ width: 150, height: 150, alignItems: 'center', justifyContent: 'center' }}>
-      {vals.map((v, i) => (
-        <Animated.View
-          key={i}
-          style={{
-            position: 'absolute', width: 150, height: 150, borderRadius: 75, borderWidth: 1.5, borderColor: T.accent,
-            opacity: v.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.9, 0.12, 0] }),
-            transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.37, 1] }) }],
-          }}
-        />
-      ))}
-      <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: T.accent }} />
-    </View>
-  );
-}
-
-function SocialBtn({ kind, onPress, loading }: { kind: 'apple' | 'google'; onPress: () => void; loading?: boolean }) {
-  const { T } = useApp();
-  const apple = kind === 'apple';
-  const bg = apple ? (T.dark ? '#fff' : '#000') : T.surface;
-  const fg = apple ? (T.dark ? '#000' : '#fff') : T.text;
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={loading}
-      style={{
-        width: '100%', height: 54, borderRadius: 16, backgroundColor: bg,
-        borderWidth: apple ? 0 : 1.5, borderColor: T.line2,
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-        opacity: loading ? 0.6 : 1,
-      }}
-    >
-      {apple ? <AppleLogo size={18} color={fg} /> : <GoogleLogo size={18} />}
-      <Text style={{ fontFamily: fontUI(600), fontSize: 16.5, color: fg }}>Continue with {apple ? 'Apple' : 'Google'}</Text>
-    </Pressable>
-  );
-}
-
 export default function Onboarding() {
-  const { T, profile, setProfile } = useApp();
+  const { T, setProfile } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
@@ -129,68 +38,26 @@ export default function Onboarding() {
   const [suburb, setSuburb] = useState<string | null>(null);
   const [acts, setActs] = useState<string[]>([]);
   const [ageDeclined, setAgeDeclined] = useState(false);
+  // Gate rendering until the session guard resolves, so we never flash the
+  // onboarding steps at someone who's about to be redirected away.
+  const [ready, setReady] = useState(false);
 
-  // Auth sub-flow (within the sign-in step)
-  const [phoneView, setPhoneView] = useState<'buttons' | 'phone' | 'otp' | 'email'>('buttons');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [otpCode, setOtpCode] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [emailMode, setEmailMode] = useState<'signin' | 'signup'>('signin');
-  const [authLoading, setAuthLoading] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
-  // Set once the user has authenticated — locks off the hero + sign-in panels.
-  const [authed, setAuthed] = useState(false);
-
-  const goTo = (i: number, animated = true) => {
-    // Once authenticated you can't go back to panels 0 (hero) or 1 (sign-in).
-    const p = Math.max(authed ? FIRST_ONBOARDING_STEP : 0, Math.min(STEPS - 1, i));
-    scrollRef.current?.scrollTo({ x: p * W, animated });
-    setPage(p);
-  };
-  const next = () => goTo(page + 1);
-  const goToApp = () => router.replace('/(user)/home');
-
-  // Resume-on-mount: if a session already exists when this screen loads, the
-  // user has passed the sign-in panel — most importantly after a web OAuth
-  // redirect, which reloads the whole app and lands back here. Skip the hero +
-  // sign-in panels and drop them straight onto the first onboarding step
-  // (or into the app if they're already onboarded), rather than at the start.
+  // Guard: this flow is for signed-in, not-yet-onboarded users only.
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) return; // not signed in → begin at the hero
-      if (isOnboarded(session)) { goToApp(); return; }
-      setAuthed(true);
-      // Wait a frame so the horizontal pager is laid out before jumping.
-      requestAnimationFrame(() => {
-        scrollRef.current?.scrollTo({ x: FIRST_ONBOARDING_STEP * W, animated: false });
-        setPage(FIRST_ONBOARDING_STEP);
-      });
+      if (!session) { router.replace('/(user)/sign-in'); return; }
+      if (isOnboarded(session)) { router.replace('/(user)/home'); return; }
+      setReady(true);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // After auth (inline flows — phone, email, native Google/Apple): a returning,
-  // already-onboarded user goes straight to the app; anyone else continues into
-  // the onboarding steps. Web OAuth doesn't reach here (it reloads the app), so
-  // the resume-on-mount effect above covers it instead.
-  const continueOrEnter = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session && isOnboarded(session)) { goToApp(); return; }
-    // Fallback for users who onboarded before the metadata flag existed: check
-    // the backend profile, and backfill the flag so future launches are fast.
-    const existing = await fetchUserProfile().catch(() => null);
-    const onboarded = !!(existing && (existing.home_suburb || (existing.preferred_acts?.length ?? 0) > 0));
-    if (onboarded) {
-      await markOnboarded();
-      goToApp();
-      return;
-    }
-    setAuthed(true);
-    goTo(FIRST_ONBOARDING_STEP);
+  const goTo = (i: number) => {
+    const p = Math.max(0, Math.min(STEPS - 1, i));
+    scrollRef.current?.scrollTo({ x: p * W, animated: true });
+    setPage(p);
   };
+  const next = () => goTo(page + 1);
 
   const complete = async () => {
     if (suburb || acts.length) {
@@ -203,73 +70,6 @@ export default function Onboarding() {
     router.replace('/(user)/home');
   };
 
-  // ── auth handlers ───────────────────────────────────────────
-  const withAuth = async (fn: () => Promise<unknown>) => {
-    setAuthError(null);
-    setAuthLoading(true);
-    try {
-      await fn();
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleApple = () =>
-    withAuth(async () => {
-      const user = await signInWithApple().catch((e) => {
-        if (e.code !== 'ERR_REQUEST_CANCELED') throw e;
-        return null;
-      });
-      if (user) await continueOrEnter();
-    }).catch((e) => setAuthError(e.message ?? 'Apple sign-in failed.'));
-
-  const handleGoogle = () =>
-    withAuth(async () => {
-      const user = await signInWithGoogle();
-      if (user) await continueOrEnter();
-    }).catch((e) => setAuthError(e.message ?? 'Google sign-in failed.'));
-
-  const handleSendOtp = () =>
-    withAuth(async () => {
-      await sendPhoneOtp(phoneNumber);
-      setOtpCode('');
-      setPhoneView('otp');
-    }).catch((e) => setAuthError(e.message ?? 'Could not send code. Check the number.'));
-
-  const handleVerifyOtp = () =>
-    withAuth(async () => {
-      const user = await verifyPhoneOtp(phoneNumber, otpCode);
-      if (user) { setPhoneView('buttons'); setPhoneNumber(''); setOtpCode(''); await continueOrEnter(); }
-    }).catch((e) => setAuthError(e.message ?? 'Invalid code. Please try again.'));
-
-  const handleEmailAuth = () =>
-    withAuth(async () => {
-      if (emailMode === 'signin') {
-        const user = await signInWithEmail(email, password);
-        if (!user) return;
-        // Onboarded → app; signed up but never finished → resume onboarding.
-        setEmail(''); setPassword('');
-        await continueOrEnter();
-        return;
-      }
-      // Sign-up → create the account, save their name, then onboard.
-      const user = await signUpWithEmail(email, password);
-      if (!user) return;
-      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
-      if (fullName) {
-        setProfile((p) => ({ ...p, name: fullName }));
-        await syncUserProfile({ full_name: fullName }).catch(() => {/* best effort */});
-      }
-      setPhoneView('buttons');
-      setEmail(''); setPassword(''); setFirstName(''); setLastName('');
-      setAuthed(true);
-      goTo(FIRST_ONBOARDING_STEP);
-    }).catch((e) => setAuthError(e.message ?? 'Authentication failed. Check your details.'));
-
-  const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    setPage(Math.round(e.nativeEvent.contentOffset.x / W));
-  };
-
   const toggleAct = (a: string) => setActs((p) => (p.includes(a) ? p.filter((x) => x !== a) : [...p, a]));
 
   const skipLink = (label: string, onPress: () => void) => (
@@ -278,23 +78,24 @@ export default function Onboarding() {
     </Pressable>
   );
 
+  if (!ready) {
+    return <View style={{ flex: 1, backgroundColor: T.bg }} />;
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      {/* Progress dots. Only shown once signed in — onboarding proper begins
-          after the sign-in panel. One dot per post-sign-in step, and they're a
-          read-only indicator (no tap-to-jump), so steps can't be skipped. */}
-      {authed && (
-        <View style={{ position: 'absolute', top: insets.top + 6, left: 0, right: 0, zIndex: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 22 }}>
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            {[...Array(STEPS - FIRST_ONBOARDING_STEP)].map((_, i) => {
-              const active = i + FIRST_ONBOARDING_STEP === page;
-              return (
-                <View key={i} style={{ width: active ? 22 : 7, height: 7, borderRadius: 4, backgroundColor: active ? T.accent : T.line2 }} />
-              );
-            })}
-          </View>
+      {/* Progress dots — one per step, read-only (no tap-to-jump) so no step
+          can be skipped from the header. */}
+      <View style={{ position: 'absolute', top: insets.top + 6, left: 0, right: 0, zIndex: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 22 }}>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          {[...Array(STEPS)].map((_, i) => {
+            const active = i === page;
+            return (
+              <View key={i} style={{ width: active ? 22 : 7, height: 7, borderRadius: 4, backgroundColor: active ? T.accent : T.line2 }} />
+            );
+          })}
         </View>
-      )}
+      </View>
 
       <ScrollView
         ref={scrollRef}
@@ -302,200 +103,9 @@ export default function Onboarding() {
         pagingEnabled
         scrollEnabled={false}
         showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={onScrollEnd}
         style={{ flex: 1 }}
       >
-        {/* 0 — hero (minimal) */}
-        <Panel
-          top={insets.top + 8}
-          footer={<Btn full onPress={next}>Get started</Btn>}
-        >
-          <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 8, justifyContent: 'space-between' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
-              <PulseMark size={28} radius={8} />
-              <Logo size={20} />
-            </View>
-            <View style={{ alignItems: 'center', flex: 1, justifyContent: 'center', paddingVertical: 30 }}>
-              <PulseRings />
-            </View>
-            <View style={{ paddingBottom: 8 }}>
-              <Text style={{ fontFamily: fontDisplay(700), fontSize: 52, lineHeight: 51, letterSpacing: -2, color: T.text }}>Plans,{'\n'}on impulse.</Text>
-              <Text style={{ marginTop: 16, fontFamily: fontUI(400), fontSize: 16.5, lineHeight: 24, color: T.muted, maxWidth: 300 }}>
-                Last-minute things to do in Sydney, with the price already worked out.
-              </Text>
-            </View>
-          </View>
-        </Panel>
-
-        {/* 1 — sign in */}
-        <Panel
-          top={insets.top + 24}
-          footer={
-            <Text style={{ fontFamily: fontUI(400), fontSize: 12, lineHeight: 17, color: T.faint, textAlign: 'center' }}>
-              By continuing you agree to our <Text style={{ color: T.muted }}>Terms</Text> and <Text style={{ color: T.muted }}>Privacy Policy</Text>.
-            </Text>
-          }
-        >
-          {phoneView === 'buttons' && (
-            <>
-              <Lede kicker="Welcome in" title="Get in." body="One tap and you're set. We'll only ever use your number to hold your slots." />
-              <View style={{ paddingHorizontal: 24, paddingTop: 34, gap: 11 }}>
-                {/* expo-apple-authentication is iOS/tvOS only — there's no native
-                    Apple Sign In on Android or web, so the button doesn't render there. */}
-                {Platform.OS === 'ios' && <SocialBtn kind="apple" onPress={handleApple} loading={authLoading} />}
-                <SocialBtn kind="google" onPress={handleGoogle} loading={authLoading} />
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 8 }}>
-                  <View style={{ flex: 1, height: 1, backgroundColor: T.line }} />
-                  <Text style={{ fontFamily: fontMono(400), fontSize: 11, color: T.faint, letterSpacing: 0.7 }}>OR</Text>
-                  <View style={{ flex: 1, height: 1, backgroundColor: T.line }} />
-                </View>
-                <Btn full variant="secondary" onPress={() => { setAuthError(null); setPhoneView('phone'); }} disabled={authLoading}>
-                  <PhoneGlyph size={17} color={T.text} />
-                  <Text style={{ fontFamily: fontUI(600), fontSize: 17, color: T.text }}>Continue with phone</Text>
-                </Btn>
-                <Btn full variant="secondary" onPress={() => { setAuthError(null); setEmailMode('signin'); setPhoneView('email'); }} disabled={authLoading}>
-                  <MailGlyph size={17} color={T.text} />
-                  <Text style={{ fontFamily: fontUI(600), fontSize: 17, color: T.text }}>Continue with email</Text>
-                </Btn>
-                {authError ? (
-                  <Text style={{ fontFamily: fontUI(400), fontSize: 13.5, color: '#FF5A4D', textAlign: 'center' }}>{authError}</Text>
-                ) : null}
-              </View>
-            </>
-          )}
-
-          {phoneView === 'phone' && (
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-              <Lede kicker="Phone number" title="What's your number?" body="We'll send a one-time code to verify it's you." />
-              <View style={{ paddingHorizontal: 24, paddingTop: 30, gap: 14 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14 }}>
-                  <Text style={{ fontFamily: fontUI(500), fontSize: 16, color: T.muted, marginRight: 6 }}>+</Text>
-                  <TextInput
-                    value={phoneNumber}
-                    onChangeText={setPhoneNumber}
-                    placeholder="61 412 345 678"
-                    placeholderTextColor={T.faint}
-                    keyboardType="phone-pad"
-                    autoFocus
-                    style={{ flex: 1, fontFamily: fontUI(400), fontSize: 17, color: T.text }}
-                  />
-                </View>
-                {authError ? (
-                  <Text style={{ fontFamily: fontUI(400), fontSize: 13.5, color: '#FF5A4D' }}>{authError}</Text>
-                ) : null}
-                <Btn full onPress={handleSendOtp} disabled={phoneNumber.length < 8 || authLoading}>
-                  {authLoading ? 'Sending…' : 'Send code'}
-                </Btn>
-                <Pressable onPress={() => { setPhoneView('buttons'); setAuthError(null); }} style={{ alignItems: 'center', paddingVertical: 6 }}>
-                  <Text style={{ fontFamily: fontUI(400), fontSize: 15, color: T.muted }}>Back</Text>
-                </Pressable>
-              </View>
-            </KeyboardAvoidingView>
-          )}
-
-          {phoneView === 'otp' && (
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-              <Lede kicker="Verification" title="Enter the code." body={`Sent to +${phoneNumber}. Check your messages.`} />
-              <View style={{ paddingHorizontal: 24, paddingTop: 30, gap: 14 }}>
-                <TextInput
-                  value={otpCode}
-                  onChangeText={(t) => setOtpCode(t.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="123456"
-                  placeholderTextColor={T.faint}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  autoFocus
-                  style={{
-                    fontFamily: fontMono(700), fontSize: 32, letterSpacing: 8,
-                    color: T.text, textAlign: 'center',
-                    backgroundColor: T.surface, borderRadius: 14,
-                    paddingVertical: 18,
-                  }}
-                />
-                {authError ? (
-                  <Text style={{ fontFamily: fontUI(400), fontSize: 13.5, color: '#FF5A4D', textAlign: 'center' }}>{authError}</Text>
-                ) : null}
-                <Btn full onPress={handleVerifyOtp} disabled={otpCode.length < 6 || authLoading}>
-                  {authLoading ? 'Verifying…' : 'Verify'}
-                </Btn>
-                <Pressable onPress={() => { setPhoneView('phone'); setOtpCode(''); setAuthError(null); }} style={{ alignItems: 'center', paddingVertical: 6 }}>
-                  <Text style={{ fontFamily: fontUI(400), fontSize: 15, color: T.muted }}>Resend / change number</Text>
-                </Pressable>
-              </View>
-            </KeyboardAvoidingView>
-          )}
-
-          {phoneView === 'email' && (
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-              <Lede
-                kicker={emailMode === 'signin' ? 'Welcome back' : 'Create account'}
-                title={emailMode === 'signin' ? 'Sign in.' : 'Join Impulse.'}
-                body={emailMode === 'signin' ? 'Enter your email and password.' : 'Pick an email and a password to get started.'}
-              />
-              <View style={{ paddingHorizontal: 24, paddingTop: 30, gap: 12 }}>
-                {emailMode === 'signup' && (
-                  <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <TextInput
-                      value={firstName}
-                      onChangeText={setFirstName}
-                      placeholder="First name"
-                      placeholderTextColor={T.faint}
-                      autoCapitalize="words"
-                      autoCorrect={false}
-                      autoFocus
-                      style={{ flex: 1, fontFamily: fontUI(400), fontSize: 17, color: T.text, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14 }}
-                    />
-                    <TextInput
-                      value={lastName}
-                      onChangeText={setLastName}
-                      placeholder="Last name"
-                      placeholderTextColor={T.faint}
-                      autoCapitalize="words"
-                      autoCorrect={false}
-                      style={{ flex: 1, fontFamily: fontUI(400), fontSize: 17, color: T.text, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14 }}
-                    />
-                  </View>
-                )}
-                <TextInput
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="you@example.com"
-                  placeholderTextColor={T.faint}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  autoFocus={emailMode === 'signin'}
-                  style={{ fontFamily: fontUI(400), fontSize: 17, color: T.text, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14 }}
-                />
-                <TextInput
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Password"
-                  placeholderTextColor={T.faint}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  style={{ fontFamily: fontUI(400), fontSize: 17, color: T.text, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14 }}
-                />
-                {authError ? (
-                  <Text style={{ fontFamily: fontUI(400), fontSize: 13.5, color: '#FF5A4D' }}>{authError}</Text>
-                ) : null}
-                <Btn full onPress={handleEmailAuth} disabled={!email || password.length < 6 || (emailMode === 'signup' && (!firstName.trim() || !lastName.trim())) || authLoading}>
-                  {authLoading ? 'Please wait…' : emailMode === 'signin' ? 'Sign in' : 'Create account'}
-                </Btn>
-                <Pressable onPress={() => { setEmailMode(emailMode === 'signin' ? 'signup' : 'signin'); setAuthError(null); }} style={{ alignItems: 'center', paddingVertical: 4 }}>
-                  <Text style={{ fontFamily: fontUI(400), fontSize: 15, color: T.muted }}>
-                    {emailMode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-                  </Text>
-                </Pressable>
-                <Pressable onPress={() => { setPhoneView('buttons'); setAuthError(null); }} style={{ alignItems: 'center', paddingVertical: 4 }}>
-                  <Text style={{ fontFamily: fontUI(400), fontSize: 15, color: T.faint }}>Back</Text>
-                </Pressable>
-              </View>
-            </KeyboardAvoidingView>
-          )}
-        </Panel>
-
-        {/* 2 — location */}
+        {/* 0 — location */}
         <Panel
           footer={
             <>
@@ -514,7 +124,7 @@ export default function Onboarding() {
           </View>
         </Panel>
 
-        {/* 3 — notifications */}
+        {/* 1 — notifications */}
         <Panel
           footer={
             <>
@@ -533,7 +143,7 @@ export default function Onboarding() {
           </View>
         </Panel>
 
-        {/* 4 — age */}
+        {/* 2 — age */}
         <Panel
           footer={
             <>
@@ -564,7 +174,7 @@ export default function Onboarding() {
           </View>
         </Panel>
 
-        {/* 5 — suburb */}
+        {/* 3 — suburb */}
         <Panel
           top={insets.top + 24}
           footer={<Btn full onPress={next} disabled={!suburb}>{suburb ? `Set to ${suburb}` : 'Pick your suburb'}</Btn>}
@@ -588,7 +198,7 @@ export default function Onboarding() {
           </View>
         </Panel>
 
-        {/* 6 — activities */}
+        {/* 4 — activities */}
         <Panel
           top={insets.top + 24}
           footer={

@@ -31,7 +31,15 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     storage: authStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    // PKCE for both native and web (OAuth returns a "?code=" to exchange).
+    flowType: 'pkce',
+    // On web, let supabase-js finish the OAuth handshake automatically on page
+    // load: it reads the "?code=" the provider redirect appends and exchanges
+    // it for a session. getSession() awaits this, so the session is captured
+    // after a Google redirect without any manual exchange. (Default is the
+    // implicit flow with this off, which silently dropped the web session.)
+    // Native completes PKCE explicitly in auth.ts, so it stays off there.
+    detectSessionInUrl: Platform.OS === 'web',
   },
 });
 
