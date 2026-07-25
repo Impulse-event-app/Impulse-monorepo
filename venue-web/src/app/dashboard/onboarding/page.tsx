@@ -3,7 +3,11 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { venueApi, type VenueCreate } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 import { useVenue } from "@/providers/VenueProvider";
+
+const PHOTO_BUCKET = "venue-photos";
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
 
 const CATEGORIES = [
   "Bar", "Restaurant", "Cafe", "Bowling", "Mini Golf",
@@ -118,11 +122,13 @@ export default function VenueOnboardingPage() {
     email: "",
     website: "",
     opening_hours: "",
+    image_url: "",
   });
 
   const [week, setWeek] = useState<WeekHours>(DEFAULT_WEEK);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -145,6 +151,44 @@ export default function VenueOnboardingPage() {
     setWeek((w) => ({ ...w, [day]: { ...w[day], ...patch } }));
   }
 
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file after a remove
+    if (!file) return;
+    setError(null);
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file (JPG or PNG).");
+      return;
+    }
+    if (file.size > MAX_PHOTO_BYTES) {
+      setError("Image must be under 5 MB.");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (!userId) throw new Error("You must be signed in to upload a photo.");
+
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+
+      const { error: upErr } = await supabase.storage
+        .from(PHOTO_BUCKET)
+        .upload(path, file, { cacheControl: "3600", upsert: false, contentType: file.type });
+      if (upErr) throw upErr;
+
+      const { data } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
+      setField("image_url", data.publicUrl);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to upload photo.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -160,6 +204,7 @@ export default function VenueOnboardingPage() {
       const payload: VenueCreate = {
         ...form,
         opening_hours: serializeHours(week),
+        image_url: form.image_url?.trim() || undefined,
       };
       const created = await venueApi.create(payload);
       setVenue(created);
@@ -193,6 +238,44 @@ export default function VenueOnboardingPage() {
             {error}
           </p>
         )}
+
+        {/* ── Section: Photo ── */}
+        <Section title="Photo">
+          <p className="text-xs" style={{ color: "var(--faint)" }}>
+            This hero photo is shown to customers browsing venues in the app.
+          </p>
+          {form.image_url ? (
+            <div className="relative overflow-hidden rounded-xl" style={{ border: "1px solid var(--line)" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={form.image_url} alt="Venue hero" className="h-44 w-full object-cover" />
+              <button
+                type="button"
+                onClick={() => setField("image_url", "")}
+                className="absolute right-2 top-2 rounded-md px-2 py-1 text-xs font-medium"
+                style={{ background: "rgba(0,0,0,0.6)", color: "#fff" }}
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <label
+              className="flex h-44 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-xl text-sm"
+              style={{ border: "1px dashed var(--line2)", color: "var(--faint)", background: "var(--ph)" }}
+            >
+              <span style={{ color: "var(--muted)" }}>
+                {uploading ? "Uploading…" : "Click to upload a hero photo"}
+              </span>
+              <span className="text-xs">JPG or PNG, up to 5 MB</span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoChange}
+                disabled={uploading}
+              />
+            </label>
+          )}
+        </Section>
 
         {/* ── Section: Identity ── */}
         <Section title="Identity">

@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
-import { Drop, LatLng, SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, money } from './data';
+import { Drop, LatLng, SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, pct } from './data';
 import { fontUI, useApp } from './theme';
 import { DropCardCompact, Pin } from './components';
 import { Filter, Search } from './icons';
@@ -93,7 +93,7 @@ export default function MapScreen() {
             key={d.id}
             latitude={coord.latitude}
             longitude={coord.longitude}
-            label={money(d.now)}
+            label={`${pct(d.now, d.usual)}%`}
             active={sel === d.id}
             dim={!matchIds.has(d.id)}
             onPress={() => select(d.id)}

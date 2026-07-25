@@ -61,6 +61,7 @@ export type Drop = {
   cap: number;
   latitude: number | null;
   longitude: number | null;
+  image: string | null;   // real venue photo URL, or null → category placeholder
 };
 
 // max party each venue fits (drives the party-size filter)
@@ -73,7 +74,7 @@ const CAPS: Record<string, number> = {
 // on the most time-critical drops). window → human label for the rest.
 const T0 = Date.now();
 
-type RawDrop = Omit<Drop, 'target' | 'cap' | 'latitude' | 'longitude'>;
+type RawDrop = Omit<Drop, 'target' | 'cap' | 'latitude' | 'longitude' | 'image'>;
 
 const RAW: RawDrop[] = [
   {
@@ -161,6 +162,7 @@ export const DROPS: Drop[] = RAW.map((d) => ({
   cap: CAPS[d.id],
   latitude: LATLNG[d.id]?.latitude ?? null,
   longitude: LATLNG[d.id]?.longitude ?? null,
+  image: null,
 }));
 
 // region that frames all of the drops (Sydney inner-city)
@@ -206,6 +208,30 @@ export function dropCoords(d: Drop): LatLng | null {
 
 // areas present in the dataset (for the filter sheet)
 export const AREAS = Array.from(new Set(DROPS.map((d) => d.suburb)));
+
+// ── placeholder venue photos (until real venue photos exist) ─
+// Category-matched stock photo, stable per venue via a lock seed so it
+// doesn't reshuffle between renders/screens.
+const CATEGORY_PHOTO_KEYWORDS: Record<string, string> = {
+  Bowling: 'bowlingalley',
+  Karaoke: 'karaokebar',
+  'Escape rooms': 'escaperoom',
+  'Mini golf': 'minigolf',
+  Pool: 'poolhall',
+  Comedy: 'comedyclub',
+  'Live music': 'liveband',
+  Darts: 'darts',
+};
+
+export function venuePhotoUrl(d: Pick<Drop, 'id' | 'cat' | 'image'>): string {
+  // Real venue photo (uploaded via venue-web) wins; otherwise fall back to a
+  // stable, category-matched placeholder.
+  if (d.image) return d.image;
+  const keyword = CATEGORY_PHOTO_KEYWORDS[d.cat] ?? 'bar';
+  let hash = 0;
+  for (let i = 0; i < d.id.length; i++) hash = (hash * 31 + d.id.charCodeAt(i)) >>> 0;
+  return `https://loremflickr.com/640/480/${keyword}?lock=${hash}`;
+}
 
 // ── filters ──────────────────────────────────────────────────
 export type Filters = {
@@ -310,6 +336,7 @@ export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): D
     cap: d.max_group_size,
     latitude: d.venue_lat,
     longitude: d.venue_lng,
+    image: d.venue_image_url,
   };
 }
 

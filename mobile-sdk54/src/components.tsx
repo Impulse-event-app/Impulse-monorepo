@@ -1,6 +1,7 @@
 // components.tsx — Impulse shared UI atoms, ported from the design handoff.
 import React, { useState } from 'react';
 import {
+  Image,
   Pressable,
   PressableProps,
   StyleProp,
@@ -8,7 +9,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { Drop, fmtCountdown, money, pct, useCountdown } from './data';
+import { Drop, fmtCountdown, money, pct, useCountdown, venuePhotoUrl } from './data';
 import { fontDisplay, fontMono, fontUI, hexA, useTheme } from './theme';
 import { ChevronDown, LocationPin, PinTriangle } from './icons';
 
@@ -164,13 +165,21 @@ export function Chip({
 
 // ── striped image placeholder ────────────────────────────────
 export function Placeholder({
-  label = 'venue photo', style, radius = 0,
+  label = 'venue photo', style, radius = 0, uri,
 }: {
   label?: string;
   style?: StyleProp<ViewStyle>;
   radius?: number;
+  uri?: string;
 }) {
   const T = useTheme();
+  if (uri) {
+    return (
+      <View style={[{ borderRadius: radius, overflow: 'hidden' }, style]}>
+        <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+      </View>
+    );
+  }
   return (
     <View style={[{ backgroundColor: T.ph, borderRadius: radius, overflow: 'hidden' }, style]}>
       {/* faint diagonal hatching */}
@@ -265,7 +274,7 @@ export function DropCardEditorial({ d, onPress }: { d: Drop; onPress?: () => voi
     <Touchable onPress={onPress} scale={0.985}>
       <View style={[{ backgroundColor: T.surface, borderRadius: 22, overflow: 'hidden' }, T.shadow]}>
         <View>
-          <Placeholder label={d.cat + ' · venue photo'} style={{ height: 168 }} />
+          <Placeholder label={d.cat + ' · venue photo'} uri={venuePhotoUrl(d)} style={{ height: 168 }} />
           <View style={{ position: 'absolute', top: 12, left: 12, flexDirection: 'row', gap: 7 }}>
             <View style={{ backgroundColor: 'rgba(244,241,234,0.92)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 }}>
               <Text style={{ fontFamily: fontUI(600), fontSize: 12.5, color: '#0F0E0D' }}>{d.cat}</Text>
@@ -298,7 +307,7 @@ export function DropCardCompact({ d, onPress }: { d: Drop; onPress?: () => void 
   return (
     <Touchable onPress={onPress} scale={0.99}>
       <View style={[{ backgroundColor: T.surface, borderRadius: 16, overflow: 'hidden', flexDirection: 'row' }, T.shadow]}>
-        <Placeholder label={d.cat} style={{ width: 92 }} />
+        <Placeholder label={d.cat} uri={venuePhotoUrl(d)} style={{ width: 92 }} />
         <View style={{ paddingVertical: 11, paddingHorizontal: 13, flex: 1, minWidth: 0 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
             <Text numberOfLines={1} style={{ fontFamily: fontDisplay(600), fontSize: 16.5, color: T.text, letterSpacing: -0.33, flexShrink: 1 }}>

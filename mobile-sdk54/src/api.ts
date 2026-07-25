@@ -94,6 +94,7 @@ export type ApiDeal = {
   venue_lat: number | null;
   venue_lng: number | null;
   venue_avg_rating: number;
+  venue_image_url: string | null;
   // deal fields
   title: string;
   category: string;

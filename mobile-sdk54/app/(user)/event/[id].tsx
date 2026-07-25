@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { money, apiDealToDrop } from '../../../src/data';
+import { money, apiDealToDrop, venuePhotoUrl } from '../../../src/data';
 import { fontDisplay, fontUI, useApp } from '../../../src/theme';
 import { logInteraction } from '../../../src/api';
 import {
@@ -63,7 +63,7 @@ export default function DetailScreen() {
     <View style={{ flex: 1, backgroundColor: T.bg }}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View>
-          <Placeholder label={d.cat + ' · venue photo'} style={{ height: 300 }} />
+          <Placeholder label={d.cat + ' · venue photo'} uri={venuePhotoUrl(d)} style={{ height: 300 }} />
           <PushHead onBack={() => router.back()} floating />
           {d.target ? (
             <View style={{ position: 'absolute', top: insets.top + 4, right: 16 }}>

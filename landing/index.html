@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Impulse — Plans, on impulse.</title>
+  <meta name="description" content="Last-minute things to do in Sydney, with the price already worked out. Find something tonight, or list your venue.">
+  <meta name="theme-color" content="#0F0E0D">
+
+  <!-- Social sharing -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Impulse — Plans, on impulse.">
+  <meta property="og:description" content="Last-minute things to do in Sydney, with the price already worked out.">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <!-- PulseMark favicon: coral concentric rings + centre dot on warm near-black -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230F0E0D'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23FF5A4D' stroke-opacity='.3' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='6.5' fill='none' stroke='%23FF5A4D' stroke-opacity='.6' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23FF5A4D'/%3E%3C/svg%3E">
+
+  <!-- Set theme before first paint to avoid a flash; defaults to dark like the design. -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('impulse-theme');
+        document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* ---- Palette (dark is the default; light overrides via [data-theme]) ---- */
+    :root {
+      --accent: #FF5A4D;
+      --accent-ink: #1A0B08;
+      --bg: #0F0E0D;
+      --surface: #1A1817;
+      --text: #F4F1EA;
+      --muted: rgba(244, 241, 234, 0.60);
+      --hairline: rgba(244, 241, 234, 0.12);
+    }
+    :root[data-theme="light"] {
+      --bg: #F6F3ED;
+      --surface: #FFFFFF;
+      --text: #17120F;
+      --muted: rgba(23, 18, 15, 0.58);
+      --hairline: rgba(23, 18, 15, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; overflow-x: hidden; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      transition: background .3s ease, color .3s ease;
+    }
+    a { color: inherit; text-decoration: none; }
+    ::selection { background: #FF5A4D; color: #1A0B08; }
+
+    .wrap {
+      width: 100%;
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: clamp(20px, 4vw, 40px);
+      display: flex;
+      flex-direction: column;
+      gap: clamp(28px, 4vw, 56px);
+      min-height: 100vh;
+    }
+
+    /* ---- Header ---- */
+    .header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: #FF5A4D;
+      box-shadow: 0 0 16px rgba(255, 90, 77, 0.7);
+      animation: pulse 2.6s ease-out infinite;
+    }
+    .brand-name {
+      font-family: 'Space Mono', ui-monospace, monospace;
+      font-size: 13px; letter-spacing: 0.28em; text-transform: uppercase;
+      color: var(--muted);
+    }
+    .theme-toggle {
+      font-family: 'Space Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--muted);
+      background: transparent;
+      border: 1px solid var(--hairline);
+      border-radius: 100px;
+      padding: 9px 16px;
+      cursor: pointer;
+      transition: color .15s ease, border-color .15s ease;
+    }
+    .theme-toggle:hover { color: var(--text); border-color: var(--muted); }
+
+    /* ---- Hero ---- */
+    .hero {
+      display: flex; flex-direction: column;
+      gap: clamp(16px, 2.4vw, 26px);
+      padding-top: clamp(8px, 2vw, 24px);
+    }
+    .eyebrow {
+      font-family: 'Space Mono', ui-monospace, monospace;
+      font-size: 12px; letter-spacing: 0.32em; text-transform: uppercase;
+      color: #FF5A4D;
+    }
+    .wordmark {
+      font-family: 'Archivo', ui-sans-serif, sans-serif;
+      font-weight: 900;
+      font-size: clamp(72px, 17vw, 220px);
+      line-height: 0.82; letter-spacing: -0.055em;
+      margin: 0; color: var(--text);
+    }
+    .tagline {
+      font-family: 'Archivo', ui-sans-serif, sans-serif;
+      font-weight: 800;
+      font-size: clamp(24px, 3.4vw, 44px);
+      line-height: 1; letter-spacing: -0.02em;
+      margin: 0; color: #FF5A4D;
+    }
+    .lede {
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-size: clamp(16px, 1.6vw, 20px);
+      line-height: 1.4; margin: 0; max-width: 42ch;
+      color: var(--muted);
+    }
+
+    /* ---- Cards ---- */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+      gap: clamp(16px, 2.2vw, 24px);
+    }
+    .card {
+      display: flex; flex-direction: column; justify-content: space-between;
+      border-radius: 22px;
+      padding: clamp(24px, 3vw, 40px);
+      min-height: clamp(300px, 32vw, 380px);
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .card:hover { transform: translateY(-4px); }
+    .card-going {
+      background: #FF5A4D;
+      box-shadow: 0 24px 60px -24px rgba(255, 90, 77, 0.55);
+    }
+    .card-going:hover { box-shadow: 0 30px 70px -22px rgba(255, 90, 77, 0.62); }
+    .card-venue {
+      background: var(--surface);
+      border: 1px solid var(--hairline);
+      box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.6);
+    }
+    .card-head {
+      font-family: 'Archivo', ui-sans-serif, sans-serif;
+      font-weight: 900;
+      font-size: clamp(30px, 4.4vw, 52px);
+      line-height: 0.95; letter-spacing: -0.03em; margin: 0;
+    }
+    .card-eyebrow {
+      font-family: 'Space Mono', ui-monospace, monospace;
+      font-size: 12px; letter-spacing: 0.28em; text-transform: uppercase;
+    }
+    .card-copy {
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-size: clamp(15px, 1.4vw, 18px);
+      line-height: 1.45; margin: 0; max-width: 34ch;
+    }
+    .card-top { display: flex; flex-direction: column; gap: 14px; }
+
+    /* Consumer card lives on coral; its ink is the warm near-black. */
+    .card-going .card-eyebrow { color: #1A0B08; opacity: 0.7; }
+    .card-going .card-head { color: #1A0B08; }
+    .card-going .card-copy { color: #1A0B08; opacity: 0.82; }
+
+    /* Venue card follows the theme. */
+    .card-venue .card-eyebrow { color: #FF5A4D; }
+    .card-venue .card-head { color: var(--text); }
+    .card-venue .card-copy { color: var(--muted); }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 10px; align-self: flex-start;
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-weight: 700; font-size: 16px;
+      padding: 14px 24px; border-radius: 100px; margin-top: 26px;
+    }
+    .btn-going { background: #1A0B08; color: #F4F1EA; }
+    .btn-venue { background: #FF5A4D; color: #1A0B08; }
+    .arrow { transition: transform .2s ease; }
+    .card:hover .arrow { transform: translateX(4px); }
+
+    /* ---- Category marquee ---- */
+    .strip {
+      overflow: hidden;
+      border-top: 1px solid var(--hairline);
+      border-bottom: 1px solid var(--hairline);
+      padding: clamp(16px, 2vw, 22px) 0;
+      -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+      mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+    }
+    .marquee {
+      display: flex; gap: 0; width: max-content;
+      animation: marquee 32s linear infinite;
+    }
+    .marquee-group {
+      display: flex;
+      gap: clamp(20px, 2.6vw, 40px);
+      padding-right: clamp(20px, 2.6vw, 40px);
+    }
+    .chip {
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-weight: 600; font-size: clamp(16px, 1.8vw, 22px);
+      color: var(--text); white-space: nowrap;
+      display: inline-flex; align-items: center; gap: clamp(20px, 2.6vw, 40px);
+    }
+    .sep { color: #FF5A4D; margin-left: clamp(20px, 2.6vw, 40px); }
+
+    /* ---- Footer ---- */
+    .footer {
+      margin-top: auto;
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+      gap: 16px;
+      padding-top: clamp(16px, 3vw, 32px);
+      border-top: 1px solid var(--hairline);
+    }
+    .footer-note {
+      font-family: 'Space Mono', ui-monospace, monospace;
+      font-size: 12px; letter-spacing: 0.14em; color: var(--muted);
+    }
+    .footer-nav { display: flex; gap: 24px; }
+    .footer-nav a {
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-size: 14px; color: var(--muted); transition: color .15s ease;
+    }
+    .footer-nav a:hover { color: var(--text); }
+
+    @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+    @keyframes pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(255, 90, 77, 0.55), 0 0 16px rgba(255, 90, 77, 0.7); }
+      70%  { box-shadow: 0 0 0 11px rgba(255, 90, 77, 0), 0 0 16px rgba(255, 90, 77, 0.7); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 90, 77, 0), 0 0 16px rgba(255, 90, 77, 0.7); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .marquee { animation: none; }
+      .dot { animation: none; }
+      .card, .arrow, body { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <header class="header">
+      <div class="brand">
+        <div class="dot"></div>
+        <span class="brand-name">impulse</span>
+      </div>
+      <button id="theme-toggle" class="theme-toggle" aria-label="Toggle colour theme">Lights on</button>
+    </header>
+
+    <section class="hero">
+      <span class="eyebrow">Sydney · tonight</span>
+      <h1 class="wordmark">Impulse</h1>
+      <p class="tagline">Plans, on impulse.</p>
+      <p class="lede">Last-minute things to do in Sydney, with the price already worked out.</p>
+    </section>
+
+    <!--
+      LINKS — update these two hrefs to your live deployments:
+        · Consumer app (mobile-sdk54 on EAS Hosting)
+        · Venue dashboard (venue-web on Vercel)
+    -->
+    <section class="cards">
+
+      <a class="card card-going" href="https://impulse.expo.app/sign-in">
+        <div class="card-top">
+          <span class="card-eyebrow">Going out</span>
+          <h2 class="card-head">Something<br>on tonight?</h2>
+          <p class="card-copy">Last-minute deals near you. Your slot's held the second you claim it.</p>
+        </div>
+        <span class="btn btn-going">Find something tonight <span class="arrow">→</span></span>
+      </a>
+
+      <a class="card card-venue" href="https://venue-web-five.vercel.app/login">
+        <div class="card-top">
+          <span class="card-eyebrow">For venues</span>
+          <h2 class="card-head">Turn a quiet<br>night around.</h2>
+          <p class="card-copy">List deals, fill your empty slots, manage the lot. Quiet nights into booked-out ones.</p>
+        </div>
+        <span class="btn btn-venue">List your venue <span class="arrow">→</span></span>
+      </a>
+
+    </section>
+
+    <section class="strip" aria-label="Categories">
+      <div class="marquee">
+        <div class="marquee-group">
+          <span class="chip">Bowling<span class="sep">·</span></span>
+          <span class="chip">Karaoke<span class="sep">·</span></span>
+          <span class="chip">Escape rooms<span class="sep">·</span></span>
+          <span class="chip">Mini golf<span class="sep">·</span></span>
+          <span class="chip">Pool<span class="sep">·</span></span>
+          <span class="chip">Comedy<span class="sep">·</span></span>
+          <span class="chip">Live music<span class="sep">·</span></span>
+          <span class="chip">Darts<span class="sep">·</span></span>
+          <span class="chip">Bars<span class="sep">·</span></span>
+        </div>
+        <div class="marquee-group" aria-hidden="true">
+          <span class="chip">Bowling<span class="sep">·</span></span>
+          <span class="chip">Karaoke<span class="sep">·</span></span>
+          <span class="chip">Escape rooms<span class="sep">·</span></span>
+          <span class="chip">Mini golf<span class="sep">·</span></span>
+          <span class="chip">Pool<span class="sep">·</span></span>
+          <span class="chip">Comedy<span class="sep">·</span></span>
+          <span class="chip">Live music<span class="sep">·</span></span>
+          <span class="chip">Darts<span class="sep">·</span></span>
+          <span class="chip">Bars<span class="sep">·</span></span>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span class="footer-note">impulse · made in sydney</span>
+      <nav class="footer-nav">
+        <a href="#terms">Terms</a>
+        <a href="#privacy">Privacy</a>
+      </nav>
+    </footer>
+
+  </div>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var btn = document.getElementById('theme-toggle');
+      function label() { return root.getAttribute('data-theme') === 'dark' ? 'Lights on' : 'Lights off'; }
+      if (!btn) return;
+      btn.textContent = label();
+      btn.addEventListener('click', function () {
+        var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-theme', next);
+        try { localStorage.setItem('impulse-theme', next); } catch (e) {}
+        btn.textContent = label();
+      });
+    })();
+  </script>
+</body>
+</html>
