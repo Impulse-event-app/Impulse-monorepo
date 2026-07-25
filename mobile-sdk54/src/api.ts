@@ -73,6 +73,7 @@ export type UserProfile = {
   avatar_url: string | null;
   home_suburb: string | null;
   preferred_acts: string[];
+  accessibility_needs: string[];
   party_size: number;
   age_bracket: number | null;
   notifications_enabled: boolean;
@@ -81,7 +82,7 @@ export type UserProfile = {
 };
 
 export type UserProfileUpdate = Partial<
-  Pick<UserProfile, 'full_name' | 'avatar_url' | 'home_suburb' | 'preferred_acts' | 'party_size' | 'age_bracket' | 'notifications_enabled'>
+  Pick<UserProfile, 'full_name' | 'avatar_url' | 'home_suburb' | 'preferred_acts' | 'accessibility_needs' | 'party_size' | 'age_bracket' | 'notifications_enabled'>
 >;
 
 export type ApiDeal = {

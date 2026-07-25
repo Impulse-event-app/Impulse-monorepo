@@ -41,6 +41,19 @@ export const SYDNEY_SUBURBS = [
   'Westmead', 'Wolli Creek', 'Woollahra', 'Woolloomooloo', 'Zetland',
 ];
 
+// ── accessibility options (onboarding) ──────────────────────
+// Shared taxonomy — mirrors the venue-side "accessibility features" list in
+// venue-web so a user's needs can later be matched against venue features.
+export const ACCESSIBILITY_OPTIONS = [
+  'Wheelchair access',
+  'Step-free entry',
+  'Accessible bathroom',
+  'Hearing assistance',
+  'Vision assistance',
+  'Low-sensory / quiet space',
+  'Service animal friendly',
+];
+
 // ── helpers ──────────────────────────────────────────────────
 export const money = (n: number) => '$' + n;
 export const pct = (now: number, usual: number) => Math.round((1 - now / usual) * 100);
