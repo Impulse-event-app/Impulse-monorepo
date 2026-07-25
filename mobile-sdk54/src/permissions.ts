@@ -44,3 +44,34 @@ export async function requestNotificationAccess(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Fetch this device's Expo push token and register it with the backend.
+ * Native only — Expo push tokens don't exist on web (huddle web sessions get
+ * the same info via the polling status screen). Best-effort; never throws.
+ */
+export async function syncPushToken(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const Notifications = await import('expo-notifications');
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') return;
+
+    let projectId: string | undefined;
+    try {
+      const Constants = (await import('expo-constants')).default;
+      projectId = Constants?.expoConfig?.extra?.eas?.projectId;
+    } catch {
+      // no project id available; getExpoPushTokenAsync falls back
+    }
+    const { data: token } = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined,
+    );
+    if (!token) return;
+
+    const { registerPushToken } = await import('./api');
+    await registerPushToken(token);
+  } catch {
+    // notifications module unavailable (e.g. Expo Go SDK limitation) — ignore
+  }
+}

@@ -13,7 +13,7 @@ import { fontDisplay, fontMono, fontUI, useApp } from '../../src/theme';
 import { Btn } from '../../src/components';
 import { GlyphBell, GlyphPin, Search } from '../../src/icons';
 import { isOnboarded, markOnboarded, syncUserProfile } from '../../src/auth';
-import { requestLocationAccess, requestNotificationAccess } from '../../src/permissions';
+import { requestLocationAccess, requestNotificationAccess, syncPushToken } from '../../src/permissions';
 import { supabase } from '../../src/supabase';
 import { Lede, Panel, SCREEN_W as W } from '../../src/onboardingUI';
 
@@ -80,7 +80,9 @@ export default function Onboarding() {
   const allowNotifications = async () => {
     setPermBusy(true);
     try {
-      setNotifEnabled(await requestNotificationAccess());
+      const granted = await requestNotificationAccess();
+      setNotifEnabled(granted);
+      if (granted) syncPushToken().catch(() => {});   // register device for pushes
     } finally {
       setPermBusy(false);
       next();

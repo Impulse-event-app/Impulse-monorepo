@@ -31,6 +31,7 @@ class User(Base):
     party_size = Column(Integer, nullable=False, server_default="2")
     age_bracket = Column(Integer, nullable=True)               # 18 | 25 | 35 | 45
     notifications_enabled = Column(Boolean, nullable=False, server_default="false")
+    expo_push_token = Column(Text, nullable=True)              # ExponentPushToken[...] for push
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -133,6 +134,53 @@ class Booking(Base):
 
     deal: "Deal" = relationship("Deal", back_populates="bookings")
     user: "User" = relationship("User", back_populates="bookings")
+
+
+class Huddle(Base):
+    """A group plan: N people vote on deals, winner becomes a shared booking."""
+    __tablename__ = "huddles"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    creator_member_id = Column(UUID(as_uuid=False), ForeignKey("huddle_members.id", use_alter=True), nullable=True)
+    group_size = Column(Integer, nullable=False)
+    # open | voting_complete | awaiting_payment | active | expired | collapsed | redeemed
+    status = Column(Text, nullable=False, server_default="open")
+    join_token = Column(Text, nullable=False, unique=True)
+    winning_deal_id = Column(UUID(as_uuid=False), ForeignKey("deals.id"), nullable=True)
+    common_code = Column(Text, nullable=True, unique=True)
+    voting_deadline = Column(DateTime(timezone=True), nullable=True)
+    payment_deadline = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    # Bumped on every member join/vote/pay — the realtime poke channel.
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    members: List["HuddleMember"] = relationship(
+        "HuddleMember", back_populates="huddle", foreign_keys="HuddleMember.huddle_id",
+    )
+    winning_deal: Optional["Deal"] = relationship("Deal", foreign_keys=[winning_deal_id])
+
+
+class HuddleMember(Base):
+    __tablename__ = "huddle_members"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    huddle_id = Column(UUID(as_uuid=False), ForeignKey("huddles.id"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=True)   # null → guest
+    display_name = Column(Text, nullable=False)
+    # Secret returned to the joining client; authenticates guests on later calls.
+    member_token = Column(Text, nullable=False, unique=True)
+    joined_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    # Sealed until resolution — never exposed to other members via any endpoint.
+    ballot = Column(JSONB, nullable=True)                          # ordered deal ids, best first
+    ballot_at = Column(DateTime(timezone=True), nullable=True)
+    pinch_payer_id = Column(Text, nullable=True)
+    pinch_source_id = Column(Text, nullable=True)
+    deposit_payment_id = Column(Text, nullable=True)
+    deposit_status = Column(Text, nullable=False, server_default="unpaid")  # unpaid | paid | refunded
+    balance_payment_id = Column(Text, nullable=True)
+    balance_status = Column(Text, nullable=False, server_default="unpaid")
+
+    huddle: "Huddle" = relationship("Huddle", back_populates="members", foreign_keys=[huddle_id])
 
 
 class UserVenueInteraction(Base):

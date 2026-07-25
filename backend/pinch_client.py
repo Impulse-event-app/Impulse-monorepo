@@ -108,6 +108,15 @@ def create_payment(input: dict, merchant_id: str) -> dict:
     return _post("/payments/realtime", input, merchant_id)
 
 
+def get_payment(payment_id: str, merchant_id: str) -> dict:
+    """GET /payments/{id} — used to read the actual captured amount."""
+    url = f"{PINCH_BASE_URL}/payments/{payment_id}"
+    resp = httpx.get(url, headers=_headers(merchant_id), timeout=_TIMEOUT)
+    if resp.status_code < 200 or resp.status_code >= 300:
+        raise PinchError(resp.status_code, resp.text)
+    return resp.json()
+
+
 def create_refund(input: dict, merchant_id: str) -> dict:
     """POST /refunds — input: paymentId, amount (cents), reason, nonce. Returns refund ref_XXX.
 

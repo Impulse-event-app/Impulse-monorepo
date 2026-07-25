@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import secrets
@@ -9,7 +8,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
-import pinch_client
+import payments
 from auth import get_current_user
 from database import get_db
 from models import Booking, Deal, Venue
@@ -220,63 +219,35 @@ def pay_deposit(
     slot = f"{booking.deal.date} {booking.slot_time}"
 
     try:
-        # 1. Create the Pinch payer
-        payer = pinch_client.create_payer(
-            {
-                "firstName": body.first_name,
-                "lastName": body.last_name,
-                "email": body.email,
-            },
-            PINCH_MERCHANT_ID,
+        # 1+2. Vault the card (payer + reusable source)
+        booking.pinch_payer_id, booking.pinch_source_id = payments.vault_card(
+            first_name=body.first_name,
+            last_name=body.last_name,
+            email=body.email,
+            token=body.token,
+            merchant_id=PINCH_MERCHANT_ID,
         )
-        booking.pinch_payer_id = payer["id"]
-
-        # 2. Vault the card as a reusable payment source
-        source = pinch_client.create_payment_source(
-            payer["id"],
-            {"sourceType": "credit-card", "token": body.token},
-            PINCH_MERCHANT_ID,
-        )
-        booking.pinch_source_id = source["id"]
-
-        # 3. Charge the deposit — full deposit is Impulse's (venue share zero).
-        # Pinch caps applicationFee at amount minus transaction fees, so the
-        # card fee is surcharged to the customer to keep the full deposit.
-        # NOTE: metadata must be a JSON *string* — an object breaks Pinch's
-        # model binding and nulls out the entire request.
-        payment = pinch_client.create_payment(
-            {
-                "payerId": booking.pinch_payer_id,
-                "sourceId": booking.pinch_source_id,
-                "amount": booking.deposit_amount_cents,
-                "applicationFee": booking.deposit_amount_cents,
-                "surcharge": ["credit-card"],
-                "description": f"Impulse deposit — {venue_name} {slot}",
-                "metadata": json.dumps({
-                    "impulseBookingId": booking.id,
-                    "type": "deposit",
-                    "depositRate": DEPOSIT_RATE,
-                    "depositAmountCents": booking.deposit_amount_cents,
-                    "balanceAmountCents": booking.balance_amount_cents,
-                    "fullDiscountedPriceCents": booking.deposit_amount_cents + booking.balance_amount_cents,
-                }),
-                "nonce": f"deposit-{booking.id}",
+        # 3. Charge the deposit via the shared orchestration.
+        payment = payments.charge_deposit(
+            payer_id=booking.pinch_payer_id,
+            source_id=booking.pinch_source_id,
+            amount_cents=booking.deposit_amount_cents,
+            description=f"Impulse deposit — {venue_name} {slot}",
+            metadata={
+                "impulseBookingId": booking.id,
+                "type": "deposit",
+                "depositRate": DEPOSIT_RATE,
+                "depositAmountCents": booking.deposit_amount_cents,
+                "balanceAmountCents": booking.balance_amount_cents,
+                "fullDiscountedPriceCents": booking.deposit_amount_cents + booking.balance_amount_cents,
             },
-            PINCH_MERCHANT_ID,
+            nonce=f"deposit-{booking.id}",
+            merchant_id=PINCH_MERCHANT_ID,
         )
     except PinchError as e:
         db.rollback()
         logger.error("Pinch deposit failed for booking %s: %s %s", booking_id, e.status_code, e.body)
         raise HTTPException(status_code=402, detail=f"Deposit payment failed: {e.body}")
-
-    status = str(payment.get("status", "")).lower()
-    if status != "approved":
-        db.rollback()
-        logger.error("Pinch deposit not approved for booking %s: %s", booking_id, json.dumps(payment))
-        raise HTTPException(
-            status_code=402,
-            detail=f"Deposit payment not approved (status={payment.get('status')})",
-        )
 
     # Deposit approved — record it and only now generate the confirmation code
     booking.deposit_payment_id = payment["id"]
@@ -423,29 +394,20 @@ def redeem_booking(
 
     if balance_cents > 0:
         try:
-            payment = pinch_client.create_payment(
-                {
-                    "payerId": booking.pinch_payer_id,
-                    "sourceId": booking.pinch_source_id,
-                    "amount": balance_cents,
-                    # Impulse takes 20% of the balance too. No surcharge here —
-                    # the customer pays exactly the quoted balance and Pinch's
-                    # fees come out of the venue's share.
-                    "applicationFee": round(balance_cents * 0.20),
-                    "description": f"Impulse balance — {venue_name} {slot}",
-                    "metadata": json.dumps({
-                        "impulseBookingId": booking.id,
-                        "type": "balance",
-                        "balanceAmountCents": balance_cents,
-                    }),
-                    "nonce": f"balance-{booking.id}",
+            payment = payments.charge_balance(
+                payer_id=booking.pinch_payer_id,
+                source_id=booking.pinch_source_id,
+                amount_cents=balance_cents,
+                application_fee_cents=round(balance_cents * 0.20),
+                description=f"Impulse balance — {venue_name} {slot}",
+                metadata={
+                    "impulseBookingId": booking.id,
+                    "type": "balance",
+                    "balanceAmountCents": balance_cents,
                 },
-                PINCH_MERCHANT_ID,
+                nonce=f"balance-{booking.id}",
+                merchant_id=PINCH_MERCHANT_ID,
             )
-            status = str(payment.get("status", "")).lower()
-            if status != "approved":
-                raise PinchError(200, json.dumps(payment))
-
             booking.balance_payment_id = payment["id"]
             booking.payment_status = "fully_paid"
             # In-app customer notification (Plans screen)

@@ -307,3 +307,113 @@ class StatsResponse(BaseModel):
     revenue_today: float
     spots_filled: int
     total_spots: int
+
+
+# ── Huddle (group voting → shared booking) ────────────────────────────────────
+
+class HuddleCreate(BaseModel):
+    group_size: int   # 2–10
+
+
+class HuddleJoin(BaseModel):
+    display_name: Optional[str] = None   # required for guests; signed-in users fall back to profile name
+
+
+class HuddleMemberPublic(BaseModel):
+    """What any member may see about any other member. Ballots stay sealed —
+    only the fact that a ballot exists (has_voted) is ever exposed."""
+    id: str
+    display_name: str
+    is_creator: bool
+    has_voted: bool
+    deposit_status: str
+    balance_status: str
+
+
+class HuddleResponse(BaseModel):
+    id: str
+    status: str
+    group_size: int
+    join_token: str
+    voting_deadline: Optional[datetime]
+    payment_deadline: Optional[datetime]
+    winning_deal_id: Optional[str]
+    # Only set (non-null) once the huddle is active — payment complete.
+    common_code: Optional[str]
+    members: List[HuddleMemberPublic]
+    created_at: datetime
+    # Caller-specific fields (never another member's):
+    my_member_id: Optional[str] = None
+    my_has_voted: bool = False
+    # My share of the winning deal — set once resolved. The amount charged at
+    # payment time is exactly my_share.deposit_cents, never recomputed.
+    my_share: Optional["HuddleShare"] = None
+    # Joined winning deal details once resolved.
+    winning_deal: Optional[DealWithVenueResponse] = None
+
+
+class HuddleJoinResponse(BaseModel):
+    huddle: HuddleResponse
+    member_id: str
+    # Secret for this seat. Returned only to its owner, at create/join time.
+    member_token: str
+
+
+class BallotSubmit(BaseModel):
+    """Ordered deal ids, best first. Up to 3; must all be current candidates."""
+    picks: List[str]
+
+
+class HuddleShare(BaseModel):
+    total_cents: int
+    deposit_cents: int
+    balance_cents: int
+
+
+class PushTokenRegister(BaseModel):
+    expo_push_token: str
+
+
+class HuddlePay(BaseModel):
+    """CaptureJs card token + payer details for a member's deposit-share charge."""
+    token: str
+    card_holder_name: str
+    email: str
+    first_name: str
+    last_name: str
+
+
+# ── Huddle venue verification (group redemption) ──────────────────────────────
+
+class HuddleVerifyMember(BaseModel):
+    name: str
+    balance_cents: int
+    balance_status: str            # unpaid | paid | declined
+
+
+class HuddleVerifyResponse(BaseModel):
+    """Preview shown to venue staff before confirming the group charge."""
+    huddle_id: str
+    group_size: int
+    venue_name: str
+    deal_title: str
+    slot: str
+    total_balance_cents: int
+    members: List[HuddleVerifyMember]
+    status: str
+    already_redeemed: bool
+
+
+class HuddleRedeemMemberResult(BaseModel):
+    name: str
+    balance_cents: int
+    status: str                    # paid | declined
+    warning: Optional[str] = None  # "collect $X from {name} directly"
+
+
+class HuddleRedeemResponse(BaseModel):
+    huddle_id: str
+    redeemed: bool
+    members: List[HuddleRedeemMemberResult]
+    total_charged_cents: int
+    declines: int

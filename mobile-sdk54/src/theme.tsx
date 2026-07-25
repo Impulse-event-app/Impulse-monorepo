@@ -6,6 +6,9 @@ import { DEFAULT_FILTERS, Drop, Filters, Plan, apiBookingToPlan, apiDealToDrop }
 import { ApiDeal, listDeals, getMyBookings } from './api';
 import { supabase } from './supabase';
 import { fetchUserProfile } from './auth';
+import { persistDel, persistGet, persistSet } from './persist';
+
+const ACTIVE_HUDDLE_KEY = 'impulse.activeHuddle';
 
 // ── fonts ────────────────────────────────────────────────────
 // Each weight is its own family in React Native. These keys must match the
@@ -158,7 +161,30 @@ type AppState = {
   setProfile: React.Dispatch<React.SetStateAction<Profile>>;
   profileLoading: boolean;
   refreshProfile: () => Promise<void>;
+  // Huddle voting: when active, the home feed becomes the ballot — the user
+  // picks their top 3 from the normal deal cards. candidateIds limits picks to
+  // deals that fit the group.
+  voteSession: VoteSession | null;
+  voteRanking: string[];            // deal ids, best first (max 3)
+  startVoting: (s: VoteSession) => void;
+  toggleVotePick: (dealId: string) => void;
+  clearVoting: () => void;
+  // The user's current huddle (created / joined / voted), so the home bar can
+  // show its live status instead of the "Start a Huddle" prompt.
+  activeHuddle: ActiveHuddle | null;
+  setActiveHuddle: (h: ActiveHuddle | null) => void;
   reset: () => void;
+};
+
+export type VoteSession = {
+  huddleId: string;
+  memberToken?: string;
+  candidateIds: string[];
+};
+
+export type ActiveHuddle = {
+  huddleId: string;
+  memberToken?: string;
 };
 
 const Ctx = createContext<AppState | null>(null);
@@ -173,6 +199,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [dealsLoading, setDealsLoading] = useState(false);
   const [bookingsLoading, setBookingsLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [voteSession, setVoteSession] = useState<VoteSession | null>(null);
+  const [voteRanking, setVoteRanking] = useState<string[]>([]);
+  const [activeHuddle, setActiveHuddleState] = useState<ActiveHuddle | null>(null);
+
+  // Persist the active huddle so it survives reloads/restarts (web reload,
+  // app relaunch). Loaded once on mount; saved on every change.
+  useEffect(() => {
+    persistGet(ACTIVE_HUDDLE_KEY).then((raw) => {
+      if (!raw) return;
+      try { setActiveHuddleState(JSON.parse(raw)); } catch { /* ignore corrupt value */ }
+    });
+  }, []);
+
+  const setActiveHuddle = (h: ActiveHuddle | null) => {
+    setActiveHuddleState(h);
+    if (h) persistSet(ACTIVE_HUDDLE_KEY, JSON.stringify(h));
+    else persistDel(ACTIVE_HUDDLE_KEY);
+  };
 
   const T = useMemo(() => tokens(dark, accent), [dark, accent]);
 
@@ -255,6 +299,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         refreshDeals();
         refreshBookings();
         refreshProfile();
+        // Refresh the push token for already-opted-in users (huddle pushes).
+        import('./permissions').then((p) => p.syncPushToken().catch(() => {}));
         if (!bookingsChannel) {
           bookingsChannel = supabase
             .channel('bookings-live')
@@ -293,10 +339,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addPlan: (p) => setPlans((prev) => [p, ...prev]),
     bookingsLoading, refreshBookings,
     profile, setProfile, profileLoading, refreshProfile,
+    voteSession, voteRanking,
+    startVoting: (s) => { setVoteSession(s); setVoteRanking([]); },
+    toggleVotePick: (dealId) =>
+      setVoteRanking((prev) => {
+        if (prev.includes(dealId)) return prev.filter((x) => x !== dealId);
+        if (prev.length >= 3) return prev;   // top 3 only
+        return [...prev, dealId];
+      }),
+    clearVoting: () => { setVoteSession(null); setVoteRanking([]); },
+    activeHuddle, setActiveHuddle,
     reset: () => {
       setFilters(DEFAULT_FILTERS);
       setPlans([]);
       setProfile(DEFAULT_PROFILE);
+      setVoteSession(null);
+      setVoteRanking([]);
+      setActiveHuddle(null);
     },
   };
 

@@ -104,11 +104,6 @@ export default function MapScreenWeb() {
         ref: containerRef,
         style: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' },
       })}
-      {!leafletReady && (
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ fontFamily: fontUI(400), fontSize: 14, color: T.muted }}>Loading map…</Text>
-        </View>
-      )}
 
       {/* top search + filter row */}
       <View style={{ position: 'absolute', top: insets.top + 4, left: 18, right: 18, flexDirection: 'row', gap: 9 }}>
@@ -123,15 +118,6 @@ export default function MapScreenWeb() {
           <Filter size={18} color={activeCount ? T.accentInk : T.text} />
         </Pressable>
       </View>
-
-        {/* interactive map (MapLibre GL renders into this real DOM node) */}
-        <View style={{ marginTop: 14, marginHorizontal: 14, borderRadius: 18, overflow: 'hidden', height: MAP_HEIGHT, backgroundColor: T.surface }}>
-          {React.createElement('div', {
-            ref: containerRef,
-            style: { width: '100%', height: '100%' },
-          })}
-        </View>
-      )}
     </View>
   );
 }

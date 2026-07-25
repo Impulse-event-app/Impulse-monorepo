@@ -91,6 +91,47 @@ export function PulseMark({ size = 30, radius }: { size?: number; radius?: numbe
   );
 }
 
+// ── huddle mark (group riff on the pulse-rings icon) ─────────
+// Same dark rounded square + coral accent as PulseMark, but three dots
+// clustered inside a pulse ring — a "huddle" of people.
+export function HuddleMark({ size = 30, radius }: { size?: number; radius?: number }) {
+  const T = useTheme();
+  const r = radius != null ? radius : size * 0.26;
+  const dot = (dx: number, dy: number, d = 0.17) => (
+    <View
+      style={{
+        position: 'absolute', left: '50%', top: '50%',
+        width: d * size, height: d * size, borderRadius: (d * size) / 2,
+        backgroundColor: T.accent,
+        marginLeft: -(d * size) / 2 + dx * size,
+        marginTop: -(d * size) / 2 + dy * size,
+      }}
+    />
+  );
+  return (
+    <View
+      style={{
+        width: size, height: size, borderRadius: r, backgroundColor: '#0F0E0D',
+        overflow: 'hidden', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      {/* pulse ring */}
+      <View
+        style={{
+          position: 'absolute', left: '50%', top: '50%',
+          width: 0.74 * size, height: 0.74 * size, borderRadius: 0.37 * size,
+          borderWidth: Math.max(1, size * 0.022), borderColor: hexA(T.accent, 0.32),
+          marginLeft: -0.37 * size, marginTop: -0.37 * size,
+        }}
+      />
+      {/* three clustered members */}
+      {dot(0, -0.15)}
+      {dot(-0.14, 0.11)}
+      {dot(0.14, 0.11)}
+    </View>
+  );
+}
+
 // ── button ───────────────────────────────────────────────────
 export function Btn({
   children, onPress, variant = 'primary', full, style, disabled,

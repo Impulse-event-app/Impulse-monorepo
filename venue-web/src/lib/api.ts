@@ -232,3 +232,47 @@ export const bookingApi = {
   redeem: (code: string) =>
     rawRequest("POST", `/bookings/redeem/${encodeURIComponent(code)}`),
 };
+
+// ── Huddles (group verification) ──────────────────────────────────────────────
+
+export interface HuddleVerifyMember {
+  name: string;
+  balance_cents: number;
+  balance_status: "unpaid" | "paid" | "declined";
+}
+
+export interface HuddleVerifyResponse {
+  huddle_id: string;
+  group_size: number;
+  venue_name: string;
+  deal_title: string;
+  slot: string;
+  total_balance_cents: number;
+  members: HuddleVerifyMember[];
+  status: string;
+  already_redeemed: boolean;
+}
+
+export interface HuddleRedeemMemberResult {
+  name: string;
+  balance_cents: number;
+  status: "paid" | "declined";
+  warning: string | null;
+}
+
+export interface HuddleRedeemResponse {
+  huddle_id: string;
+  redeemed: boolean;
+  members: HuddleRedeemMemberResult[];
+  total_charged_cents: number;
+  declines: number;
+}
+
+export const huddleApi = {
+  // Preview a group code (no charge). rawRequest so 404 (not a huddle code) can
+  // fall through to the booking-redeem path without throwing.
+  verify: (code: string) =>
+    rawRequest("GET", `/huddles/verify/${encodeURIComponent(code)}`),
+  redeem: (code: string) =>
+    request<HuddleRedeemResponse>("POST", `/huddles/redeem/${encodeURIComponent(code)}`),
+};

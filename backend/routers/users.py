@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from auth import get_current_user
 from database import get_db
 from models import User
-from schemas import UserResponse, UserUpdate
+from schemas import PushTokenRegister, UserResponse, UserUpdate
 
 router = APIRouter()
 
@@ -38,3 +38,18 @@ def update_me(
     db.commit()
     db.refresh(row)
     return row
+
+
+@router.put("/me/push-token", status_code=204)
+def register_push_token(
+    body: PushTokenRegister,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Store the caller's Expo push token (for huddle + booking notifications)."""
+    row = db.query(User).filter(User.id == user["sub"]).first()
+    if not row:
+        row = User(id=user["sub"], email=user.get("email"))
+        db.add(row)
+    row.expo_push_token = body.expo_push_token
+    db.commit()

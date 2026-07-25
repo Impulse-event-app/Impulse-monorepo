@@ -237,3 +237,106 @@ export async function logInteraction(
     body: JSON.stringify({ venue_id: venueId, event_type: eventType, rating }),
   });
 }
+
+// ── huddles (group voting → shared booking) ──────────────────
+
+export type HuddleMemberPublic = {
+  id: string;
+  display_name: string;
+  is_creator: boolean;
+  has_voted: boolean;
+  deposit_status: 'unpaid' | 'paid' | 'refunded';
+  balance_status: string;
+};
+
+export type HuddleShare = {
+  total_cents: number;
+  deposit_cents: number;
+  balance_cents: number;
+};
+
+export type ApiHuddle = {
+  id: string;
+  status: 'open' | 'voting_complete' | 'awaiting_payment' | 'active' | 'expired' | 'collapsed' | 'redeemed';
+  group_size: number;
+  join_token: string;
+  voting_deadline: string | null;
+  payment_deadline: string | null;
+  winning_deal_id: string | null;
+  common_code: string | null;   // only present once the huddle is active
+  members: HuddleMemberPublic[];
+  created_at: string;
+  // caller-specific — never another member's data
+  my_member_id: string | null;
+  my_has_voted: boolean;
+  my_share: HuddleShare | null;       // set once resolved; the exact amount to charge
+  winning_deal: ApiDeal | null;       // set once resolved
+};
+
+export type HuddleJoinResult = {
+  huddle: ApiHuddle;
+  member_id: string;
+  member_token: string;   // this seat's secret — keep client-side only
+};
+
+/** Start a huddle (signed-in only). Creator takes the first seat. */
+export async function createHuddle(groupSize: number): Promise<HuddleJoinResult> {
+  return request<HuddleJoinResult>('/huddles', {
+    method: 'POST',
+    body: JSON.stringify({ group_size: groupSize }),
+  });
+}
+
+/** Join via share link/QR token. Works signed-in or as a guest (name required). */
+export async function joinHuddle(joinToken: string, displayName?: string): Promise<HuddleJoinResult> {
+  return publicRequest<HuddleJoinResult>(`/huddles/join/${encodeURIComponent(joinToken)}`, {
+    method: 'POST',
+    body: JSON.stringify({ display_name: displayName }),
+  });
+}
+
+/** Member view of a huddle — avatar states only, ballots stay sealed. */
+export async function getHuddle(huddleId: string, memberToken?: string): Promise<ApiHuddle> {
+  const qs = memberToken ? `?member_token=${encodeURIComponent(memberToken)}` : '';
+  return publicRequest<ApiHuddle>(`/huddles/${encodeURIComponent(huddleId)}${qs}`);
+}
+
+/** The huddle ballot: live deals that fit the whole group. */
+export async function getHuddleCandidates(huddleId: string, memberToken?: string): Promise<ApiDeal[]> {
+  const qs = memberToken ? `?member_token=${encodeURIComponent(memberToken)}` : '';
+  return publicRequest<ApiDeal[]>(`/huddles/${encodeURIComponent(huddleId)}/candidates${qs}`);
+}
+
+/** Submit this member's sealed ballot — ordered deal ids, best first (1–3). */
+export async function submitBallot(huddleId: string, picks: string[], memberToken?: string): Promise<ApiHuddle> {
+  const qs = memberToken ? `?member_token=${encodeURIComponent(memberToken)}` : '';
+  return publicRequest<ApiHuddle>(`/huddles/${encodeURIComponent(huddleId)}/ballot${qs}`, {
+    method: 'POST',
+    body: JSON.stringify({ picks }),
+  });
+}
+
+/** Register this device's Expo push token for the signed-in user. */
+export async function registerPushToken(expoPushToken: string): Promise<void> {
+  await request<void>('/users/me/push-token', {
+    method: 'PUT',
+    body: JSON.stringify({ expo_push_token: expoPushToken }),
+  });
+}
+
+export type HuddlePayBody = {
+  token: string;
+  card_holder_name: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+};
+
+/** Pay this member's deposit share of the winning deal (vault + charge). */
+export async function payHuddleShare(huddleId: string, body: HuddlePayBody, memberToken?: string): Promise<ApiHuddle> {
+  const qs = memberToken ? `?member_token=${encodeURIComponent(memberToken)}` : '';
+  return publicRequest<ApiHuddle>(`/huddles/${encodeURIComponent(huddleId)}/pay${qs}`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}

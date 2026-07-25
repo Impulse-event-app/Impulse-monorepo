@@ -14,6 +14,15 @@ export default function UserLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="event/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="claim/[id]" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen
+          name="huddle/new"
+          options={{ presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }}
+        />
+        <Stack.Screen
+          name="huddle/[id]"
+          options={{ presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }}
+        />
+        <Stack.Screen name="huddle/join/[token]" options={{ animation: 'fade' }} />
         <Stack.Screen name="legal/[doc]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="confirm" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
         <Stack.Screen
