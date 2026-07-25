@@ -55,6 +55,7 @@ class Venue(Base):
     email = Column(Text, nullable=True)
     website = Column(Text, nullable=True)
     opening_hours = Column(Text, nullable=True)
+    image_url = Column(Text, nullable=True)                    # hero photo, uploaded via venue-web to Supabase Storage
     is_active = Column(Boolean, default=True, nullable=False)
     avg_rating = Column(Numeric(3, 2), nullable=False, server_default="0")
     total_ratings = Column(Integer, nullable=False, server_default="0")

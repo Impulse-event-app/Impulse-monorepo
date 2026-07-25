@@ -47,6 +47,7 @@ class VenueCreate(BaseModel):
     email: Optional[str] = None
     website: Optional[str] = None
     opening_hours: Optional[str] = None
+    image_url: Optional[str] = None
 
 
 class VenueUpdate(BaseModel):
@@ -61,6 +62,7 @@ class VenueUpdate(BaseModel):
     email: Optional[str] = None
     website: Optional[str] = None
     opening_hours: Optional[str] = None
+    image_url: Optional[str] = None
     is_active: Optional[bool] = None
 
 
@@ -80,6 +82,7 @@ class VenueResponse(BaseModel):
     email: Optional[str]
     website: Optional[str]
     opening_hours: Optional[str]
+    image_url: Optional[str]
     is_active: bool
     avg_rating: float
     total_ratings: int
@@ -148,6 +151,7 @@ class DealWithVenueResponse(DealResponse):
     venue_lat: Optional[float]
     venue_lng: Optional[float]
     venue_avg_rating: float
+    venue_image_url: Optional[str]
 
     @classmethod
     def from_deal(cls, deal: object) -> "DealWithVenueResponse":
@@ -179,6 +183,7 @@ class DealWithVenueResponse(DealResponse):
             venue_lat=d.venue.lat,
             venue_lng=d.venue.lng,
             venue_avg_rating=float(d.venue.avg_rating),
+            venue_image_url=d.venue.image_url,
         )
 
 

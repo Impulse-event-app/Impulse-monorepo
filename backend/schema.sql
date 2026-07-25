@@ -64,6 +64,7 @@ create table if not exists public.venues (
   email          text,
   website        text,
   opening_hours  text,
+  image_url      text,        -- hero photo, uploaded via venue-web to Supabase Storage
   is_active      boolean     not null default true,
   -- denormalised aggregate — updated by trigger
   avg_rating     numeric(3,2) not null default 0,
@@ -233,3 +234,48 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- ── Storage: venue-photos bucket ──────────────────────────────
+-- Public-read bucket that holds venue hero photos uploaded from
+-- venue-web. Files are keyed by owner: "<auth.uid()>/<uuid>.<ext>",
+-- so the RLS policies below scope writes to the uploading owner
+-- while anyone can read (the mobile feed loads these URLs directly).
+
+insert into storage.buckets (id, name, public)
+values ('venue-photos', 'venue-photos', true)
+on conflict (id) do nothing;
+
+-- Anyone can read venue photos
+drop policy if exists "venue-photos: public read" on storage.objects;
+create policy "venue-photos: public read"
+  on storage.objects for select
+  using (bucket_id = 'venue-photos');
+
+-- Authenticated users can upload only under their own uid/ prefix
+drop policy if exists "venue-photos: owner insert" on storage.objects;
+create policy "venue-photos: owner insert"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'venue-photos'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+-- Owners can update / delete only their own files
+drop policy if exists "venue-photos: owner modify" on storage.objects;
+create policy "venue-photos: owner modify"
+  on storage.objects for update
+  to authenticated
+  using (
+    bucket_id = 'venue-photos'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "venue-photos: owner delete" on storage.objects;
+create policy "venue-photos: owner delete"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'venue-photos'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
