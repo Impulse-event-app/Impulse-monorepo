@@ -126,16 +126,30 @@ export type ApiBooking = {
   slot_time: string;
   num_people: number;
   total_paid: number;
-  confirmation_code: string;
+  confirmation_code: string | null;   // null until the deposit is paid
   status: string;
   redeemed_at: string | null;
   created_at: string;
+  // payment fields
+  deposit_amount_cents: number | null;
+  balance_amount_cents: number | null;
+  payment_status: 'unpaid' | 'deposit_paid' | 'fully_paid' | 'cancelled';
+  payment_note: string | null;        // balance-charge outcome shown in-app
+  payment_followup: boolean;
 };
 
 export type BookingCreate = {
   deal_id: string;
   slot_time: string;
   num_people: number;
+};
+
+export type BookingPay = {
+  token: string;              // CaptureJs card token — never raw card details
+  card_holder_name: string;
+  email: string;
+  first_name: string;
+  last_name: string;
 };
 
 export type InteractionType = 'view' | 'save' | 'booking' | 'rating';
@@ -182,12 +196,27 @@ export async function getDeal(dealId: string): Promise<ApiDeal> {
 
 // ── bookings ─────────────────────────────────────────────────
 
-/** Create a booking for a deal. Returns the confirmed booking with code. */
+/** Reserve a slot. The booking is unpaid and has NO code until payBooking succeeds. */
 export async function createBooking(body: BookingCreate): Promise<ApiBooking> {
   return request<ApiBooking>('/bookings', {
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+/** Charge the 20% deposit via Pinch. On success returns the booking WITH its 6-digit code. */
+export async function payBooking(bookingId: string, body: BookingPay): Promise<ApiBooking> {
+  return request<ApiBooking>(`/bookings/${bookingId}/pay`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+/** Cancel a booking. The deposit is always forfeited — no refunds. */
+export async function cancelBooking(
+  bookingId: string,
+): Promise<{ cancelled: boolean; depositForfeited: boolean; depositAmountCents: number }> {
+  return request(`/bookings/${bookingId}/cancel`, { method: 'POST' });
 }
 
 /** Fetch all bookings belonging to the signed-in user. */

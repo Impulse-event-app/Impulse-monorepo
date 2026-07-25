@@ -1,6 +1,7 @@
 // theme.tsx — Impulse: theme tokens, fonts, and the app-wide state provider.
 // Ported from the Impulse design handoff (app-data.jsx / app-main.jsx).
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { DEFAULT_FILTERS, Drop, Filters, Plan, apiBookingToPlan, apiDealToDrop } from './data';
 import { ApiDeal, listDeals, getMyBookings } from './api';
 import { supabase } from './supabase';
@@ -200,7 +201,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setBookingsLoading(true);
     try {
       const data = await getMyBookings();
-      setPlans(data.map(apiBookingToPlan));
+      // Hide unpaid holds (abandoned checkouts) — they have no code yet.
+      setPlans(data.filter((b) => b.status !== 'pending').map(apiBookingToPlan));
     } catch {
       // Not authenticated yet or network error — keep existing plans
     } finally {
@@ -241,18 +243,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refreshDeals();
 
+    // Live booking updates: when the venue verifies the customer's code, the
+    // backend updates the bookings row (status → attended, balance charged,
+    // payment_note set). Supabase Realtime pushes that change here so the
+    // customer's screen flips to "verified/charged" without a manual refresh.
+    // RLS ("bookings: user read own") scopes delivery to the signed-in user.
+    let bookingsChannel: RealtimeChannel | null = null;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
         refreshDeals();
         refreshBookings();
         refreshProfile();
+        if (!bookingsChannel) {
+          bookingsChannel = supabase
+            .channel('bookings-live')
+            .on(
+              'postgres_changes',
+              {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'bookings',
+                filter: `user_id=eq.${session.user.id}`,
+              },
+              () => { refreshBookings(); },
+            )
+            .subscribe();
+        }
       } else {
+        bookingsChannel?.unsubscribe();
+        bookingsChannel = null;
         setPlans([]);
         setProfile(DEFAULT_PROFILE);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      bookingsChannel?.unsubscribe();
+      subscription.unsubscribe();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

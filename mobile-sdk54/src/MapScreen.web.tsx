@@ -1,159 +1,94 @@
 // MapScreen.web.tsx — web map tab. react-native-maps is native-only, so on web
-// we render a real interactive map with Leaflet + CARTO tiles (no API key),
-// loaded from a CDN at runtime so nothing changes in the bundle. The layout
-// mirrors the native map (MapScreen.tsx): a full-screen map with a floating
-// search/filter row, custom discount-% pins, and a slide-up card on tap. Keep
-// the two in sync when the map UI changes.
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+// we render MapLibre GL with CARTO's free vector basemaps (no API key, just
+// attribution — same CARTO family as the app's old raster tiles, with proper
+// light/dark styles). Pins come from dropCoords() — exact venue coordinates
+// when the backend has them, otherwise the deal's suburb centre. The deal list
+// sits below, so even if WebGL/styles fail the tab is never empty.
+import React, { useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Drop, LatLng, SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, pct } from './data';
+import * as maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, money } from './data';
 import { fontDisplay, fontUI, useApp } from './theme';
 import { DropCardCompact } from './components';
 import { Filter, Search } from './icons';
 
-const LEAFLET_VERSION = '1.9.4';
-const LEAFLET_CSS = `https://unpkg.com/leaflet@${LEAFLET_VERSION}/dist/leaflet.css`;
-const LEAFLET_JS = `https://unpkg.com/leaflet@${LEAFLET_VERSION}/dist/leaflet.js`;
-
-// Lazy-load Leaflet's CSS + JS from the CDN once. Returns true when window.L
-// is ready, false while loading or if it failed.
-function useLeaflet(): boolean {
-  const [ready, setReady] = useState<boolean>(
-    () => typeof window !== 'undefined' && !!(window as unknown as { L?: unknown }).L,
-  );
-  useEffect(() => {
-    if (ready || typeof document === 'undefined') return;
-    if ((window as unknown as { L?: unknown }).L) { setReady(true); return; }
-
-    if (!document.querySelector(`link[data-leaflet]`)) {
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = LEAFLET_CSS;
-      link.setAttribute('data-leaflet', '');
-      document.head.appendChild(link);
-    }
-
-    let script = document.querySelector('script[data-leaflet]') as HTMLScriptElement | null;
-    if (!script) {
-      script = document.createElement('script');
-      script.src = LEAFLET_JS;
-      script.async = true;
-      script.setAttribute('data-leaflet', '');
-      document.head.appendChild(script);
-    }
-    const onLoad = () => setReady(true);
-    script.addEventListener('load', onLoad);
-    return () => script?.removeEventListener('load', onLoad);
-  }, [ready]);
-  return ready;
-}
-
-// Build the HTML for one pin — an accent discount pill with a pointer,
-// mirroring the native <Pin> component. `active` adds a halo ring; `dim`
-// fades venues filtered out of the current results.
-function pinHtml(label: string, accent: string, ink: string, active: boolean, dim: boolean): string {
-  const font = fontDisplay(700);
-  return `
-  <div style="opacity:${dim ? 0.35 : 1};display:flex;flex-direction:column;align-items:center;pointer-events:auto;cursor:pointer;">
-    ${active ? `<div style="position:absolute;top:-7px;width:38px;height:38px;border-radius:19px;border:2px solid ${accent};opacity:0.5;"></div>` : ''}
-    <div style="background:${accent};color:${ink};font-family:'${font}',system-ui,sans-serif;font-weight:700;font-size:12px;height:${active ? 30 : 26}px;display:flex;align-items:center;padding:0 10px;border-radius:999px;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,0.18);">${label}</div>
-    <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid ${accent};margin-top:-1px;"></div>
-  </div>`;
-}
+const STYLE_LIGHT = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
+const STYLE_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+const MAP_HEIGHT = 340;
 
 export default function MapScreenWeb() {
   const { T, dark, filters, drops } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const leafletReady = useLeaflet();
-  const [sel, setSel] = useState<string | null>(null);
 
-  // Resolve a coordinate for every deal — exact venue location when the backend
-  // has it, otherwise the deal's suburb centre. Only mappable deals get a pin.
-  const located = useMemo(
-    () => drops
-      .map((d) => ({ d, coord: dropCoords(d) }))
-      .filter((x) => x.coord != null) as { d: Drop; coord: LatLng }[],
-    [drops],
-  );
-  const selDrop = located.find((x) => x.d.id === sel)?.d ?? null;
-  const matchIds = useMemo(
-    () => new Set(applyFilters(located.map((x) => x.d), filters).map((d) => d.id)),
-    [located, filters],
-  );
+  const matched = applyFilters(drops, filters);
   const activeCount = activeFilterCount(filters);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mapRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tileRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const markersRef = useRef<any[]>([]);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<maplibregl.Marker[]>([]);
 
   // Create the map once. A tap on empty map clears the selection.
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const L = (window as any).L;
-    if (!leafletReady || !L || !containerRef.current || mapRef.current) return;
-    const map = L.map(containerRef.current, { attributionControl: false, zoomControl: false })
-      .setView([SYDNEY_REGION.latitude, SYDNEY_REGION.longitude], 12);
-    map.on('click', () => setSel(null));
-    mapRef.current = map;
-    // The container may not have its final size on first paint.
-    setTimeout(() => map.invalidateSize(), 0);
-  }, [leafletReady]);
+    if (!containerRef.current || mapRef.current) return;
+    mapRef.current = new maplibregl.Map({
+      container: containerRef.current,
+      style: dark ? STYLE_DARK : STYLE_LIGHT,
+      center: [SYDNEY_REGION.longitude, SYDNEY_REGION.latitude],
+      zoom: 11.5,
+      attributionControl: { compact: true },
+    });
+    mapRef.current.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Base tiles follow the app's light/dark theme — CARTO's clean minimal
-  // basemaps (no API key) for an Apple-Maps-ish look rather than raw OSM.
+  // Basemap style follows the app's light/dark theme. Markers are DOM
+  // overlays, so they survive the style swap.
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const L = (window as any).L;
-    if (!leafletReady || !L || !mapRef.current) return;
-    if (tileRef.current) mapRef.current.removeLayer(tileRef.current);
-    const style = dark ? 'dark_all' : 'light_all';
-    tileRef.current = L.tileLayer(`https://{s}.basemaps.cartocdn.com/${style}/{z}/{x}/{y}.png`, {
-      maxZoom: 20,
-    }).addTo(mapRef.current);
-  }, [leafletReady, dark]);
+    mapRef.current?.setStyle(dark ? STYLE_DARK : STYLE_LIGHT);
+  }, [dark]);
 
   // Plot a discount pin per mappable deal. Rebuilt whenever the data, the
   // selection, or the active filters change so pin styling stays in sync.
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const L = (window as any).L;
-    if (!leafletReady || !L || !mapRef.current) return;
     const map = mapRef.current;
-    markersRef.current.forEach((m) => map.removeLayer(m));
+    if (!map) return;
+    markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
-    located.forEach(({ d, coord }) => {
-      const active = sel === d.id;
-      const dim = !matchIds.has(d.id);
-      const icon = L.divIcon({
-        className: '',
-        html: pinHtml(`${pct(d.now, d.usual)}%`, T.accent, T.accentInk, active, dim),
-        iconSize: [64, 44],
-        iconAnchor: [32, 44],
-      });
-      const marker = L.marker([coord.latitude, coord.longitude], {
-        icon,
-        zIndexOffset: active ? 1000 : dim ? -100 : 0,
-      }).addTo(map);
-      marker.on('click', () => {
-        if (dim) return;
-        setSel(d.id);
-        map.panTo([coord.latitude, coord.longitude], { animate: true, duration: 0.35 });
-      });
+    const bounds = new maplibregl.LngLatBounds();
+    matched.forEach((d) => {
+      const c = dropCoords(d);
+      if (!c) return;
+      const marker = new maplibregl.Marker({ color: T.accent })
+        .setLngLat([c.longitude, c.latitude])
+        .setPopup(
+          new maplibregl.Popup({ offset: 20, closeButton: false }).setHTML(
+            `<strong>${d.venue}</strong><br/>${money(d.now)} · ${d.suburb || 'Sydney'}`,
+          ),
+        )
+        .addTo(map);
+      marker.getElement().style.cursor = 'pointer';
+      marker.getElement().addEventListener('click', () => router.push(`/(user)/event/${d.id}`));
       markersRef.current.push(marker);
+      bounds.extend([c.longitude, c.latitude]);
     });
-  }, [leafletReady, located, matchIds, sel, T.accent, T.accentInk]);
+
+    if (markersRef.current.length === 1) {
+      map.jumpTo({ center: bounds.getCenter(), zoom: 14 });
+    } else if (markersRef.current.length > 1) {
+      map.fitBounds(bounds, { padding: 48, maxZoom: 14, duration: 0 });
+    }
+  }, [matched, T.accent, router]);
 
   // Tear the map down on unmount so a remount re-initialises cleanly.
   useEffect(() => {
     return () => {
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
       mapRef.current?.remove();
       mapRef.current = null;
     };
@@ -189,10 +124,12 @@ export default function MapScreenWeb() {
         </Pressable>
       </View>
 
-      {/* selected mini card */}
-      {selDrop && (
-        <View style={{ position: 'absolute', left: 14, right: 14, bottom: barTop + 8 }}>
-          <DropCardCompact d={selDrop} onPress={() => router.push(`/(user)/event/${selDrop.id}`)} />
+        {/* interactive map (MapLibre GL renders into this real DOM node) */}
+        <View style={{ marginTop: 14, marginHorizontal: 14, borderRadius: 18, overflow: 'hidden', height: MAP_HEIGHT, backgroundColor: T.surface }}>
+          {React.createElement('div', {
+            ref: containerRef,
+            style: { width: '100%', height: '100%' },
+          })}
         </View>
       )}
     </View>

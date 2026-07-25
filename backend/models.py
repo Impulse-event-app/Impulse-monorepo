@@ -111,10 +111,25 @@ class Booking(Base):
     slot_time = Column(Text, nullable=False)
     num_people = Column(Integer, nullable=False)
     total_paid = Column(Numeric(10, 2), nullable=False)
-    confirmation_code = Column(Text, nullable=False, unique=True)
+    # Null until the Pinch deposit succeeds — the code only exists once paid.
+    confirmation_code = Column(Text, nullable=True, unique=True)
     status = Column(_BOOKING_STATUS, nullable=False, server_default="confirmed")
     redeemed_at = Column(DateTime(timezone=True), nullable=True)   # set when venue scans the ticket
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # ── Pinch payment fields ──────────────────────────────────
+    deposit_amount_cents = Column(Integer, nullable=True)
+    balance_amount_cents = Column(Integer, nullable=True)
+    deposit_payment_id = Column(Text, nullable=True)               # pmt_XXX for the 20% deposit
+    balance_payment_id = Column(Text, nullable=True)               # pmt_XXX for the 80% balance
+    pinch_payer_id = Column(Text, nullable=True)                   # pyr_XXX
+    pinch_source_id = Column(Text, nullable=True)                  # src_XXX (vaulted card)
+    # unpaid | deposit_paid | fully_paid | cancelled
+    payment_status = Column(Text, nullable=False, server_default="unpaid")
+    # Customer-facing outcome of the balance charge (shown in-app on the Plans screen)
+    payment_note = Column(Text, nullable=True)
+    # True when the balance charge declined at redemption — venue collects directly
+    payment_followup = Column(Boolean, nullable=False, server_default="false")
 
     deal: "Deal" = relationship("Deal", back_populates="bookings")
     user: "User" = relationship("User", back_populates="bookings")

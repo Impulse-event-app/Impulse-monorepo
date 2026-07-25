@@ -458,17 +458,18 @@ export function Pin({ active, onPress, label }: { active?: boolean; onPress?: ()
 }
 
 // ── location pill (Tonight header) ───────────────────────────
-export function LocPill() {
+export function LocPill({ label = 'All Sydney', onPress }: { label?: string; onPress?: () => void }) {
   const T = useTheme();
   return (
     <Pressable
+      onPress={onPress}
       style={{
         flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: T.chipBg,
         borderRadius: 999, paddingHorizontal: 13, paddingVertical: 7,
       }}
     >
       <LocationPin size={13} color={T.accent} />
-      <Text style={{ fontFamily: fontUI(500), fontSize: 14, color: T.text }}>Sydney · CBD</Text>
+      <Text style={{ fontFamily: fontUI(500), fontSize: 14, color: T.text }}>{label}</Text>
       <ChevronDown size={11} color={T.muted} />
     </Pressable>
   );

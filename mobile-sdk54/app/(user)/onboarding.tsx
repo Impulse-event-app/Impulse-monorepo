@@ -6,13 +6,14 @@
 // (or who's already onboarded) just in case.
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CATEGORIES } from '../../src/data';
+import { CATEGORIES, SYDNEY_SUBURBS } from '../../src/data';
 import { fontDisplay, fontMono, fontUI, useApp } from '../../src/theme';
 import { Btn } from '../../src/components';
 import { GlyphBell, GlyphPin, Search } from '../../src/icons';
 import { isOnboarded, markOnboarded, syncUserProfile } from '../../src/auth';
+import { requestLocationAccess, requestNotificationAccess } from '../../src/permissions';
 import { supabase } from '../../src/supabase';
 import { Lede, Panel, SCREEN_W as W } from '../../src/onboardingUI';
 
@@ -38,6 +39,10 @@ export default function Onboarding() {
   const [suburb, setSuburb] = useState<string | null>(null);
   const [acts, setActs] = useState<string[]>([]);
   const [ageDeclined, setAgeDeclined] = useState(false);
+  const [ageBracket, setAgeBracket] = useState<number | null>(null);
+  const [notifEnabled, setNotifEnabled] = useState(false);
+  const [permBusy, setPermBusy] = useState(false);
+  const [query, setQuery] = useState('');
   // Gate rendering until the session guard resolves, so we never flash the
   // onboarding steps at someone who's about to be redirected away.
   const [ready, setReady] = useState(false);
@@ -59,12 +64,40 @@ export default function Onboarding() {
   };
   const next = () => goTo(page + 1);
 
+  // Ask the OS for location; if we can reverse-geocode a suburb, prefill the
+  // home-base step so the user just confirms it.
+  const allowLocation = async () => {
+    setPermBusy(true);
+    try {
+      const { suburb: found } = await requestLocationAccess();
+      if (found && SYDNEY_SUBURBS.includes(found)) setSuburb(found);
+    } finally {
+      setPermBusy(false);
+      next();
+    }
+  };
+
+  const allowNotifications = async () => {
+    setPermBusy(true);
+    try {
+      setNotifEnabled(await requestNotificationAccess());
+    } finally {
+      setPermBusy(false);
+      next();
+    }
+  };
+
   const complete = async () => {
     if (suburb || acts.length) {
       setProfile((p) => ({ ...p, suburb: suburb || p.suburb, acts: acts.length ? acts : p.acts }));
     }
     // Fire-and-forget profile sync to public.users
-    syncUserProfile({ suburb: suburb ?? undefined, acts }).catch(console.warn);
+    syncUserProfile({
+      suburb: suburb ?? undefined,
+      acts,
+      notifications_enabled: notifEnabled,
+      age_bracket: ageBracket ?? undefined,
+    }).catch(console.warn);
     // Record that onboarding is done so we never route them back here.
     await markOnboarded();
     router.replace('/(user)/home');
@@ -109,7 +142,9 @@ export default function Onboarding() {
         <Panel
           footer={
             <>
-              <Btn full onPress={next}>Allow location</Btn>
+              <Btn full onPress={allowLocation} disabled={permBusy}>
+                {permBusy ? 'Asking…' : 'Allow location'}
+              </Btn>
               {skipLink('Not now', next)}
             </>
           }
@@ -128,7 +163,9 @@ export default function Onboarding() {
         <Panel
           footer={
             <>
-              <Btn full onPress={next}>Turn on notifications</Btn>
+              <Btn full onPress={allowNotifications} disabled={permBusy}>
+                {permBusy ? 'Asking…' : 'Turn on notifications'}
+              </Btn>
               {skipLink('Not now', next)}
             </>
           }
@@ -147,9 +184,10 @@ export default function Onboarding() {
         <Panel
           footer={
             <>
-              <Btn full onPress={next}>Yes, I'm 18 or over</Btn>
+              <Btn full onPress={() => { setAgeBracket(18); next(); }}>Yes, I'm 18 or over</Btn>
               {skipLink("I'm under 18", () => {
                 setAgeDeclined(true);
+                setAgeBracket(null);
                 setTimeout(next, 650);
               })}
             </>
@@ -183,10 +221,43 @@ export default function Onboarding() {
           <View style={{ paddingHorizontal: 22, paddingTop: 20 }}>
             <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 12, marginBottom: 16 }, T.shadow]}>
               <Search size={17} color={T.muted} />
-              <Text style={{ fontFamily: fontUI(400), fontSize: 15, color: T.faint }}>Search Sydney suburbs</Text>
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search Sydney suburbs"
+                placeholderTextColor={T.faint}
+                autoCorrect={false}
+                style={{ flex: 1, fontFamily: fontUI(400), fontSize: 15, color: T.text, padding: 0 }}
+              />
+              {query.length > 0 && (
+                <Pressable onPress={() => setQuery('')} hitSlop={8}>
+                  <Text style={{ fontFamily: fontUI(400), fontSize: 15, color: T.muted }}>✕</Text>
+                </Pressable>
+              )}
             </View>
+            {query.trim().length > 0 && (
+              <View style={[{ backgroundColor: T.surface, borderRadius: 14, marginBottom: 16, overflow: 'hidden' }, T.shadow]}>
+                {SYDNEY_SUBURBS
+                  .filter((s) => s.toLowerCase().includes(query.trim().toLowerCase()))
+                  .slice(0, 6)
+                  .map((s, i, arr) => (
+                    <Pressable
+                      key={s}
+                      onPress={() => { setSuburb(s); setQuery(''); }}
+                      style={{ paddingHorizontal: 15, paddingVertical: 13, borderBottomWidth: i < arr.length - 1 ? 1 : 0, borderBottomColor: T.line }}
+                    >
+                      <Text style={{ fontFamily: fontUI(500), fontSize: 15, color: T.text }}>{s}</Text>
+                    </Pressable>
+                  ))}
+                {SYDNEY_SUBURBS.filter((s) => s.toLowerCase().includes(query.trim().toLowerCase())).length === 0 && (
+                  <Text style={{ fontFamily: fontUI(400), fontSize: 14, color: T.muted, paddingHorizontal: 15, paddingVertical: 13 }}>
+                    No matching suburb — try a nearby one
+                  </Text>
+                )}
+              </View>
+            )}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9 }}>
-              {SUBURBS.map((s) => {
+              {(suburb && !SUBURBS.includes(suburb) ? [suburb, ...SUBURBS] : SUBURBS).map((s) => {
                 const on = suburb === s;
                 return (
                   <Pressable key={s} onPress={() => setSuburb(s)} style={{ height: 36, paddingHorizontal: 16, borderRadius: 999, backgroundColor: on ? T.chipOn : T.chipBg, justifyContent: 'center' }}>
