@@ -15,6 +15,32 @@ export const CATEGORIES = [
   'Darts',
 ];
 
+// ── Sydney suburbs (home-base search + area picker) ──────────
+// Local list so search is instant and offline; swap for a Places-backed
+// autocomplete when a web-enabled Google key exists.
+export const SYDNEY_SUBURBS = [
+  'Alexandria', 'Annandale', 'Ashfield', 'Auburn', 'Avalon Beach', 'Balmain',
+  'Bankstown', 'Barangaroo', 'Baulkham Hills', 'Bellevue Hill', 'Bexley',
+  'Blacktown', 'Bondi', 'Bondi Beach', 'Bondi Junction', 'Botany', 'Bronte',
+  'Burwood', 'Cabramatta', 'Camperdown', 'Campsie', 'Caringbah', 'Carlton',
+  'Castle Hill', 'Chatswood', 'Chippendale', 'Clovelly', 'Collaroy', 'Concord',
+  'Coogee', 'Cremorne', 'Cronulla', 'Crows Nest', 'Darlinghurst', 'Darling Harbour',
+  'Dee Why', 'Double Bay', 'Drummoyne', 'Dulwich Hill', 'Earlwood', 'Eastwood',
+  'Edgecliff', 'Enmore', 'Epping', 'Erskineville', 'Fairfield', 'Five Dock',
+  'Forest Lodge', 'Freshwater', 'Gladesville', 'Glebe', 'Gordon', 'Granville',
+  'Greenwich', 'Haberfield', 'Haymarket', 'Homebush', 'Hornsby', 'Hurstville',
+  'Kensington', 'Kingsford', 'Kirribilli', 'Kogarah', 'Lane Cove', 'Leichhardt',
+  'Lewisham', 'Lidcombe', 'Lilyfield', 'Liverpool', 'Maroubra', 'Marrickville',
+  'Mascot', 'Manly', 'Menai', 'Milsons Point', 'Miranda', 'Mona Vale', 'Mosman',
+  'Mount Druitt', 'Narrabeen', 'Neutral Bay', 'Newport', 'Newtown', 'North Ryde',
+  'North Sydney', 'Paddington', 'Parramatta', 'Penrith', 'Petersham', 'Potts Point',
+  'Pyrmont', 'Randwick', 'Redfern', 'Rhodes', 'Rockdale', 'Rose Bay', 'Rosebery',
+  'Rozelle', 'Ryde', 'St Ives', 'St Leonards', 'St Peters', 'Stanmore', 'Strathfield',
+  'Surry Hills', 'Sutherland', 'Sydenham', 'Sydney CBD', 'Sydney Olympic Park',
+  'Tempe', 'The Rocks', 'Ultimo', 'Vaucluse', 'Waterloo', 'Waverley', 'Wentworthville',
+  'Westmead', 'Wolli Creek', 'Woollahra', 'Woolloomooloo', 'Zetland',
+];
+
 // ── helpers ──────────────────────────────────────────────────
 export const money = (n: number) => '$' + n;
 export const pct = (now: number, usual: number) => Math.round((1 - now / usual) * 100);

@@ -1,131 +1,94 @@
 // MapScreen.web.tsx — web map tab. react-native-maps is native-only, so on web
-// we render a real interactive map with Leaflet + OpenStreetMap tiles (no API
-// key required), loaded from a CDN at runtime so nothing changes in the bundle.
-// Pins come from dropCoords() — exact venue coordinates when the backend has
-// them, otherwise the deal's suburb centre. The deal list sits below, and if
-// Leaflet can't load we still show the list, so the tab is never empty.
-import React, { useEffect, useRef, useState } from 'react';
+// we render MapLibre GL with CARTO's free vector basemaps (no API key, just
+// attribution — same CARTO family as the app's old raster tiles, with proper
+// light/dark styles). Pins come from dropCoords() — exact venue coordinates
+// when the backend has them, otherwise the deal's suburb centre. The deal list
+// sits below, so even if WebGL/styles fail the tab is never empty.
+import React, { useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, money } from './data';
 import { fontDisplay, fontUI, useApp } from './theme';
 import { DropCardCompact } from './components';
 import { Filter, Search } from './icons';
 import { FLOATING_TAB_CLEARANCE } from '../app/(user)/(tabs)/_layout';
 
-const LEAFLET_VERSION = '1.9.4';
-const LEAFLET_CSS = `https://unpkg.com/leaflet@${LEAFLET_VERSION}/dist/leaflet.css`;
-const LEAFLET_JS = `https://unpkg.com/leaflet@${LEAFLET_VERSION}/dist/leaflet.js`;
+const STYLE_LIGHT = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
+const STYLE_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 const MAP_HEIGHT = 340;
-
-// Lazy-load Leaflet's CSS + JS from the CDN once. Returns true when window.L
-// is ready, false while loading or if it failed.
-function useLeaflet(): boolean {
-  const [ready, setReady] = useState<boolean>(
-    () => typeof window !== 'undefined' && !!(window as unknown as { L?: unknown }).L,
-  );
-  useEffect(() => {
-    if (ready || typeof document === 'undefined') return;
-    if ((window as unknown as { L?: unknown }).L) { setReady(true); return; }
-
-    if (!document.querySelector(`link[data-leaflet]`)) {
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = LEAFLET_CSS;
-      link.setAttribute('data-leaflet', '');
-      document.head.appendChild(link);
-    }
-
-    let script = document.querySelector('script[data-leaflet]') as HTMLScriptElement | null;
-    if (!script) {
-      script = document.createElement('script');
-      script.src = LEAFLET_JS;
-      script.async = true;
-      script.setAttribute('data-leaflet', '');
-      document.head.appendChild(script);
-    }
-    const onLoad = () => setReady(true);
-    script.addEventListener('load', onLoad);
-    return () => script?.removeEventListener('load', onLoad);
-  }, [ready]);
-  return ready;
-}
 
 export default function MapScreenWeb() {
   const { T, dark, filters, drops } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const leafletReady = useLeaflet();
 
   const matched = applyFilters(drops, filters);
   const activeCount = activeFilterCount(filters);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const containerRef = useRef<HTMLDivElement | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mapRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tileRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const markersRef = useRef<any[]>([]);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<maplibregl.Marker[]>([]);
 
   // Create the map once.
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const L = (window as any).L;
-    if (!leafletReady || !L || !containerRef.current || mapRef.current) return;
-    mapRef.current = L.map(containerRef.current, { attributionControl: true, zoomControl: true })
-      .setView([SYDNEY_REGION.latitude, SYDNEY_REGION.longitude], 12);
-    // The container may not have its final size on first paint.
-    setTimeout(() => mapRef.current?.invalidateSize(), 0);
-  }, [leafletReady]);
+    if (!containerRef.current || mapRef.current) return;
+    mapRef.current = new maplibregl.Map({
+      container: containerRef.current,
+      style: dark ? STYLE_DARK : STYLE_LIGHT,
+      center: [SYDNEY_REGION.longitude, SYDNEY_REGION.latitude],
+      zoom: 11.5,
+      attributionControl: { compact: true },
+    });
+    mapRef.current.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Base tiles follow the app's light/dark theme — CARTO's clean minimal
-  // basemaps (no API key) for an Apple-Maps-ish look rather than raw OSM.
+  // Basemap style follows the app's light/dark theme. Markers are DOM
+  // overlays, so they survive the style swap.
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const L = (window as any).L;
-    if (!leafletReady || !L || !mapRef.current) return;
-    if (tileRef.current) mapRef.current.removeLayer(tileRef.current);
-    const style = dark ? 'dark_all' : 'light_all';
-    tileRef.current = L.tileLayer(`https://{s}.basemaps.cartocdn.com/${style}/{z}/{x}/{y}.png`, {
-      maxZoom: 20,
-      attribution: '&copy; OpenStreetMap &copy; CARTO',
-    }).addTo(mapRef.current);
-  }, [leafletReady, dark]);
+    mapRef.current?.setStyle(dark ? STYLE_DARK : STYLE_LIGHT);
+  }, [dark]);
 
   // Plot a pin per mappable deal.
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const L = (window as any).L;
-    if (!leafletReady || !L || !mapRef.current) return;
     const map = mapRef.current;
-    markersRef.current.forEach((m) => map.removeLayer(m));
+    if (!map) return;
+    markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
-    const points: [number, number][] = [];
+    const bounds = new maplibregl.LngLatBounds();
     matched.forEach((d) => {
       const c = dropCoords(d);
       if (!c) return;
-      const marker = L.marker([c.latitude, c.longitude])
-        .addTo(map)
-        .bindPopup(`<strong>${d.venue}</strong><br/>${money(d.now)} · ${d.suburb || 'Sydney'}`);
-      marker.on('click', () => router.push(`/(user)/event/${d.id}`));
+      const marker = new maplibregl.Marker({ color: T.accent })
+        .setLngLat([c.longitude, c.latitude])
+        .setPopup(
+          new maplibregl.Popup({ offset: 20, closeButton: false }).setHTML(
+            `<strong>${d.venue}</strong><br/>${money(d.now)} · ${d.suburb || 'Sydney'}`,
+          ),
+        )
+        .addTo(map);
+      marker.getElement().style.cursor = 'pointer';
+      marker.getElement().addEventListener('click', () => router.push(`/(user)/event/${d.id}`));
       markersRef.current.push(marker);
-      points.push([c.latitude, c.longitude]);
+      bounds.extend([c.longitude, c.latitude]);
     });
 
-    if (points.length === 1) {
-      map.setView(points[0], 14);
-    } else if (points.length > 1) {
-      map.fitBounds(points, { padding: [48, 48], maxZoom: 14 });
+    if (markersRef.current.length === 1) {
+      map.jumpTo({ center: bounds.getCenter(), zoom: 14 });
+    } else if (markersRef.current.length > 1) {
+      map.fitBounds(bounds, { padding: 48, maxZoom: 14, duration: 0 });
     }
-  }, [leafletReady, matched, router]);
+  }, [matched, T.accent, router]);
 
   // Tear the map down on unmount so a remount re-initialises cleanly.
   useEffect(() => {
     return () => {
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
       mapRef.current?.remove();
       mapRef.current = null;
     };
@@ -151,17 +114,12 @@ export default function MapScreenWeb() {
           </Pressable>
         </View>
 
-        {/* interactive map (Leaflet renders into this real DOM node) */}
+        {/* interactive map (MapLibre GL renders into this real DOM node) */}
         <View style={{ marginTop: 14, marginHorizontal: 14, borderRadius: 18, overflow: 'hidden', height: MAP_HEIGHT, backgroundColor: T.surface }}>
           {React.createElement('div', {
             ref: containerRef,
             style: { width: '100%', height: '100%' },
           })}
-          {!leafletReady && (
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontFamily: fontUI(400), fontSize: 14, color: T.muted }}>Loading map…</Text>
-            </View>
-          )}
         </View>
 
         <Text style={{ fontFamily: fontDisplay(600), fontSize: 15, color: T.muted, paddingHorizontal: 20, marginTop: 20, letterSpacing: -0.2 }}>

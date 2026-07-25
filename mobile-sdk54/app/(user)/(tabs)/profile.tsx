@@ -160,10 +160,17 @@ export default function ProfileScreen() {
     setEditing(false);
   };
 
-  const signOut = () => {
-    supabaseSignOut().catch(console.warn);
+  const signOut = async () => {
+    // Await the Supabase sign-out BEFORE navigating — the root index checks
+    // getSession(), and navigating while the session still exists bounces the
+    // user back to home instead of sign-in.
+    try {
+      await supabaseSignOut();
+    } catch (e) {
+      console.warn(e);
+    }
     reset();
-    router.replace('/');
+    router.replace('/(user)/sign-in');
   };
 
   return (

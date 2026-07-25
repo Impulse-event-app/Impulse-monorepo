@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { money, apiDealToDrop } from '../../../src/data';
+import { money, apiDealToDrop, dropCoords } from '../../../src/data';
+import { VenueMap } from '../../../src/VenueMap';
 import { fontDisplay, fontUI, useApp } from '../../../src/theme';
 import { logInteraction } from '../../../src/api';
 import {
@@ -103,7 +104,14 @@ export default function DetailScreen() {
             ))}
           </View>
 
-          <Placeholder label="map" style={{ height: 120, borderRadius: 16, marginTop: 14 }} />
+          {(() => {
+            const coords = dropCoords(d);
+            return coords ? (
+              <VenueMap latitude={coords.latitude} longitude={coords.longitude} style={{ marginTop: 14 }} />
+            ) : (
+              <Placeholder label="map" style={{ height: 120, borderRadius: 16, marginTop: 14 }} />
+            );
+          })()}
         </View>
       </ScrollView>
 

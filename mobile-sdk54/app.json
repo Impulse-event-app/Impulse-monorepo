@@ -8,7 +8,14 @@
       "expo-router",
       "expo-font",
       "expo-web-browser",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Impulse uses your location to surface drops within a few suburbs — never in the background, only while you're looking."
+        }
+      ],
+      "expo-notifications"
     ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",

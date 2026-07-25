@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   CATEGORIES,
@@ -54,6 +55,23 @@ export default function HomeScreen() {
   const initials = displayName.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase() || 'U';
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [areaOpen, setAreaOpen] = useState(false);
+
+  // Area picker options: the user's home suburb first, then every suburb that
+  // currently has a drop. "All Sydney" clears the area filter.
+  const areaOptions = [
+    ...new Set([
+      ...(profile.suburb ? [profile.suburb] : []),
+      ...drops.map((d) => d.suburb).filter(Boolean),
+    ]),
+  ];
+  const areaLabel = filters.areas.length
+    ? filters.areas.length === 1 ? filters.areas[0] : `${filters.areas[0]} +${filters.areas.length - 1}`
+    : 'All Sydney';
+  const pickArea = (s: string | null) => {
+    setFilters({ ...filters, areas: s ? [s] : [] });
+    setAreaOpen(false);
+  };
 
   const quickCat = (c: string) => {
     if (c === 'All') setFilters({ ...filters, cats: [] });
@@ -65,9 +83,15 @@ export default function HomeScreen() {
   };
   const isChipOn = (c: string) => (c === 'All' ? filters.cats.length === 0 : filters.cats.includes(c));
 
+  // Preferred activities float to the top within each section (stable sort
+  // keeps the filter ordering within each group).
+  const preferred = new Set(profile.acts);
   const filtered = applyFilters(drops, filters);
-  const now = filtered.filter((d) => d.status === 'now');
-  const later = filtered.filter((d) => d.status === 'later');
+  const boosted = preferred.size
+    ? [...filtered].sort((a, b) => Number(preferred.has(b.cat)) - Number(preferred.has(a.cat)))
+    : filtered;
+  const now = boosted.filter((d) => d.status === 'now');
+  const later = boosted.filter((d) => d.status === 'later');
   const activeCount = activeFilterCount(filters);
 
   const openDrop = (id: string) => router.push(`/(user)/event/${id}`);
@@ -109,7 +133,7 @@ export default function HomeScreen() {
           </View>
           <View style={{ paddingHorizontal: 18, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 18 }}>
             <Text style={{ fontFamily: fontDisplay(700), fontSize: 33, color: T.text, letterSpacing: -1 }}>What's on?</Text>
-            <LocPill />
+            <LocPill label={areaLabel} onPress={() => setAreaOpen(true)} />
           </View>
         </View>
 
@@ -154,6 +178,35 @@ export default function HomeScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* Area picker — opened by the location pill */}
+      <Modal visible={areaOpen} transparent animationType="fade" onRequestClose={() => setAreaOpen(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }} onPress={() => setAreaOpen(false)}>
+          <View style={{ position: 'absolute', top: insets.top + 96, right: 18, left: 18, maxWidth: 340, alignSelf: 'flex-end' }}>
+            <Pressable style={[{ backgroundColor: T.surface, borderRadius: 18, overflow: 'hidden' }, T.shadow]} onPress={() => {}}>
+              <Text style={{ fontFamily: fontMono(400), fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: T.faint, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 }}>
+                Show drops in
+              </Text>
+              {[null, ...areaOptions].map((s, i, arr) => {
+                const on = s === null ? filters.areas.length === 0 : filters.areas.includes(s);
+                const isHome = s !== null && s === profile.suburb;
+                return (
+                  <Pressable
+                    key={s ?? 'all'}
+                    onPress={() => pickArea(s)}
+                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: i < arr.length - 1 ? 1 : 0, borderBottomColor: T.line }}
+                  >
+                    <Text style={{ fontFamily: fontUI(on ? 600 : 400), fontSize: 15.5, color: on ? T.accent : T.text }}>
+                      {s ?? 'All Sydney'}{isHome ? '  ·  home' : ''}
+                    </Text>
+                    {on && <Text style={{ fontFamily: fontUI(600), fontSize: 15, color: T.accent }}>✓</Text>}
+                  </Pressable>
+                );
+              })}
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }

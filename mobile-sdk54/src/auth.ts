@@ -155,6 +155,8 @@ export async function syncUserProfile(updates: {
   acts?: string[];
   party_size?: number;
   full_name?: string;
+  notifications_enabled?: boolean;
+  age_bracket?: number;
 } = {}) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
@@ -164,6 +166,8 @@ export async function syncUserProfile(updates: {
     ...(updates.suburb !== undefined ? { home_suburb: updates.suburb } : {}),
     ...(updates.acts !== undefined ? { preferred_acts: updates.acts } : {}),
     ...(updates.party_size !== undefined ? { party_size: updates.party_size } : {}),
+    ...(updates.notifications_enabled !== undefined ? { notifications_enabled: updates.notifications_enabled } : {}),
+    ...(updates.age_bracket !== undefined ? { age_bracket: updates.age_bracket } : {}),
   };
 
   try {

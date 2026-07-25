@@ -28,11 +28,16 @@ function PulseRings() {
   const { T } = useApp();
   const vals = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
   useEffect(() => {
+    // On web the native animated module is missing, so useNativeDriver falls
+    // back to JS — and react-native-web's Animated.loop fails to restart under
+    // that fallback, playing the rings once. Drive on the JS driver on web so
+    // the loop repeats; keep the native driver on iOS/Android.
+    const useNativeDriver = Platform.OS !== 'web';
     const loops = vals.map((v, i) =>
       Animated.loop(
         Animated.sequence([
           Animated.delay(i * 860),
-          Animated.timing(v, { toValue: 1, duration: 2600, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+          Animated.timing(v, { toValue: 1, duration: 2600, easing: Easing.out(Easing.ease), useNativeDriver }),
         ]),
       ),
     );
