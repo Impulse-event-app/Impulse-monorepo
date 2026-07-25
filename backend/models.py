@@ -28,6 +28,7 @@ class User(Base):
     avatar_url = Column(Text, nullable=True)
     home_suburb = Column(Text, nullable=True)
     preferred_acts = Column(ARRAY(Text()), nullable=False, server_default="{}")
+    accessibility_needs = Column(ARRAY(Text()), nullable=False, server_default="{}")
     party_size = Column(Integer, nullable=False, server_default="2")
     age_bracket = Column(Integer, nullable=True)               # 18 | 25 | 35 | 45
     notifications_enabled = Column(Boolean, nullable=False, server_default="false")
@@ -57,6 +58,7 @@ class Venue(Base):
     website = Column(Text, nullable=True)
     opening_hours = Column(Text, nullable=True)
     image_url = Column(Text, nullable=True)                    # hero photo, uploaded via venue-web to Supabase Storage
+    accessibility_features = Column(ARRAY(Text()), nullable=False, server_default="{}")  # disability-friendly features the venue offers
     is_active = Column(Boolean, default=True, nullable=False)
     avg_rating = Column(Numeric(3, 2), nullable=False, server_default="0")
     total_ratings = Column(Integer, nullable=False, server_default="0")

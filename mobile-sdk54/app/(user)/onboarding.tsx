@@ -8,7 +8,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CATEGORIES, SYDNEY_SUBURBS } from '../../src/data';
+import { ACCESSIBILITY_OPTIONS, CATEGORIES, SYDNEY_SUBURBS } from '../../src/data';
 import { fontDisplay, fontMono, fontUI, useApp } from '../../src/theme';
 import { Btn } from '../../src/components';
 import { GlyphBell, GlyphPin, Search } from '../../src/icons';
@@ -19,7 +19,7 @@ import { Lede, Panel, SCREEN_W as W } from '../../src/onboardingUI';
 
 const SUBURBS = ['Sydney CBD', 'Surry Hills', 'Newtown', 'Bondi', 'Marrickville', 'Enmore', 'Darlinghurst', 'Redfern', 'Chippendale', 'Glebe', 'Paddington', 'Manly'];
 const ACTIVITIES = CATEGORIES.filter((c) => c !== 'All');
-const STEPS = 5; // location, notifications, age, suburb, activities
+const STEPS = 6; // location, notifications, age, suburb, accessibility, activities
 
 function PermIcon({ children }: { children: React.ReactNode }) {
   const { T } = useApp();
@@ -38,6 +38,7 @@ export default function Onboarding() {
   const [page, setPage] = useState(0);
   const [suburb, setSuburb] = useState<string | null>(null);
   const [acts, setActs] = useState<string[]>([]);
+  const [access, setAccess] = useState<string[]>([]);
   const [ageDeclined, setAgeDeclined] = useState(false);
   const [ageBracket, setAgeBracket] = useState<number | null>(null);
   const [notifEnabled, setNotifEnabled] = useState(false);
@@ -97,6 +98,7 @@ export default function Onboarding() {
     syncUserProfile({
       suburb: suburb ?? undefined,
       acts,
+      accessibility_needs: access,
       notifications_enabled: notifEnabled,
       age_bracket: ageBracket ?? undefined,
     }).catch(console.warn);
@@ -106,6 +108,7 @@ export default function Onboarding() {
   };
 
   const toggleAct = (a: string) => setActs((p) => (p.includes(a) ? p.filter((x) => x !== a) : [...p, a]));
+  const toggleAccess = (a: string) => setAccess((p) => (p.includes(a) ? p.filter((x) => x !== a) : [...p, a]));
 
   const skipLink = (label: string, onPress: () => void) => (
     <Pressable onPress={onPress} style={{ paddingVertical: 6, alignItems: 'center' }}>
@@ -271,7 +274,39 @@ export default function Onboarding() {
           </View>
         </Panel>
 
-        {/* 4 — activities */}
+        {/* 4 — accessibility */}
+        <Panel
+          top={insets.top + 24}
+          footer={
+            <>
+              <Btn full onPress={next}>{access.length === 0 ? 'None of these — continue' : `Continue — ${access.length} selected`}</Btn>
+              {skipLink('Skip', next)}
+            </>
+          }
+        >
+          <Lede
+            kicker="Access needs"
+            title="Any accessibility requirements?"
+            body="Pick anything that applies. We'll highlight venues that support your needs. This stays private and you can change it later."
+          />
+          <View style={{ paddingHorizontal: 22, paddingTop: 22, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+            {ACCESSIBILITY_OPTIONS.map((a) => {
+              const on = access.includes(a);
+              return (
+                <Pressable
+                  key={a}
+                  onPress={() => toggleAccess(a)}
+                  style={{ paddingHorizontal: 16, paddingVertical: 11, borderRadius: 14, backgroundColor: on ? T.accent : T.chipBg, flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                >
+                  <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: on ? T.accentInk : T.faint }} />
+                  <Text style={{ fontFamily: fontUI(500), fontSize: 15.5, letterSpacing: -0.16, color: on ? T.accentInk : T.text }}>{a}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Panel>
+
+        {/* 5 — activities */}
         <Panel
           top={insets.top + 24}
           footer={

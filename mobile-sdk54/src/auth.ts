@@ -153,6 +153,7 @@ export async function fetchUserProfile() {
 export async function syncUserProfile(updates: {
   suburb?: string;
   acts?: string[];
+  accessibility_needs?: string[];
   party_size?: number;
   full_name?: string;
   notifications_enabled?: boolean;
@@ -165,6 +166,7 @@ export async function syncUserProfile(updates: {
     ...(updates.full_name !== undefined ? { full_name: updates.full_name } : {}),
     ...(updates.suburb !== undefined ? { home_suburb: updates.suburb } : {}),
     ...(updates.acts !== undefined ? { preferred_acts: updates.acts } : {}),
+    ...(updates.accessibility_needs !== undefined ? { accessibility_needs: updates.accessibility_needs } : {}),
     ...(updates.party_size !== undefined ? { party_size: updates.party_size } : {}),
     ...(updates.notifications_enabled !== undefined ? { notifications_enabled: updates.notifications_enabled } : {}),
     ...(updates.age_bracket !== undefined ? { age_bracket: updates.age_bracket } : {}),
@@ -184,6 +186,7 @@ export async function syncUserProfile(updates: {
         full_name: updates.full_name ?? null,
         home_suburb: updates.suburb ?? null,
         preferred_acts: updates.acts ?? null,
+        accessibility_needs: updates.accessibility_needs ?? null,
         party_size: updates.party_size ?? null,
         updated_at: new Date().toISOString(),
       });

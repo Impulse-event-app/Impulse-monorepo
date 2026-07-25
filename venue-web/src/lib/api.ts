@@ -87,6 +87,7 @@ export interface Venue {
   website: string | null;
   opening_hours: string | null;
   image_url: string | null;
+  accessibility_features: string[];
   is_active: boolean;
   avg_rating: number;
   total_ratings: number;
@@ -106,6 +107,7 @@ export interface VenueCreate {
   website?: string;
   opening_hours?: string;
   image_url?: string;
+  accessibility_features?: string[];
 }
 
 export interface VenueUpdate extends Partial<VenueCreate> {

@@ -1,7 +1,7 @@
 """add_image_url_to_venues
 
 Revision ID: b7c1e2f4a9d3
-Revises: a62f430a1372
+Revises: d81f3ca66e42
 Create Date: 2026-07-25 10:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'b7c1e2f4a9d3'
-down_revision: Union[str, Sequence[str], None] = 'a62f430a1372'
+down_revision: Union[str, Sequence[str], None] = 'd81f3ca66e42'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -20,6 +20,8 @@ create table if not exists public.users (
   home_suburb            text,
   -- Onboarding: step 5  e.g. '{"Bowling","Karaoke","Pool"}'
   preferred_acts         text[]      not null default '{}',
+  -- Onboarding: accessibility  e.g. '{"Wheelchair access","Hearing assistance"}'
+  accessibility_needs    text[]      not null default '{}',
   -- Onboarding: step 6  default 2, max typically 10
   party_size             integer     not null default 2,
   -- Onboarding: step 3  stored as lower bound of bracket: 18 | 25 | 35 | 45
@@ -65,6 +67,8 @@ create table if not exists public.venues (
   website        text,
   opening_hours  text,
   image_url      text,        -- hero photo, uploaded via venue-web to Supabase Storage
+  -- disability-friendly features, e.g. '{"Step-free entry","Accessible bathroom"}'
+  accessibility_features text[] not null default '{}',
   is_active      boolean     not null default true,
   -- denormalised aggregate — updated by trigger
   avg_rating     numeric(3,2) not null default 0,

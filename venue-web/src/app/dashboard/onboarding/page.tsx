@@ -14,6 +14,18 @@ const CATEGORIES = [
   "Escape Room", "Arcade", "Pool / Billiards", "Karaoke", "Other",
 ];
 
+// Shared accessibility taxonomy — mirrors the user-side "access needs" list in
+// the mobile app so venue features can later be matched against user needs.
+const ACCESSIBILITY_FEATURES = [
+  "Wheelchair access",
+  "Step-free entry",
+  "Accessible bathroom",
+  "Hearing assistance",
+  "Vision assistance",
+  "Low-sensory / quiet space",
+  "Service animal friendly",
+];
+
 // ── Opening hours types ───────────────────────────────────────────────────────
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
@@ -123,6 +135,7 @@ export default function VenueOnboardingPage() {
     website: "",
     opening_hours: "",
     image_url: "",
+    accessibility_features: [],
   });
 
   const [week, setWeek] = useState<WeekHours>(DEFAULT_WEEK);
@@ -149,6 +162,16 @@ export default function VenueOnboardingPage() {
 
   function setDay(day: Day, patch: Partial<DayHours>) {
     setWeek((w) => ({ ...w, [day]: { ...w[day], ...patch } }));
+  }
+
+  function toggleFeature(feature: string) {
+    setForm((f) => {
+      const current = f.accessibility_features ?? [];
+      const next = current.includes(feature)
+        ? current.filter((x) => x !== feature)
+        : [...current, feature];
+      return { ...f, accessibility_features: next };
+    });
   }
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -354,6 +377,34 @@ export default function VenueOnboardingPage() {
           <p className="mt-2 text-xs" style={{ color: "var(--faint)" }}>
             Preview: <span style={{ color: "var(--muted)" }}>{serializeHours(week).slice(0, 80)}…</span>
           </p>
+        </Section>
+
+        {/* ── Section: Accessibility ── */}
+        <Section title="Accessibility">
+          <p className="text-xs" style={{ color: "var(--faint)" }}>
+            Which of these does your venue offer for guests with disabilities? Customers with matching
+            access needs will see these in the app.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {ACCESSIBILITY_FEATURES.map((feature) => {
+              const on = (form.accessibility_features ?? []).includes(feature);
+              return (
+                <button
+                  key={feature}
+                  type="button"
+                  onClick={() => toggleFeature(feature)}
+                  className="rounded-full px-3.5 py-2 text-sm font-medium transition-colors"
+                  style={{
+                    background: on ? "var(--accent)" : "var(--ph)",
+                    color: on ? "var(--accent-ink)" : "var(--text)",
+                    border: `1px solid ${on ? "var(--accent)" : "var(--line2)"}`,
+                  }}
+                >
+                  {feature}
+                </button>
+              );
+            })}
+          </div>
         </Section>
 
         <button type="submit" disabled={saving}

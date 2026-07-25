@@ -11,6 +11,7 @@ class UserUpdate(BaseModel):
     avatar_url: Optional[str] = None
     home_suburb: Optional[str] = None
     preferred_acts: Optional[List[str]] = None
+    accessibility_needs: Optional[List[str]] = None
     party_size: Optional[int] = None
     age_bracket: Optional[int] = None
     notifications_enabled: Optional[bool] = None
@@ -26,6 +27,7 @@ class UserResponse(BaseModel):
     avatar_url: Optional[str]
     home_suburb: Optional[str]
     preferred_acts: List[str]
+    accessibility_needs: List[str]
     party_size: int
     age_bracket: Optional[int]
     notifications_enabled: bool
@@ -48,6 +50,7 @@ class VenueCreate(BaseModel):
     website: Optional[str] = None
     opening_hours: Optional[str] = None
     image_url: Optional[str] = None
+    accessibility_features: Optional[List[str]] = None
 
 
 class VenueUpdate(BaseModel):
@@ -63,6 +66,7 @@ class VenueUpdate(BaseModel):
     website: Optional[str] = None
     opening_hours: Optional[str] = None
     image_url: Optional[str] = None
+    accessibility_features: Optional[List[str]] = None
     is_active: Optional[bool] = None
 
 
@@ -83,6 +87,7 @@ class VenueResponse(BaseModel):
     website: Optional[str]
     opening_hours: Optional[str]
     image_url: Optional[str]
+    accessibility_features: List[str]
     is_active: bool
     avg_rating: float
     total_ratings: int
@@ -152,6 +157,7 @@ class DealWithVenueResponse(DealResponse):
     venue_lng: Optional[float]
     venue_avg_rating: float
     venue_image_url: Optional[str]
+    venue_accessibility_features: List[str]
 
     @classmethod
     def from_deal(cls, deal: object) -> "DealWithVenueResponse":
@@ -184,6 +190,7 @@ class DealWithVenueResponse(DealResponse):
             venue_lng=d.venue.lng,
             venue_avg_rating=float(d.venue.avg_rating),
             venue_image_url=d.venue.image_url,
+            venue_accessibility_features=d.venue.accessibility_features or [],
         )
 
 
