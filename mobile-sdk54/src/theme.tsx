@@ -5,7 +5,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { DEFAULT_FILTERS, Drop, Filters, Plan, apiBookingToPlan, apiDealToDrop } from './data';
 import { ApiDeal, listDeals, getMyBookings } from './api';
 import { supabase } from './supabase';
-import { fetchUserProfile } from './auth';
+import { fetchUserProfile, syncUserProfile } from './auth';
 import { persistDel, persistGet, persistSet } from './persist';
 
 const ACTIVE_HUDDLE_KEY = 'impulse.activeHuddle';
@@ -266,7 +266,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       const up = await fetchUserProfile(); // null if the row doesn't exist yet
       const email = up?.email ?? user.email ?? '';
-      const name = (up?.full_name?.trim() || (email ? email.split('@')[0] : '')) || 'You';
+      // OAuth providers (Google, Apple) return the user's real name in the
+      // session's user_metadata — capture it so the account has a name, not
+      // just an email. Order: backend row → provider name → email username.
+      const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+      const providerName =
+        (typeof meta.full_name === 'string' && meta.full_name.trim()) ||
+        (typeof meta.name === 'string' && meta.name.trim()) ||
+        '';
+      const backendName = up?.full_name?.trim() ?? '';
+      const name = (backendName || providerName || (email ? email.split('@')[0] : '')) || 'You';
       setProfile({
         name,
         email,
@@ -275,6 +284,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         acts: up?.preferred_acts ?? [],
         party: up?.party_size ?? 2,
       });
+
+      // Persist the provider's name to the backend once, so server-side
+      // consumers (e.g. the huddle creator's display name) get it too.
+      if (!backendName && providerName) {
+        syncUserProfile({ full_name: providerName }).catch(() => {});
+      }
     } catch {
       // Keep whatever profile we already have on error
     } finally {
