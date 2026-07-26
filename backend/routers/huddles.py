@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func as sa_func, text
+from sqlalchemy import func as sa_func, or_, text
 from sqlalchemy.orm import Session, joinedload
 
 import payments
@@ -48,13 +48,15 @@ def _now() -> datetime:
 
 def candidate_deals(db: Session, group_size: int):
     """Live deals the whole group can actually attend: active, enough spots,
-    and a max_group_size that fits N."""
+    a max_group_size that fits N, and not already expired."""
+    now = _now()
     return (
         db.query(Deal)
         .filter(
             Deal.is_active == True,
             Deal.spots_remaining >= group_size,
             Deal.max_group_size >= group_size,
+            or_(Deal.expires_at.is_(None), Deal.expires_at > now),
         )
         .all()
     )
@@ -71,12 +73,14 @@ def _cutoff(deal: Deal) -> Optional[datetime]:
 
 
 def _voting_deadline(deals: list) -> datetime:
-    """Soonest candidate cutoff (expiry or last-slot−1h), else a default
-    window. Clamped to at least a few minutes out."""
-    cutoffs = [c for d in deals if (c := _cutoff(d))]
-    soonest = min(cutoffs) if cutoffs else None
-    fallback = _now() + DEFAULT_VOTING_WINDOW
-    return min(soonest, fallback) if soonest else fallback
+    """Soonest *future* candidate cutoff (deal expiry or last-slot−1h) — voting
+    stays open until the earliest option would actually expire. Only future
+    cutoffs count, so an already-expired deal can't time the huddle out
+    immediately. Falls back to a default window only when no deal carries a
+    cutoff at all."""
+    now = _now()
+    future_cutoffs = [c for d in deals if (c := _cutoff(d)) is not None and c > now]
+    return min(future_cutoffs) if future_cutoffs else now + DEFAULT_VOTING_WINDOW
 
 
 def _member_public(m: HuddleMember, creator_member_id: Optional[str]) -> HuddleMemberPublic:
@@ -313,6 +317,7 @@ def huddle_candidates(
             Deal.is_active == True,
             Deal.spots_remaining >= h.group_size,
             Deal.max_group_size >= h.group_size,
+            or_(Deal.expires_at.is_(None), Deal.expires_at > _now()),
         )
         .all()
     )
@@ -353,7 +358,10 @@ def _resolve_huddle(db: Session, h: Huddle) -> None:
     winner = next(d for d in candidates if d.id == winner_id)
     h.winning_deal_id = winner.id
     h.status = "awaiting_payment"
-    h.payment_deadline = _cutoff(winner) or (_now() + DEFAULT_VOTING_WINDOW)
+    # Never in the past — a past cutoff would collapse the huddle immediately.
+    _wc = _cutoff(winner)
+    _pn = _now()
+    h.payment_deadline = _wc if (_wc is not None and _wc > _pn) else (_pn + DEFAULT_VOTING_WINDOW)
     touch(h)
     db.commit()
     db.refresh(h)
