@@ -248,28 +248,11 @@ export function dropCoords(d: Drop): LatLng | null {
 // areas present in the dataset (for the filter sheet)
 export const AREAS = Array.from(new Set(DROPS.map((d) => d.suburb)));
 
-// ── placeholder venue photos (until real venue photos exist) ─
-// Category-matched stock photo, stable per venue via a lock seed so it
-// doesn't reshuffle between renders/screens.
-const CATEGORY_PHOTO_KEYWORDS: Record<string, string> = {
-  Bowling: 'bowlingalley',
-  Karaoke: 'karaokebar',
-  'Escape rooms': 'escaperoom',
-  'Mini golf': 'minigolf',
-  Pool: 'poolhall',
-  Comedy: 'comedyclub',
-  'Live music': 'liveband',
-  Darts: 'darts',
-};
-
-export function venuePhotoUrl(d: Pick<Drop, 'id' | 'cat' | 'image'>): string {
-  // Real venue photo (uploaded via venue-web) wins; otherwise fall back to a
-  // stable, category-matched placeholder.
-  if (d.image) return d.image;
-  const keyword = CATEGORY_PHOTO_KEYWORDS[d.cat] ?? 'bar';
-  let hash = 0;
-  for (let i = 0; i < d.id.length; i++) hash = (hash * 31 + d.id.charCodeAt(i)) >>> 0;
-  return `https://loremflickr.com/640/480/${keyword}?lock=${hash}`;
+// Real venue photo (uploaded via venue-web) if there is one, else undefined —
+// callers pass this straight to <Placeholder uri>, which shows a clean
+// category-labelled placeholder graphic (no network image) when uri is unset.
+export function venuePhotoUrl(d: Pick<Drop, 'image'>): string | undefined {
+  return d.image ?? undefined;
 }
 
 // ── filters ──────────────────────────────────────────────────
