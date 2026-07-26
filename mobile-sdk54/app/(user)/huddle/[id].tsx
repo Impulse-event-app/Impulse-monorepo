@@ -7,7 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, Share, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fontDisplay, fontMono, fontUI, useApp } from '../../../src/theme';
-import { getHuddle, getHuddleCandidates, payHuddleShare, ApiHuddle, ApiError } from '../../../src/api';
+import { getHuddle, getHuddleCandidates, payHuddleShare, cancelHuddle, ApiHuddle, ApiError } from '../../../src/api';
 import QRCode from 'react-native-qrcode-svg';
 import { Btn, HuddleMark } from '../../../src/components';
 import { PinchCardField } from '../../../src/PinchCardField';
@@ -94,13 +94,15 @@ function AvatarSlot({ name, voted, empty }: { name?: string; voted?: boolean; em
 
 export default function HuddlePopup() {
   const { id, mt } = useLocalSearchParams<{ id: string; mt?: string }>();
-  const { T, profile, startVoting } = useApp();
+  const { T, profile, startVoting, setActiveHuddle } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [huddle, setHuddle] = useState<ApiHuddle | null>(null);
   const [copied, setCopied] = useState(false);
   const [paying, setPaying] = useState(false);      // card field revealed
   const [submitting, setSubmitting] = useState(false);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!id) return;
@@ -167,9 +169,26 @@ export default function HuddlePopup() {
     }
   };
 
+  const doCancel = async () => {
+    if (!id) return;
+    setCancelling(true);
+    try {
+      await cancelHuddle(id, mt);
+      setActiveHuddle(null);   // home bar reverts to "Start a Huddle"
+      router.back();
+    } catch (err) {
+      Alert.alert('Could not cancel', err instanceof ApiError ? err.message : 'Please try again.');
+      setCancelling(false);
+      setConfirmingCancel(false);
+    }
+  };
+
   const filled = huddle?.members ?? [];
   const emptyCount = huddle ? Math.max(0, huddle.group_size - filled.length) : 0;
   const canVote = huddle?.status === 'open' && !huddle.my_has_voted && !!huddle.my_member_id;
+  const imCreator = !!huddle?.members.find((m) => m.id === huddle.my_member_id)?.is_creator;
+  // Creator can call it off until the group is confirmed (active).
+  const canCancel = imCreator && (huddle?.status === 'open' || huddle?.status === 'awaiting_payment');
   const resolved = huddle && ['awaiting_payment', 'active', 'redeemed'].includes(huddle.status);
   const myMember = huddle?.members.find((m) => m.id === huddle.my_member_id);
   const myDepositPaid = myMember?.deposit_status === 'paid';
@@ -307,6 +326,33 @@ export default function HuddlePopup() {
                 </View>
               )}
             </View>
+          )}
+
+          {/* Creator: cancel the huddle (inline confirm, works on web + native) */}
+          {canCancel && (
+            confirmingCancel ? (
+              <View style={{ marginTop: 14, padding: 14, backgroundColor: T.surface, borderRadius: 14, gap: 10 }}>
+                <Text style={{ fontFamily: fontUI(500), fontSize: 14, color: T.text, textAlign: 'center' }}>
+                  Cancel this huddle for everyone?{paidCount > 0 ? ' Anyone who paid is refunded.' : ''}
+                </Text>
+                {cancelling ? (
+                  <ActivityIndicator color={T.accent} style={{ height: 44 }} />
+                ) : (
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <Pressable onPress={() => setConfirmingCancel(false)} style={{ flex: 1, height: 44, borderRadius: 12, backgroundColor: T.chipBg, alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontFamily: fontUI(600), fontSize: 14.5, color: T.text }}>Keep it</Text>
+                    </Pressable>
+                    <Pressable onPress={doCancel} style={{ flex: 1, height: 44, borderRadius: 12, backgroundColor: '#E5484D', alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontFamily: fontUI(600), fontSize: 14.5, color: '#fff' }}>Yes, cancel</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            ) : (
+              <Pressable onPress={() => setConfirmingCancel(true)} style={{ paddingVertical: 14, alignItems: 'center', marginTop: 8 }}>
+                <Text style={{ fontFamily: fontUI(600), fontSize: 14.5, color: '#E5484D' }}>Cancel huddle</Text>
+              </Pressable>
+            )
           )}
 
           <Pressable onPress={() => router.back()} style={{ paddingVertical: 14, alignItems: 'center', marginTop: 6 }}>

@@ -120,7 +120,7 @@ export default function HomeScreen() {
         const h = await getHuddle(activeHuddle.huddleId, activeHuddle.memberToken);
         if (!alive) return;
         // Terminal states clear the bar (and its persisted value).
-        if (['expired', 'collapsed', 'redeemed'].includes(h.status)) {
+        if (['expired', 'collapsed', 'redeemed', 'cancelled'].includes(h.status)) {
           setActiveHuddle(null);
           setHuddleStatus(null);
         } else {

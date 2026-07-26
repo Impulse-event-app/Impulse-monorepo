@@ -441,6 +441,57 @@ def submit_ballot(
     return _huddle_response(h, me)
 
 
+@router.post("/{huddle_id}/cancel", response_model=HuddleResponse)
+def cancel_huddle(
+    huddle_id: str,
+    member_token: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    user: Optional[dict] = Depends(get_optional_user),
+):
+    """Creator calls off the huddle. Before it's confirmed (active), this is a
+    clean cancel: nothing was charged while `open`; any deposit shares paid while
+    `awaiting_payment` are refunded (same rollback as a collapse — the plan never
+    became a real booking). An already-active/ended huddle can't be cancelled."""
+    h = _load_huddle(db, huddle_id)
+    me = require_member(h, user, member_token)
+
+    if me.id != h.creator_member_id:
+        raise HTTPException(status_code=403, detail="Only the huddle creator can cancel it")
+    if h.status in ("expired", "collapsed", "cancelled", "redeemed"):
+        raise HTTPException(status_code=409, detail=f"Huddle has already ended (status={h.status})")
+    if h.status == "active":
+        raise HTTPException(status_code=409, detail="This group is already confirmed and can't be cancelled")
+
+    refunded = 0
+    if h.status == "awaiting_payment":
+        for m in h.members:
+            if m.deposit_status == "paid":
+                try:
+                    payments.refund_full(
+                        payment_id=m.deposit_payment_id,
+                        reason="Impulse huddle cancelled",
+                        nonce=f"refund-{h.id}-{m.id}",
+                        merchant_id=PINCH_MERCHANT_ID,
+                    )
+                    m.deposit_status = "refunded"
+                    refunded += 1
+                except PinchError as e:
+                    logger.error("Huddle %s cancel refund failed for member %s: %s %s — needs follow-up",
+                                 h.id, m.id, e.status_code, e.body)
+
+    h.status = "cancelled"
+    touch(h)
+    db.commit()
+
+    body = "The huddle was called off — you've been refunded." if refunded else "The huddle was called off. Nobody was charged."
+    _push_all(db, h, "Huddle cancelled", body, "huddle_cancelled")
+    logger.info("Huddle %s cancelled by creator (%d refund(s))", h.id, refunded)
+
+    h = _load_huddle(db, huddle_id)
+    me = next(m for m in h.members if m.id == me.id)
+    return _huddle_response(h, me)
+
+
 def _generate_common_code(db: Session) -> str:
     """A 6-digit group code, unique across huddles AND single-booking codes so
     the one venue verification screen can never confuse the two."""

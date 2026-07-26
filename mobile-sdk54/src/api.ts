@@ -258,7 +258,7 @@ export type HuddleShare = {
 
 export type ApiHuddle = {
   id: string;
-  status: 'open' | 'voting_complete' | 'awaiting_payment' | 'active' | 'expired' | 'collapsed' | 'redeemed';
+  status: 'open' | 'voting_complete' | 'awaiting_payment' | 'active' | 'expired' | 'collapsed' | 'redeemed' | 'cancelled';
   group_size: number;
   join_token: string;
   voting_deadline: string | null;
@@ -339,5 +339,13 @@ export async function payHuddleShare(huddleId: string, body: HuddlePayBody, memb
   return publicRequest<ApiHuddle>(`/huddles/${encodeURIComponent(huddleId)}/pay${qs}`, {
     method: 'POST',
     body: JSON.stringify(body),
+  });
+}
+
+/** Creator cancels the huddle. Refunds any paid deposit shares. */
+export async function cancelHuddle(huddleId: string, memberToken?: string): Promise<ApiHuddle> {
+  const qs = memberToken ? `?member_token=${encodeURIComponent(memberToken)}` : '';
+  return publicRequest<ApiHuddle>(`/huddles/${encodeURIComponent(huddleId)}/cancel${qs}`, {
+    method: 'POST',
   });
 }
