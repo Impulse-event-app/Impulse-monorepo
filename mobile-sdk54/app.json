@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Impulse",
-    "slug": "impulseapp",
+    "slug": "impulse",
     "version": "1.0.0",
     "scheme": "impulse",
     "plugins": [
@@ -42,9 +42,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "a6efe62b-db90-439b-90e9-71b9a1ede980"
+        "projectId": "bcd9318b-55fe-4ad0-83eb-18bb6e2f9232"
       }
     },
-    "owner": "impulseapp"
+    "owner": "manojvradan"
   }
 }
