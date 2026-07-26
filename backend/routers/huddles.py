@@ -46,6 +46,19 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _ensure_user_row(db: Session, user: Optional[dict]) -> None:
+    """A signed-in member's id is a FK into public.users (huddle_members.user_id).
+    That row is normally created by a Supabase trigger / first profile sync, but
+    an invitee can open the link before either runs — so create a minimal row on
+    demand to avoid a foreign-key violation when we seat them."""
+    if not user:
+        return
+    uid = user["sub"]
+    if not db.query(User).filter(User.id == uid).first():
+        db.add(User(id=uid, email=user.get("email")))
+        db.flush()
+
+
 def candidate_deals(db: Session, group_size: int):
     """Live deals the whole group can actually attend: active, enough spots,
     a max_group_size that fits N, and not already expired."""
@@ -196,6 +209,7 @@ def create_huddle(
         )
 
     profile = db.query(User).filter(User.id == user["sub"]).first()
+    _ensure_user_row(db, user)   # creator FK safety (may not have a users row yet)
     # Prefer the name the client sends (its computed display name), then the
     # profile's full name, then the email's local part as a username, then a
     # neutral fallback — never a role label like "Creator".
@@ -271,6 +285,10 @@ def join_huddle(
         display_name = (profile.full_name if profile and profile.full_name else None) or ""
     if not display_name:
         raise HTTPException(status_code=400, detail="display_name is required")
+
+    # A signed-in invitee may not have a public.users row yet — create it so the
+    # member's user_id FK is valid.
+    _ensure_user_row(db, user)
 
     member = HuddleMember(
         huddle_id=huddle.id,
