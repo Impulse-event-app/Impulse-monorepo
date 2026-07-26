@@ -281,10 +281,10 @@ export type HuddleJoinResult = {
 };
 
 /** Start a huddle (signed-in only). Creator takes the first seat. */
-export async function createHuddle(groupSize: number): Promise<HuddleJoinResult> {
+export async function createHuddle(groupSize: number, displayName?: string): Promise<HuddleJoinResult> {
   return request<HuddleJoinResult>('/huddles', {
     method: 'POST',
-    body: JSON.stringify({ group_size: groupSize }),
+    body: JSON.stringify({ group_size: groupSize, display_name: displayName }),
   });
 }
 

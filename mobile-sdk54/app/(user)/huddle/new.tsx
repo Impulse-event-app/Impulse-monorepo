@@ -8,7 +8,7 @@ import { createHuddle, ApiError } from '../../../src/api';
 import { Btn, HuddleMark, Stepper } from '../../../src/components';
 
 export default function NewHuddlePopup() {
-  const { T, setActiveHuddle } = useApp();
+  const { T, profile, setActiveHuddle } = useApp();
   const router = useRouter();
   const [size, setSize] = useState(4);
   const [loading, setLoading] = useState(false);
@@ -16,7 +16,10 @@ export default function NewHuddlePopup() {
   const start = async () => {
     setLoading(true);
     try {
-      const res = await createHuddle(size);
+      // Pass the app's computed display name so the creator shows as their
+      // username, not the "Creator" fallback.
+      const myName = profile.name && profile.name !== 'You' ? profile.name : undefined;
+      const res = await createHuddle(size, myName);
       setActiveHuddle({ huddleId: res.huddle.id, memberToken: res.member_token });
       router.replace(`/(user)/huddle/${res.huddle.id}?mt=${encodeURIComponent(res.member_token)}`);
     } catch (err) {

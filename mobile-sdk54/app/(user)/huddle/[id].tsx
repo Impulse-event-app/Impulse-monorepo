@@ -74,7 +74,7 @@ function AvatarSlot({ name, voted, empty }: { name?: string; voted?: boolean; em
         {empty
           ? <Text style={{ fontFamily: fontUI(400), fontSize: 18, color: T.faint }}>·</Text>
           : <Text style={{ fontFamily: fontDisplay(600), fontSize: 19, color: T.accent }}>{initial || '?'}</Text>}
-        {voted && (
+        {voted && !empty && (
           <View style={{ position: 'absolute', right: -2, bottom: -2, width: 18, height: 18, borderRadius: 999, backgroundColor: T.accent, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: T.bg }}>
             <Text style={{ fontSize: 9, color: T.accentInk, fontFamily: fontMono(700) }}>✓</Text>
           </View>

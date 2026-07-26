@@ -192,7 +192,16 @@ def create_huddle(
         )
 
     profile = db.query(User).filter(User.id == user["sub"]).first()
-    display_name = (profile.full_name if profile and profile.full_name else None) or "Creator"
+    # Prefer the name the client sends (its computed display name), then the
+    # profile's full name, then the email's local part as a username, then a
+    # neutral fallback — never a role label like "Creator".
+    email_username = (profile.email.split("@")[0] if profile and profile.email else None)
+    display_name = (
+        (body.display_name or "").strip()
+        or (profile.full_name.strip() if profile and profile.full_name else None)
+        or email_username
+        or "You"
+    )[:40]
 
     huddle = Huddle(
         group_size=body.group_size,

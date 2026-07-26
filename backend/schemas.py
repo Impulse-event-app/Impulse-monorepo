@@ -320,6 +320,7 @@ class StatsResponse(BaseModel):
 
 class HuddleCreate(BaseModel):
     group_size: int   # 2–10
+    display_name: Optional[str] = None   # creator's name; falls back to profile
 
 
 class HuddleJoin(BaseModel):
