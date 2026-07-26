@@ -1,17 +1,26 @@
 "use client";
 
+import { Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { bookingApi, venueApi, type Booking, type Deal } from "@/lib/api";
 import { useVenue } from "@/providers/VenueProvider";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { cn } from "@/lib/utils";
-import Link from "next/link";
-import { Suspense } from "react";
+import { FONT_DISPLAY, FONT_MONO, card, toneBadge, type Tone } from "@/lib/ui";
+
+const COLS = "1fr 1fr 1fr 1fr 1.2fr 1fr";
+
+const STATUS_TONE: Record<Booking["status"], Tone> = {
+  confirmed: "soft",
+  attended: "solid",
+  cancelled: "danger",
+  pending: "neutral",
+};
 
 export default function BookingsPage() {
   return (
-    <Suspense fallback={<div className="text-sm text-gray-400">Loading…</div>}>
+    <Suspense fallback={<div style={{ padding: 44, color: "var(--faint)", fontSize: 14 }}>Loading…</div>}>
       <BookingsContent />
     </Suspense>
   );
@@ -39,90 +48,65 @@ function BookingsContent() {
   if (!venue) return null;
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold" style={{color:'var(--text)'}}>Bookings</h1>
-        <p className="mt-1 text-sm" style={{color:'var(--muted)'}}>Who&apos;s coming</p>
-      </div>
+    <div style={{ padding: "38px 44px" }}>
+      <div style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 8 }}>Bookings</div>
+      <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 32, letterSpacing: "-.02em", margin: "0 0 24px" }}>Bookings</h1>
 
-      {/* Deal picker */}
+      {/* Deal filter pills */}
       {deals.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {deals.map((d) => (
-            <Link
-              key={d.id}
-              href={`/dashboard/bookings?deal_id=${d.id}`}
-              className="rounded-full px-3 py-1.5 text-sm font-medium transition-colors"
-              style={d.id === selectedDealId
-                ? {background:'var(--accent)', color:'var(--accent-ink)'}
-                : {background:'var(--surface)', color:'var(--muted)', border:'1px solid var(--line2)'}}
-            >
-              {d.title}
-            </Link>
-          ))}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
+          {deals.map((d) => {
+            const on = d.id === selectedDealId;
+            return (
+              <Link
+                key={d.id}
+                href={`/dashboard/bookings?deal_id=${d.id}`}
+                style={{
+                  padding: "9px 15px", borderRadius: 999, fontSize: 13, fontWeight: 600,
+                  border: `1px solid ${on ? "transparent" : "var(--line2)"}`,
+                  background: on ? "var(--accent)" : "var(--surface)",
+                  color: on ? "var(--accent-ink)" : "var(--muted)",
+                }}
+              >
+                {d.title}
+              </Link>
+            );
+          })}
         </div>
       )}
 
       {isLoading ? (
-        <div className="space-y-2">
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-12 animate-pulse rounded-xl" style={{background:'var(--surface)'}} />
+            <div key={i} style={{ ...card, borderRadius: 14, height: 56, animation: "pm-glow 1.4s ease-in-out infinite" }} />
           ))}
         </div>
       ) : bookings.length === 0 ? (
-        <div className="rounded-2xl p-10 text-center" style={{background:'var(--surface)', border:'1px solid var(--line)'}}>
-          <p style={{color:'var(--muted)'}}>No bookings for this deal yet.</p>
+        <div style={{ ...card, borderRadius: 16, padding: 48, textAlign: "center" }}>
+          <p style={{ color: "var(--muted)", margin: 0 }}>No bookings for this deal yet.</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl" style={{background:'var(--surface)', border:'1px solid var(--line)'}}>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs font-semibold uppercase tracking-wider"
-                style={{borderBottom:'1px solid var(--line)', background:'var(--surface2)', color:'var(--faint)'}}>
-                <th className="px-4 py-3">Code</th>
-                <th className="px-4 py-3">Slot</th>
-                <th className="px-4 py-3">Party</th>
-                <th className="px-4 py-3">Paid</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Redeemed at</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bookings.map((b) => (
-                <tr key={b.id} style={{borderBottom:'1px solid var(--line)'}}>
-                  <td className="px-4 py-3 font-mono font-semibold" style={{color:'var(--accent)'}}>
-                    {b.confirmation_code}
-                  </td>
-                  <td className="px-4 py-3" style={{color:'var(--muted)'}}>{b.slot_time}</td>
-                  <td className="px-4 py-3" style={{color:'var(--muted)'}}>
-                    {b.num_people} {b.num_people === 1 ? 'person' : 'people'}
-                  </td>
-                  <td className="px-4 py-3" style={{color:'var(--text)'}}>{formatCurrency(b.total_paid)}</td>
-                  <td className="px-4 py-3"><StatusBadge status={b.status} /></td>
-                  <td className="px-4 py-3 text-xs" style={{color:'var(--faint)'}}>
-                    {b.redeemed_at ? formatDate(b.redeemed_at) : '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ ...card, borderRadius: 16, overflow: "hidden" }}>
+          <div style={{ display: "grid", gridTemplateColumns: COLS, gap: 14, padding: "14px 22px", background: "var(--surface2)", fontFamily: FONT_MONO, fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--faint)" }}>
+            <span>Code</span><span>Slot</span><span>Party</span><span>Paid</span><span>Status</span><span>Redeemed</span>
+          </div>
+          {bookings.map((b) => {
+            const t = toneBadge(STATUS_TONE[b.status]);
+            return (
+              <div key={b.id} style={{ display: "grid", gridTemplateColumns: COLS, gap: 14, alignItems: "center", padding: "16px 22px", borderTop: "1px solid var(--line)" }}>
+                <span style={{ fontFamily: FONT_MONO, fontSize: 14, fontWeight: 700, letterSpacing: ".05em" }}>{b.confirmation_code ?? "—"}</span>
+                <span style={{ fontSize: 14, color: "var(--muted)" }}>{b.slot_time}</span>
+                <span style={{ fontSize: 14 }}>{b.num_people} {b.num_people === 1 ? "guest" : "guests"}</span>
+                <span style={{ fontWeight: 600, fontSize: 14 }}>{formatCurrency(b.total_paid)}</span>
+                <span>
+                  <span style={t.badge}><span style={t.dot} />{b.status}</span>
+                </span>
+                <span style={{ fontFamily: FONT_MONO, fontSize: 13, color: "var(--muted)" }}>{b.redeemed_at ? formatDate(b.redeemed_at) : "—"}</span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
-  );
-}
-
-function StatusBadge({ status }: { status: Booking["status"] }) {
-  const styles: Record<Booking["status"], React.CSSProperties> = {
-    confirmed: {background:'rgba(59,130,246,0.12)', color:'#60a5fa'},
-    attended:  {background:'rgba(255,90,77,0.12)',  color:'var(--accent)'},
-    cancelled: {background:'rgba(244,241,234,0.07)', color:'var(--faint)'},
-    pending:   {background:'rgba(244,241,234,0.07)', color:'var(--faint)'},
-  };
-  return (
-    <span className="rounded-full px-2 py-0.5 text-xs font-semibold capitalize"
-      style={styles[status]}>
-      {status}
-    </span>
   );
 }

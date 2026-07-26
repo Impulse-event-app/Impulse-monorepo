@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { DealForm } from "@/components/DealForm";
 import { dealApi, type DealCreate } from "@/lib/api";
 import { useVenue } from "@/providers/VenueProvider";
+import { FONT_DISPLAY } from "@/lib/ui";
 
 export default function NewDealPage() {
   const { venue } = useVenue();
@@ -20,14 +21,12 @@ export default function NewDealPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">New deal</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Create a discounted slot for {venue.name}
-        </p>
-      </div>
-      <DealForm venueId={venue.id} onSubmit={handleSubmit} submitLabel="Create deal" />
+    <div style={{ padding: "38px 44px", maxWidth: 760 }}>
+      <button onClick={() => router.push("/dashboard/deals")} style={{ background: "none", border: "none", color: "var(--muted)", fontSize: 13, cursor: "pointer", marginBottom: 14, padding: 0 }}>
+        ← Back to deals
+      </button>
+      <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 32, letterSpacing: "-.02em", margin: "0 0 30px" }}>New deal</h1>
+      <DealForm venueId={venue.id} onSubmit={handleSubmit} submitLabel="Save deal" />
     </div>
   );
 }

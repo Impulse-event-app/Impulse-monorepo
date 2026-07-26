@@ -1,15 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   bookingApi,
   huddleApi,
   type RedeemResponse,
   type HuddleVerifyResponse,
+  type HuddleVerifyMember,
   type HuddleRedeemResponse,
 } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
-import { CheckCircle, AlertTriangle, XCircle, Users } from "lucide-react";
+import { FONT_DISPLAY, FONT_MONO, card, btnPrimary, btnGhost, toneBadge } from "@/lib/ui";
 
 type BookingState =
   | { kind: "success"; data: RedeemResponse }
@@ -22,7 +23,6 @@ type BookingState =
 type RedeemState =
   | { kind: "idle" }
   | { kind: "loading" }
-  // Huddle group codes: preview → confirm → per-member result.
   | { kind: "huddle_preview"; data: HuddleVerifyResponse; code: string }
   | { kind: "huddle_confirming"; data: HuddleVerifyResponse; code: string }
   | { kind: "huddle_result"; data: HuddleRedeemResponse; venueName: string }
@@ -33,6 +33,9 @@ const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 export default function RedeemPage() {
   const [code, setCode] = useState("");
   const [state, setState] = useState<RedeemState>({ kind: "idle" });
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const showCard = state.kind !== "idle" && state.kind !== "loading";
 
   async function redeem(rawCode: string) {
     const trimmed = rawCode.replace(/\D/g, "").slice(0, 6);
@@ -40,7 +43,7 @@ export default function RedeemPage() {
     setCode(trimmed);
     setState({ kind: "loading" });
 
-    // 1) Is this a group (huddle) code? Preview it before charging.
+    // 1) Group (huddle) code? Preview before charging.
     try {
       const hres = await huddleApi.verify(trimmed);
       if (hres.ok) {
@@ -56,54 +59,35 @@ export default function RedeemPage() {
         setState({ kind: "wrong_venue", code: trimmed });
         return;
       }
-      // 404 → not a huddle code; fall through to the booking path below.
+      // 404 → not a huddle code; fall through.
     } catch {
-      // network issue on the huddle probe — fall through to booking path
+      // network issue on the huddle probe — fall through
     }
 
-    // 2) Otherwise treat it as a single-booking code (existing behaviour).
+    // 2) Single-booking code.
     try {
       const res = await bookingApi.redeem(trimmed);
-
       if (res.ok) {
         const data: RedeemResponse = await res.json();
         setState({ kind: "success", data });
         return;
       }
-
       if (res.status === 409) {
         let data: RedeemResponse | null = null;
-        try {
-          data = await res.json();
-        } catch {
-          // ignore
-        }
-        const redeemedAt =
-          res.headers.get("X-Redeemed-At") ?? data?.redeemed_at ?? "unknown time";
-
+        try { data = await res.json(); } catch { /* ignore */ }
+        const redeemedAt = res.headers.get("X-Redeemed-At") ?? data?.redeemed_at ?? "unknown time";
         if (data?.status === "cancelled") {
           setState({ kind: "cancelled", code: trimmed });
         } else if (!data?.status) {
           const detail = (data as { detail?: string } | null)?.detail;
           setState({ kind: "error", message: detail ?? "Ticket cannot be redeemed" });
         } else {
-          setState({
-            kind: "already_redeemed",
-            data: data!,
-            redeemedAt: typeof redeemedAt === "string" ? redeemedAt : String(redeemedAt),
-          });
+          setState({ kind: "already_redeemed", data: data!, redeemedAt: typeof redeemedAt === "string" ? redeemedAt : String(redeemedAt) });
         }
         return;
       }
-
-      if (res.status === 404) {
-        setState({ kind: "not_found", code: trimmed });
-        return;
-      }
-      if (res.status === 403) {
-        setState({ kind: "wrong_venue", code: trimmed });
-        return;
-      }
+      if (res.status === 404) { setState({ kind: "not_found", code: trimmed }); return; }
+      if (res.status === 403) { setState({ kind: "wrong_venue", code: trimmed }); return; }
       setState({ kind: "error", message: `Unexpected error (${res.status})` });
     } catch (err: unknown) {
       setState({ kind: "error", message: err instanceof Error ? err.message : "Network error" });
@@ -120,237 +104,231 @@ export default function RedeemPage() {
     }
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    redeem(code);
-  }
-
   function reset() {
     setState({ kind: "idle" });
     setCode("");
+    inputRef.current?.focus();
   }
 
+  const digits = Array.from({ length: 6 }, (_, i) => code[i] ?? "");
+
   return (
-    <div className="mx-auto max-w-md space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Redeem ticket</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
-          Enter the customer&apos;s 6-digit code
+    <div style={{ padding: "38px 44px", maxWidth: 900, margin: "0 auto" }}>
+      {/* Header */}
+      <div style={{ textAlign: "center", marginBottom: 30 }}>
+        <div style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 10 }}>Front of house</div>
+        <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 34, letterSpacing: "-.02em", margin: "0 0 6px" }}>Redeem a code</h1>
+        <p style={{ color: "var(--muted)", fontSize: 14, margin: 0 }}>
+          Enter the guest&apos;s 6-digit code. Group codes preview every member before you charge.
         </p>
       </div>
 
-      {/* Input area */}
-      <div className="rounded-2xl p-6 space-y-4" style={{ background: "var(--surface)", border: "1px solid var(--line)" }}>
-        <form onSubmit={handleSubmit} className="flex gap-3">
-          <input
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            inputMode="numeric"
-            autoFocus
-            className="flex-1 rounded-lg px-4 py-3 text-center font-mono text-2xl font-semibold tracking-[0.4em] focus:outline-none focus:ring-1"
-            style={{ background: "var(--ph)", border: "1px solid var(--line2)", color: "var(--text)", "--tw-ring-color": "var(--accent)" } as React.CSSProperties}
-            placeholder="000000"
-            maxLength={6}
-            spellCheck={false}
-          />
-          <button
-            type="submit"
-            disabled={code.length < 6 || state.kind === "loading"}
-            className="rounded-lg px-5 py-3 text-sm font-semibold transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
-          >
-            {state.kind === "loading" ? "Checking…" : "Redeem"}
-          </button>
-        </form>
+      {/* Code entry — 6 boxes over a hidden input */}
+      <div style={{ position: "relative", display: "flex", gap: 12, justifyContent: "center", marginBottom: 18 }}>
+        <input
+          ref={inputRef}
+          value={code}
+          autoFocus
+          inputMode="numeric"
+          maxLength={6}
+          spellCheck={false}
+          onChange={(e) => {
+            const next = e.target.value.replace(/\D/g, "").slice(0, 6);
+            setCode(next);
+            if (state.kind !== "idle" && state.kind !== "loading") setState({ kind: "idle" });
+            if (next.length === 6) redeem(next);
+          }}
+          onKeyDown={(e) => { if (e.key === "Enter") redeem(code); }}
+          aria-label="6-digit confirmation code"
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "text", border: "none", background: "transparent" }}
+        />
+        {digits.map((d, i) => {
+          const active = i === code.length;
+          return (
+            <div
+              key={i}
+              onClick={() => inputRef.current?.focus()}
+              style={{
+                width: 64, height: 80, borderRadius: 14,
+                border: `1.5px solid ${active ? "var(--accent)" : "var(--line2)"}`,
+                background: "var(--surface)", display: "grid", placeItems: "center",
+                fontFamily: FONT_MONO, fontWeight: 700, fontSize: 34, color: "var(--text)",
+              }}
+            >
+              {d}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ textAlign: "center", marginBottom: 28, minHeight: 18 }}>
+        {state.kind === "loading" && <span style={{ fontFamily: FONT_MONO, fontSize: 12, color: "var(--muted)" }}>● CHECKING…</span>}
+        {(state.kind === "huddle_preview" || state.kind === "huddle_confirming") && (
+          <span style={{ fontFamily: FONT_MONO, fontSize: 12, color: "var(--accent)" }}>● GROUP HUDDLE CODE · {state.data.group_size} members</span>
+        )}
       </div>
 
       {/* Group preview / confirm */}
       {(state.kind === "huddle_preview" || state.kind === "huddle_confirming") && (
-        <HuddlePreviewCard
-          data={state.data}
-          confirming={state.kind === "huddle_confirming"}
-          onConfirm={() => confirmHuddle(state.data, state.code)}
-          onCancel={reset}
-        />
+        <HuddlePreviewCard data={state.data} confirming={state.kind === "huddle_confirming"} onConfirm={() => confirmHuddle(state.data, state.code)} onCancel={reset} />
       )}
 
       {/* Group result */}
-      {state.kind === "huddle_result" && (
-        <HuddleResultCard data={state.data} venueName={state.venueName} onReset={reset} />
-      )}
+      {state.kind === "huddle_result" && <HuddleResultCard data={state.data} venueName={state.venueName} onReset={reset} />}
 
       {/* Booking result */}
-      {state.kind !== "idle" &&
-        state.kind !== "loading" &&
-        !state.kind.startsWith("huddle_") && (
-          <ResultCard state={state as BookingState} onReset={reset} />
-        )}
+      {showCard && !state.kind.startsWith("huddle_") && <ResultCard state={state as BookingState} onReset={reset} />}
     </div>
   );
 }
 
-// ── Huddle: group preview with a single confirm button ────────────────────────
+// ── Huddle: group preview ─────────────────────────────────────────────────────
+
+function memberNote(m: HuddleVerifyMember): string {
+  if (m.balance_status === "declined") return "Card declined · retry at till";
+  if (m.balance_status === "paid") return "Paid in app";
+  return "Card on file";
+}
 
 function HuddlePreviewCard({
-  data,
-  confirming,
-  onConfirm,
-  onCancel,
+  data, confirming, onConfirm, onCancel,
 }: {
   data: HuddleVerifyResponse;
   confirming: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const readyCount = data.members.filter((m) => m.balance_status !== "declined").length;
+  const declinedCount = data.members.length - readyCount;
+
   return (
-    <div
-      className="rounded-2xl p-6 space-y-4"
-      style={{ background: "rgba(255,90,77,0.10)", border: "1px solid rgba(255,90,77,0.25)", color: "var(--text)" }}
-    >
-      <div className="flex items-start gap-4">
-        <Users size={28} className="shrink-0" style={{ color: "var(--accent)" }} />
-        <div className="flex-1">
-          <p className="font-semibold text-lg leading-tight">Group of {data.group_size}</p>
-          <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
-            {data.deal_title} · {data.slot}
-          </p>
+    <>
+      <div style={{ ...card, border: "1px solid var(--line2)", overflow: "hidden", boxShadow: "var(--shadow-sm)" }}>
+        {/* header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px", background: "var(--surface2)", borderBottom: "1px solid var(--line)" }}>
+          <div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18 }}>{data.deal_title} · Huddle</div>
+            <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>{data.venue_name} · {data.slot} slot</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontFamily: FONT_MONO, fontSize: 10, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--faint)" }}>Total to charge</div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 26, color: "var(--accent)" }}>{money(data.total_balance_cents)}</div>
+          </div>
+        </div>
+
+        {/* members */}
+        <div style={{ padding: "8px 24px" }}>
+          {data.members.map((m, i) => {
+            const ready = m.balance_status !== "declined";
+            const t = toneBadge(ready ? "soft" : "danger");
+            return (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 0", borderBottom: i === data.members.length - 1 ? "none" : "1px solid var(--line)" }}>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--surface2)", border: "1px solid var(--line)", display: "grid", placeItems: "center", fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15, color: "var(--muted)" }}>
+                  {m.name.charAt(0).toUpperCase()}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 15 }}>{m.name}</div>
+                  <div style={{ fontSize: 12, color: "var(--faint)" }}>{memberNote(m)}</div>
+                </div>
+                <div style={{ fontFamily: FONT_MONO, fontWeight: 700, fontSize: 16 }}>{money(m.balance_cents)}</div>
+                <span style={t.badge}><span style={t.dot} />{ready ? "Ready" : "Declined"}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* footer */}
+        <div style={{ display: "flex", gap: 12, padding: "20px 24px", background: "var(--surface2)", borderTop: "1px solid var(--line)" }}>
+          <button onClick={onCancel} disabled={confirming} style={{ ...btnGhost, flex: 1, padding: 15, fontSize: 15 }}>Cancel</button>
+          <button onClick={onConfirm} disabled={confirming} style={{ ...btnPrimary, flex: 2, padding: 15, fontSize: 15, opacity: confirming ? 0.6 : 1, cursor: confirming ? "not-allowed" : "pointer" }}>
+            {confirming ? "Charging the group…" : `Charge group · ${money(data.total_balance_cents)} →`}
+          </button>
         </div>
       </div>
 
-      <ul className="divide-y" style={{ borderColor: "var(--line)" }}>
-        {data.members.map((m, i) => (
-          <li key={i} className="flex items-center justify-between py-2 text-sm">
-            <span className="font-medium">{m.name}</span>
-            <span style={{ color: "var(--muted)" }}>{money(m.balance_cents)}</span>
-          </li>
-        ))}
-      </ul>
-
-      <div className="flex items-center justify-between text-sm font-semibold pt-1">
-        <span>Total balance to charge</span>
-        <span>{money(data.total_balance_cents)}</span>
+      {/* status strip */}
+      <div style={{ display: "flex", gap: 14, marginTop: 20 }}>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, padding: "16px 18px", borderRadius: 14, border: "1px solid var(--line)", background: "var(--surface)" }}>
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />
+          <div style={{ fontSize: 13, color: "var(--muted)" }}><b style={{ color: "var(--text)" }}>{readyCount} member{readyCount === 1 ? "" : "s"} ready</b> — cards authorised and will settle instantly.</div>
+        </div>
+        {declinedCount > 0 && (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, padding: "16px 18px", borderRadius: 14, border: "1px solid color-mix(in oklab, var(--bad) 40%, var(--line))", background: "color-mix(in oklab, var(--bad) 8%, var(--surface))" }}>
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--bad)", flexShrink: 0 }} />
+            <div style={{ fontSize: 13, color: "var(--muted)" }}><b style={{ color: "var(--text)" }}>{declinedCount} declined</b> — collect at the till. You can still charge the rest.</div>
+          </div>
+        )}
       </div>
-
-      <button
-        onClick={onConfirm}
-        disabled={confirming}
-        className="w-full rounded-lg py-3 text-sm font-semibold transition-opacity disabled:opacity-60"
-        style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
-      >
-        {confirming ? "Charging the group…" : `Confirm & charge ${money(data.total_balance_cents)}`}
-      </button>
-      <button
-        onClick={onCancel}
-        disabled={confirming}
-        className="w-full rounded-lg py-2 text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
-        style={{ background: "var(--chip-bg)", color: "var(--muted)" }}
-      >
-        Cancel
-      </button>
-    </div>
+    </>
   );
 }
 
 // ── Huddle: per-member charge result ──────────────────────────────────────────
 
-function HuddleResultCard({
-  data,
-  venueName,
-  onReset,
-}: {
-  data: HuddleRedeemResponse;
-  venueName: string;
-  onReset: () => void;
-}) {
+function HuddleResultCard({ data, venueName, onReset }: { data: HuddleRedeemResponse; venueName: string; onReset: () => void }) {
   const allPaid = data.declines === 0;
   return (
-    <div
-      className="rounded-2xl p-6 space-y-4"
-      style={
-        allPaid
-          ? { background: "rgba(255,90,77,0.10)", border: "1px solid rgba(255,90,77,0.25)", color: "var(--text)" }
-          : { background: "rgba(251,191,36,0.10)", border: "1px solid rgba(251,191,36,0.25)", color: "var(--text)" }
-      }
-    >
-      <div className="flex items-start gap-4">
-        {allPaid ? (
-          <CheckCircle size={28} className="shrink-0" style={{ color: "var(--accent)" }} />
-        ) : (
-          <AlertTriangle size={28} className="shrink-0" style={{ color: "#fbbf24" }} />
-        )}
-        <div className="flex-1">
-          <p className="font-semibold text-lg leading-tight">
+    <div style={{ ...card, border: "1px solid var(--line2)", padding: 24, boxShadow: "var(--shadow-sm)" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 18 }}>
+        <div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 19 }}>
             Group redeemed{allPaid ? " — all paid" : ` — ${data.declines} to collect`}
-          </p>
-          <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
-            {money(data.total_charged_cents)} charged at {venueName}.
-          </p>
+          </div>
+          <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 3 }}>{money(data.total_charged_cents)} charged at {venueName}.</div>
         </div>
+        <span style={{ width: 12, height: 12, borderRadius: "50%", background: allPaid ? "var(--good)" : "var(--warn)", marginTop: 6 }} />
       </div>
 
-      <ul className="space-y-2">
-        {data.members.map((m, i) => (
-          <li key={i}>
-            <div className="flex items-center justify-between text-sm">
-              <span className="font-medium">{m.name}</span>
-              <span style={{ color: m.status === "paid" ? "var(--muted)" : "#fbbf24" }}>
-                {m.status === "paid" ? `${money(m.balance_cents)} charged` : "declined"}
-              </span>
+      <div>
+        {data.members.map((m, i) => {
+          const paid = m.status === "paid";
+          const t = toneBadge(paid ? "good" : "danger");
+          return (
+            <div key={i}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 0", borderBottom: "1px solid var(--line)" }}>
+                <span style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>{m.name}</span>
+                <span style={{ fontFamily: FONT_MONO, fontSize: 14 }}>{money(m.balance_cents)}</span>
+                <span style={t.badge}><span style={t.dot} />{paid ? "Charged" : "Declined"}</span>
+              </div>
+              {m.warning && (
+                <p style={{ margin: "8px 0 4px", borderRadius: 10, padding: "10px 12px", fontSize: 13, fontWeight: 600, background: "color-mix(in oklab, var(--warn) 14%, transparent)", border: "1px solid color-mix(in oklab, var(--warn) 35%, transparent)", color: "var(--text)" }}>{m.warning}</p>
+              )}
             </div>
-            {m.warning && (
-              <p
-                className="mt-1 rounded-lg px-3 py-2 text-sm font-semibold"
-                style={{ background: "rgba(251,191,36,0.15)", border: "1px solid rgba(251,191,36,0.35)" }}
-              >
-                {m.warning}
-              </p>
-            )}
-          </li>
-        ))}
-      </ul>
+          );
+        })}
+      </div>
 
-      <button
-        onClick={onReset}
-        className="w-full rounded-lg py-2 text-sm font-semibold transition-opacity hover:opacity-80"
-        style={{ background: "var(--chip-bg)", color: "var(--muted)" }}
-      >
-        Check another
-      </button>
+      <button onClick={onReset} style={{ ...btnGhost, width: "100%", marginTop: 18, padding: 13 }}>Check another</button>
     </div>
   );
 }
 
-// ── Booking result (unchanged behaviour) ──────────────────────────────────────
+// ── Single-booking result ─────────────────────────────────────────────────────
 
 function ResultCard({ state, onReset }: { state: BookingState; onReset: () => void }) {
-  const isGood = state.kind === "success";
-  const isWarn = state.kind === "already_redeemed" || state.kind === "cancelled";
-
-  const cardStyle: React.CSSProperties = isGood
-    ? { background: "rgba(255,90,77,0.10)", border: "1px solid rgba(255,90,77,0.25)", color: "var(--text)" }
-    : isWarn
-    ? { background: "rgba(251,191,36,0.10)", border: "1px solid rgba(251,191,36,0.25)", color: "var(--text)" }
-    : { background: "rgba(244,241,234,0.04)", border: "1px solid var(--line2)", color: "var(--text)" };
+  const tone: "good" | "warn" | "bad" =
+    state.kind === "success" ? "good" : state.kind === "already_redeemed" || state.kind === "cancelled" ? "warn" : "bad";
+  const toneVar = tone === "good" ? "var(--good)" : tone === "warn" ? "var(--warn)" : "var(--bad)";
 
   return (
-    <div className="rounded-2xl p-6 space-y-4" style={cardStyle}>
-      <div className="flex items-start gap-4">
-        <ResultIcon kind={state.kind} />
-        <div className="flex-1">
-          <p className="font-semibold text-lg leading-tight">{resultTitle(state)}</p>
-          <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>{resultBody(state)}</p>
+    <div style={{ ...card, border: `1px solid color-mix(in oklab, ${toneVar} 35%, var(--line2))`, background: `color-mix(in oklab, ${toneVar} 7%, var(--surface))`, padding: 24, boxShadow: "var(--shadow-sm)" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+        <span style={{ width: 12, height: 12, borderRadius: "50%", background: toneVar, marginTop: 7, flexShrink: 0 }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 19 }}>{resultTitle(state)}</div>
+          <div style={{ fontSize: 14, color: "var(--muted)", marginTop: 3 }}>{resultBody(state)}</div>
 
           {(state.kind === "success" || state.kind === "already_redeemed") && (
-            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+            <dl style={{ marginTop: 16, display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 18px", fontSize: 14 }}>
               <dt style={{ color: "var(--faint)" }}>Slot</dt>
-              <dd className="font-medium">{state.data.slot_time}</dd>
+              <dd style={{ fontWeight: 600, margin: 0 }}>{state.data.slot_time}</dd>
               <dt style={{ color: "var(--faint)" }}>Party size</dt>
-              <dd className="font-medium">{state.data.num_people}</dd>
+              <dd style={{ fontWeight: 600, margin: 0 }}>{state.data.num_people}</dd>
               {state.data.balance_amount_cents != null && (
                 <>
                   <dt style={{ color: "var(--faint)" }}>Balance</dt>
-                  <dd className="font-medium">
-                    ${(state.data.balance_amount_cents / 100).toFixed(2)}
+                  <dd style={{ fontWeight: 600, margin: 0 }}>
+                    {money(state.data.balance_amount_cents)}
                     {state.data.payment_status === "fully_paid" ? " — charged" : ""}
                   </dd>
                 </>
@@ -359,65 +337,34 @@ function ResultCard({ state, onReset }: { state: BookingState; onReset: () => vo
           )}
 
           {state.kind === "success" && state.data.payment_warning && (
-            <p
-              className="mt-3 rounded-lg px-3 py-2 text-sm font-semibold"
-              style={{ background: "rgba(251,191,36,0.15)", border: "1px solid rgba(251,191,36,0.35)" }}
-            >
-              {state.data.payment_warning}
-            </p>
+            <p style={{ marginTop: 14, borderRadius: 10, padding: "10px 12px", fontSize: 13, fontWeight: 600, background: "color-mix(in oklab, var(--warn) 14%, transparent)", border: "1px solid color-mix(in oklab, var(--warn) 35%, transparent)", color: "var(--text)" }}>{state.data.payment_warning}</p>
           )}
         </div>
       </div>
 
-      <button
-        onClick={onReset}
-        className="w-full rounded-lg py-2 text-sm font-semibold transition-opacity hover:opacity-80"
-        style={{ background: "var(--chip-bg)", color: "var(--muted)" }}
-      >
-        Check another
-      </button>
+      <button onClick={onReset} style={{ ...btnGhost, width: "100%", marginTop: 18, padding: 13 }}>Check another</button>
     </div>
   );
 }
 
-function ResultIcon({ kind }: { kind: BookingState["kind"] }) {
-  if (kind === "success")
-    return <CheckCircle size={28} className="shrink-0" style={{ color: "var(--accent)" }} />;
-  if (kind === "already_redeemed" || kind === "cancelled")
-    return <AlertTriangle size={28} className="shrink-0" style={{ color: "#fbbf24" }} />;
-  return <XCircle size={28} className="shrink-0" style={{ color: "var(--faint)" }} />;
-}
-
 function resultTitle(state: BookingState): string {
   switch (state.kind) {
-    case "success":
-      return "Valid ticket — enjoy!";
-    case "already_redeemed":
-      return "Already redeemed";
-    case "cancelled":
-      return "Booking cancelled";
-    case "not_found":
-      return "Code not found";
-    case "wrong_venue":
-      return "Wrong venue";
-    case "error":
-      return "Something went wrong";
+    case "success": return "Valid ticket — enjoy!";
+    case "already_redeemed": return "Already redeemed";
+    case "cancelled": return "Booking cancelled";
+    case "not_found": return "Code not found";
+    case "wrong_venue": return "Wrong venue";
+    case "error": return "Something went wrong";
   }
 }
 
 function resultBody(state: BookingState): string {
   switch (state.kind) {
-    case "success":
-      return `${state.data.confirmation_code} marked as attended.`;
-    case "already_redeemed":
-      return `This ticket was redeemed at ${formatDate(state.redeemedAt)}.`;
-    case "cancelled":
-      return `${state.code} belongs to a cancelled booking.`;
-    case "not_found":
-      return `No booking found for ${state.code}.`;
-    case "wrong_venue":
-      return `${state.code} belongs to a different venue.`;
-    case "error":
-      return state.message;
+    case "success": return `${state.data.confirmation_code} marked as attended.`;
+    case "already_redeemed": return `This ticket was redeemed at ${formatDate(state.redeemedAt)}.`;
+    case "cancelled": return `${state.code} belongs to a cancelled booking.`;
+    case "not_found": return `No booking found for ${state.code}.`;
+    case "wrong_venue": return `${state.code} belongs to a different venue.`;
+    case "error": return state.message;
   }
 }

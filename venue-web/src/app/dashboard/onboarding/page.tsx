@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { venueApi, type VenueCreate } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { useVenue } from "@/providers/VenueProvider";
+import { useTheme } from "@/providers/ThemeProvider";
+import { FONT_DISPLAY, FONT_MONO, card, fieldLabel, fieldInput, btnPrimary, switchTrack, switchKnob } from "@/lib/ui";
 
 const PHOTO_BUCKET = "venue-photos";
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -26,8 +28,6 @@ const ACCESSIBILITY_FEATURES = [
   "Service animal friendly",
 ];
 
-// ── Opening hours types ───────────────────────────────────────────────────────
-
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 type Day = typeof DAYS[number];
 
@@ -40,18 +40,16 @@ interface DayHours {
 type WeekHours = Record<Day, DayHours>;
 
 const DEFAULT_WEEK: WeekHours = {
-  Mon: { open: true,  from: "11:00", to: "22:00" },
-  Tue: { open: true,  from: "11:00", to: "22:00" },
-  Wed: { open: true,  from: "11:00", to: "22:00" },
-  Thu: { open: true,  from: "11:00", to: "22:00" },
-  Fri: { open: true,  from: "11:00", to: "23:00" },
-  Sat: { open: true,  from: "10:00", to: "23:00" },
+  Mon: { open: true, from: "11:00", to: "22:00" },
+  Tue: { open: true, from: "11:00", to: "22:00" },
+  Wed: { open: true, from: "11:00", to: "22:00" },
+  Thu: { open: true, from: "11:00", to: "22:00" },
+  Fri: { open: true, from: "11:00", to: "23:00" },
+  Sat: { open: true, from: "10:00", to: "23:00" },
   Sun: { open: false, from: "10:00", to: "21:00" },
 };
 
-/** Serialise the week schedule to a readable string for the backend. */
 function serializeHours(w: WeekHours): string {
-  // Group consecutive identical open days
   const lines: string[] = [];
   DAYS.forEach((d) => {
     const h = w[d];
@@ -70,8 +68,6 @@ function fmt12(hhmm: string): string {
   return m === 0 ? `${h12}${suffix}` : `${h12}:${mStr}${suffix}`;
 }
 
-// ── Field errors ──────────────────────────────────────────────────────────────
-
 interface FieldErrors {
   name?: string;
   address?: string;
@@ -82,47 +78,27 @@ interface FieldErrors {
 
 function validateFields(form: VenueCreate): FieldErrors {
   const errs: FieldErrors = {};
-
-  if (!form.name?.trim()) {
-    errs.name = "Venue name is required";
-  }
-
-  // Address: must look like "<number> <street>" e.g. "123 Main St"
+  if (!form.name?.trim()) errs.name = "Venue name is required";
   if (form.address) {
-    if (!/^\d+\s+\S/.test(form.address.trim())) {
-      errs.address = "Include a street number, e.g. 123 Main St";
-    }
+    if (!/^\d+\s+\S/.test(form.address.trim())) errs.address = "Include a street number, e.g. 123 Main St";
   } else {
     errs.address = "Address is required";
   }
-
-  if (!form.suburb?.trim()) {
-    errs.suburb = "Suburb is required";
-  }
-
-  // Phone: optional but if provided must be a plausible AU number
+  if (!form.suburb?.trim()) errs.suburb = "Suburb is required";
   if (form.phone) {
     const digits = form.phone.replace(/\D/g, "");
-    if (digits.length < 8 || digits.length > 15) {
-      errs.phone = "Enter a valid phone number";
-    }
+    if (digits.length < 8 || digits.length > 15) errs.phone = "Enter a valid phone number";
   }
-
-  // Email: optional but if provided must look valid
   if (form.email) {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      errs.email = "Enter a valid email address";
-    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Enter a valid email address";
   }
-
   return errs;
 }
-
-// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function VenueOnboardingPage() {
   const { venue, loading, setVenue } = useVenue();
   const router = useRouter();
+  const { theme, toggle } = useTheme();
 
   const [form, setForm] = useState<VenueCreate>({
     name: "",
@@ -145,18 +121,13 @@ export default function VenueOnboardingPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!loading && venue) {
-      router.replace("/dashboard");
-    }
+    if (!loading && venue) router.replace("/dashboard");
   }, [loading, venue, router]);
 
-  if (!loading && venue) {
-    return null;
-  }
+  if (!loading && venue) return null;
 
   function setField<K extends keyof VenueCreate>(key: K, value: VenueCreate[K]) {
     setForm((f) => ({ ...f, [key]: value }));
-    // Clear error for this field on change
     setFieldErrors((e) => ({ ...e, [key]: undefined }));
   }
 
@@ -167,27 +138,19 @@ export default function VenueOnboardingPage() {
   function toggleFeature(feature: string) {
     setForm((f) => {
       const current = f.accessibility_features ?? [];
-      const next = current.includes(feature)
-        ? current.filter((x) => x !== feature)
-        : [...current, feature];
+      const next = current.includes(feature) ? current.filter((x) => x !== feature) : [...current, feature];
       return { ...f, accessibility_features: next };
     });
   }
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-selecting the same file after a remove
+    e.target.value = "";
     if (!file) return;
     setError(null);
 
-    if (!file.type.startsWith("image/")) {
-      setError("Please choose an image file (JPG or PNG).");
-      return;
-    }
-    if (file.size > MAX_PHOTO_BYTES) {
-      setError("Image must be under 5 MB.");
-      return;
-    }
+    if (!file.type.startsWith("image/")) { setError("Please choose an image file (JPG or PNG)."); return; }
+    if (file.size > MAX_PHOTO_BYTES) { setError("Image must be under 5 MB."); return; }
 
     setUploading(true);
     try {
@@ -217,10 +180,7 @@ export default function VenueOnboardingPage() {
     setError(null);
 
     const errs = validateFields(form);
-    if (Object.keys(errs).length > 0) {
-      setFieldErrors(errs);
-      return;
-    }
+    if (Object.keys(errs).length > 0) { setFieldErrors(errs); return; }
 
     setSaving(true);
     try {
@@ -240,270 +200,180 @@ export default function VenueOnboardingPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center text-sm" style={{ color: "var(--faint)" }}>
-        Loading…
-      </div>
-    );
+    return <div style={{ display: "grid", placeItems: "center", height: "60vh", color: "var(--faint)", fontSize: 14 }}>Loading…</div>;
   }
 
   return (
-    <div className="mx-auto max-w-lg py-10">
-      <h1 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Create your venue</h1>
-      <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
-        Set up your venue profile to start publishing deals.
-      </p>
-
-      <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-
-        {error && (
-          <p className="rounded-lg px-4 py-3 text-sm" style={{ background: "rgba(255,90,77,0.12)", color: "var(--accent)" }}>
-            {error}
-          </p>
-        )}
-
-        {/* ── Section: Photo ── */}
-        <Section title="Photo">
-          <p className="text-xs" style={{ color: "var(--faint)" }}>
-            This hero photo is shown to customers browsing venues in the app.
-          </p>
-          {form.image_url ? (
-            <div className="relative overflow-hidden rounded-xl" style={{ border: "1px solid var(--line)" }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={form.image_url} alt="Venue hero" className="h-44 w-full object-cover" />
-              <button
-                type="button"
-                onClick={() => setField("image_url", "")}
-                className="absolute right-2 top-2 rounded-md px-2 py-1 text-xs font-medium"
-                style={{ background: "rgba(0,0,0,0.6)", color: "#fff" }}
-              >
-                Remove
-              </button>
-            </div>
-          ) : (
-            <label
-              className="flex h-44 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-xl text-sm"
-              style={{ border: "1px dashed var(--line2)", color: "var(--faint)", background: "var(--ph)" }}
-            >
-              <span style={{ color: "var(--muted)" }}>
-                {uploading ? "Uploading…" : "Click to upload a hero photo"}
-              </span>
-              <span className="text-xs">JPG or PNG, up to 5 MB</span>
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePhotoChange}
-                disabled={uploading}
-              />
-            </label>
-          )}
-        </Section>
-
-        {/* ── Section: Identity ── */}
-        <Section title="Identity">
-          <Field label="Venue name *" error={fieldErrors.name}>
-            <input required value={form.name}
-              onChange={(e) => setField("name", e.target.value)}
-              className={inputCls} style={inputStyle(!!fieldErrors.name)}
-              placeholder="The Grand Hotel" />
-          </Field>
-
-          <Field label="Category *">
-            <select value={form.category}
-              onChange={(e) => setField("category", e.target.value)}
-              className={inputCls} style={inputStyle()}>
-              {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-            </select>
-          </Field>
-
-          <Field label="Description">
-            <textarea rows={3} value={form.description}
-              onChange={(e) => setField("description", e.target.value)}
-              className={inputCls} style={inputStyle()}
-              placeholder="Tell customers what makes your venue special" />
-          </Field>
-        </Section>
-
-        {/* ── Section: Location ── */}
-        <Section title="Location">
-          <Field label="Street address *" error={fieldErrors.address}
-            hint="Include street number e.g. 123 Main St">
-            <input value={form.address}
-              onChange={(e) => setField("address", e.target.value)}
-              className={inputCls} style={inputStyle(!!fieldErrors.address)}
-              placeholder="123 Main St" />
-          </Field>
-
-          <Field label="Suburb *" error={fieldErrors.suburb}>
-            <input value={form.suburb}
-              onChange={(e) => setField("suburb", e.target.value)}
-              className={inputCls} style={inputStyle(!!fieldErrors.suburb)}
-              placeholder="Fitzroy" />
-          </Field>
-        </Section>
-
-        {/* ── Section: Contact ── */}
-        <Section title="Contact">
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Phone" error={fieldErrors.phone}>
-              <input type="tel" value={form.phone}
-                onChange={(e) => setField("phone", e.target.value)}
-                className={inputCls} style={inputStyle(!!fieldErrors.phone)}
-                placeholder="03 9000 0000" />
-            </Field>
-            <Field label="Email" error={fieldErrors.email}>
-              <input type="email" value={form.email}
-                onChange={(e) => setField("email", e.target.value)}
-                className={inputCls} style={inputStyle(!!fieldErrors.email)}
-                placeholder="hello@venue.com" />
-            </Field>
-          </div>
-          <Field label="Website">
-            <input type="url" value={form.website}
-              onChange={(e) => setField("website", e.target.value)}
-              className={inputCls} style={inputStyle()}
-              placeholder="https://myvenue.com.au" />
-          </Field>
-        </Section>
-
-        {/* ── Section: Opening hours ── */}
-        <Section title="Opening hours">
-          <div className="space-y-2">
-            {DAYS.map((day) => (
-              <DayRow key={day} day={day} hours={week[day]} onChange={(p) => setDay(day, p)} />
-            ))}
-          </div>
-          <p className="mt-2 text-xs" style={{ color: "var(--faint)" }}>
-            Preview: <span style={{ color: "var(--muted)" }}>{serializeHours(week).slice(0, 80)}…</span>
-          </p>
-        </Section>
-
-        {/* ── Section: Accessibility ── */}
-        <Section title="Accessibility">
-          <p className="text-xs" style={{ color: "var(--faint)" }}>
-            Which of these does your venue offer for guests with disabilities? Customers with matching
-            access needs will see these in the app.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {ACCESSIBILITY_FEATURES.map((feature) => {
-              const on = (form.accessibility_features ?? []).includes(feature);
-              return (
-                <button
-                  key={feature}
-                  type="button"
-                  onClick={() => toggleFeature(feature)}
-                  className="rounded-full px-3.5 py-2 text-sm font-medium transition-colors"
-                  style={{
-                    background: on ? "var(--accent)" : "var(--ph)",
-                    color: on ? "var(--accent-ink)" : "var(--text)",
-                    border: `1px solid ${on ? "var(--accent)" : "var(--line2)"}`,
-                  }}
-                >
-                  {feature}
-                </button>
-              );
-            })}
-          </div>
-        </Section>
-
-        <button type="submit" disabled={saving}
-          className="w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-50"
-          style={{ background: "var(--accent)", color: "var(--accent-ink)" }}>
-          {saving ? "Creating venue…" : "Create venue"}
-        </button>
-      </form>
-    </div>
-  );
-}
-
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl p-5 space-y-4"
-      style={{ background: "var(--surface)", border: "1px solid var(--line)" }}>
-      <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--faint)" }}>{title}</p>
-      {children}
-    </div>
-  );
-}
-
-function Field({
-  label, error, hint, children,
-}: {
-  label: string;
-  error?: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1">
-      <label className="block text-sm font-medium" style={{ color: "var(--muted)" }}>{label}</label>
-      {children}
-      {hint && !error && <p className="text-xs" style={{ color: "var(--faint)" }}>{hint}</p>}
-      {error && <p className="text-xs font-medium" style={{ color: "var(--accent)" }}>{error}</p>}
-    </div>
-  );
-}
-
-function DayRow({ day, hours, onChange }: {
-  day: Day;
-  hours: DayHours;
-  onChange: (p: Partial<DayHours>) => void;
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      {/* Toggle */}
+    <>
+      {/* Theme toggle */}
       <button
-        type="button"
-        onClick={() => onChange({ open: !hours.open })}
-        className="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
-        style={{ background: hours.open ? "var(--accent)" : "var(--ph)" }}
+        onClick={toggle}
+        style={{ position: "fixed", top: 18, right: 18, zIndex: 20, display: "inline-flex", alignItems: "center", gap: 8, padding: "7px 13px", borderRadius: 999, border: "1px solid var(--line2)", background: "var(--surface)", color: "var(--text)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
       >
-        <span
-          className="inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform"
-          style={{ transform: hours.open ? "translateX(1rem)" : "translateX(0.125rem)" }}
-        />
+        <span style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--accent)", boxShadow: "0 0 10px var(--accent)" }} />
+        {theme === "dark" ? "Dark" : "Light"}
       </button>
 
-      {/* Day label */}
-      <span className="w-8 text-sm font-semibold shrink-0"
-        style={{ color: hours.open ? "var(--text)" : "var(--faint)" }}>
-        {day}
-      </span>
+      <div style={{ maxWidth: 840, margin: "0 auto", padding: "44px 32px 80px" }}>
+        <div style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--accent)", marginBottom: 12 }}>Step 1 of 1 · Set up your venue</div>
+        <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 38, letterSpacing: "-.02em", margin: "0 0 8px" }}>Tell us about your venue</h1>
+        <p style={{ color: "var(--muted)", fontSize: 15, margin: "0 0 36px", maxWidth: 560 }}>This is what guests see when your deals surface. You can edit any of it later.</p>
 
-      {hours.open ? (
-        <div className="flex flex-1 items-center gap-2">
-          <input
-            type="time"
-            value={hours.from}
-            onChange={(e) => onChange({ from: e.target.value })}
-            className="flex-1 rounded-lg px-2 py-1 text-sm focus:outline-none"
-            style={{ background: "var(--ph)", border: "1px solid var(--line2)", color: "var(--text)" }}
-          />
-          <span className="text-xs" style={{ color: "var(--faint)" }}>to</span>
-          <input
-            type="time"
-            value={hours.to}
-            onChange={(e) => onChange({ to: e.target.value })}
-            className="flex-1 rounded-lg px-2 py-1 text-sm focus:outline-none"
-            style={{ background: "var(--ph)", border: "1px solid var(--line2)", color: "var(--text)" }}
-          />
-        </div>
-      ) : (
-        <span className="flex-1 text-sm" style={{ color: "var(--faint)" }}>Closed</span>
-      )}
-    </div>
+        <form onSubmit={handleSubmit}>
+          {error && (
+            <p style={{ borderRadius: 12, padding: "12px 16px", marginBottom: 24, fontSize: 13, background: "var(--accent-soft)", color: "var(--accent)" }}>{error}</p>
+          )}
+
+          {/* Hero photo */}
+          <div style={{ marginBottom: 34 }}>
+            <div style={{ ...fieldLabel, letterSpacing: ".12em", marginBottom: 12 }}>Hero photo</div>
+            {form.image_url ? (
+              <div style={{ position: "relative", height: 220, borderRadius: 18, overflow: "hidden", border: "1px solid var(--line)" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={form.image_url} alt="Venue hero" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <button
+                  type="button"
+                  onClick={() => setField("image_url", "")}
+                  style={{ position: "absolute", right: 12, top: 12, borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, background: "rgba(0,0,0,0.6)", color: "#fff", border: "none", cursor: "pointer" }}
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <label style={{ position: "relative", height: 220, borderRadius: 18, border: "1.5px dashed var(--line2)", background: "repeating-linear-gradient(135deg, var(--surface), var(--surface) 12px, var(--surface2) 12px, var(--surface2) 24px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, cursor: "pointer" }}>
+                <div style={{ width: 46, height: 46, borderRadius: "50%", background: "var(--accent-soft)", display: "grid", placeItems: "center", color: "var(--accent)", fontSize: 22 }}>↑</div>
+                <div style={{ fontWeight: 600 }}>{uploading ? "Uploading…" : "Drop a photo or click to upload"}</div>
+                <div style={{ fontFamily: FONT_MONO, fontSize: 11, color: "var(--faint)" }}>JPG / PNG · max 5MB</div>
+                <input type="file" accept="image/*" onChange={handlePhotoChange} disabled={uploading} style={{ display: "none" }} />
+              </label>
+            )}
+          </div>
+
+          {/* The basics */}
+          <div style={{ ...card, padding: 28, marginBottom: 24 }}>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, marginBottom: 22 }}>The basics</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label style={fieldLabel}>Venue name</label>
+                <input value={form.name} onChange={(e) => setField("name", e.target.value)} placeholder="The Lantern Room" style={{ ...fieldInput, borderColor: fieldErrors.name ? "var(--accent)" : "var(--line2)" }} />
+                {fieldErrors.name && <p style={errStyle}>{fieldErrors.name}</p>}
+              </div>
+              <div>
+                <label style={fieldLabel}>Category</label>
+                <select value={form.category} onChange={(e) => setField("category", e.target.value)} style={fieldInput}>
+                  {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={fieldLabel}>Phone</label>
+                <input type="tel" value={form.phone} onChange={(e) => setField("phone", e.target.value)} placeholder="(02) 9331 0042" style={{ ...fieldInput, borderColor: fieldErrors.phone ? "var(--accent)" : "var(--line2)" }} />
+                {fieldErrors.phone && <p style={errStyle}>{fieldErrors.phone}</p>}
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label style={fieldLabel}>Description</label>
+                <textarea rows={3} value={form.description} onChange={(e) => setField("description", e.target.value)} placeholder="Tell guests what makes your venue special." style={fieldInput} />
+              </div>
+            </div>
+          </div>
+
+          {/* Location & contact */}
+          <div style={{ ...card, padding: 28, marginBottom: 24 }}>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, marginBottom: 22 }}>Location &amp; contact</div>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 18 }}>
+              <div>
+                <label style={fieldLabel}>Street address</label>
+                <input value={form.address} onChange={(e) => setField("address", e.target.value)} placeholder="112 Crown Street" style={{ ...fieldInput, borderColor: fieldErrors.address ? "var(--accent)" : "var(--line2)" }} />
+                {fieldErrors.address && <p style={errStyle}>{fieldErrors.address}</p>}
+              </div>
+              <div>
+                <label style={fieldLabel}>Suburb</label>
+                <input value={form.suburb} onChange={(e) => setField("suburb", e.target.value)} placeholder="Surry Hills" style={{ ...fieldInput, borderColor: fieldErrors.suburb ? "var(--accent)" : "var(--line2)" }} />
+                {fieldErrors.suburb && <p style={errStyle}>{fieldErrors.suburb}</p>}
+              </div>
+              <div>
+                <label style={fieldLabel}>Email</label>
+                <input type="email" value={form.email} onChange={(e) => setField("email", e.target.value)} placeholder="hello@venue.com.au" style={{ ...fieldInput, borderColor: fieldErrors.email ? "var(--accent)" : "var(--line2)" }} />
+                {fieldErrors.email && <p style={errStyle}>{fieldErrors.email}</p>}
+              </div>
+              <div>
+                <label style={fieldLabel}>Website</label>
+                <input type="url" value={form.website} onChange={(e) => setField("website", e.target.value)} placeholder="myvenue.com.au" style={fieldInput} />
+              </div>
+            </div>
+          </div>
+
+          {/* Opening hours */}
+          <div style={{ ...card, padding: 28, marginBottom: 24 }}>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, marginBottom: 6 }}>Opening hours</div>
+            <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 20 }}>Toggle a day off to mark it closed.</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {DAYS.map((day) => {
+                const h = week[day];
+                return (
+                  <div key={day} style={{ display: "grid", gridTemplateColumns: "150px 1fr", alignItems: "center", gap: 16, padding: "12px 0", borderBottom: "1px solid var(--line)" }}>
+                    <button type="button" onClick={() => setDay(day, { open: !h.open })} style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "none", border: "none", cursor: "pointer", color: "var(--text)", textAlign: "left", padding: 0 }}>
+                      <span style={switchTrack(h.open, true)}><span style={switchKnob(h.open, true)} /></span>
+                      <span style={{ fontWeight: 600, width: 44 }}>{day}</span>
+                    </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      {h.open ? (
+                        <>
+                          <input type="time" value={h.from} onChange={(e) => setDay(day, { from: e.target.value })} style={timeInput} />
+                          <span style={{ color: "var(--faint)", fontSize: 13 }}>to</span>
+                          <input type="time" value={h.to} onChange={(e) => setDay(day, { to: e.target.value })} style={timeInput} />
+                        </>
+                      ) : (
+                        <span style={{ fontFamily: FONT_MONO, fontSize: 12, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)" }}>Closed</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Accessibility */}
+          <div style={{ ...card, padding: 28, marginBottom: 32 }}>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, marginBottom: 6 }}>Accessibility features</div>
+            <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 20 }}>Guests filter on these to match their access needs. Select all that apply.</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 12 }}>
+              {ACCESSIBILITY_FEATURES.map((feature) => {
+                const on = (form.accessibility_features ?? []).includes(feature);
+                return (
+                  <button
+                    key={feature}
+                    type="button"
+                    onClick={() => toggleFeature(feature)}
+                    style={{ display: "flex", alignItems: "center", gap: 11, padding: "14px 16px", borderRadius: 12, cursor: "pointer", textAlign: "left", fontSize: 14, border: `1px solid ${on ? "var(--accent)" : "var(--line2)"}`, background: on ? "var(--accent-soft)" : "var(--surface)", color: "var(--text)" }}
+                  >
+                    <span style={{ width: 18, height: 18, borderRadius: 6, flexShrink: 0, display: "grid", placeItems: "center", border: `1px solid ${on ? "var(--accent)" : "var(--line2)"}`, background: on ? "var(--accent)" : "transparent", color: "var(--accent-ink)", fontSize: 12, fontWeight: 700 }}>{on ? "✓" : ""}</span>
+                    <span style={{ fontWeight: 500 }}>{feature}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button type="submit" disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1, cursor: saving ? "not-allowed" : "pointer" }}>
+              {saving ? "Creating venue…" : "Create venue →"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </>
   );
 }
 
-const inputCls = "w-full rounded-lg px-3 py-2 text-sm placeholder:opacity-40 focus:outline-none transition-colors";
+const errStyle: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: "var(--accent)", margin: "8px 0 0" };
 
-function inputStyle(hasError = false): React.CSSProperties {
-  return {
-    background: "var(--ph)",
-    border: `1px solid ${hasError ? "var(--accent)" : "var(--line2)"}`,
-    color: "var(--text)",
-  };
-}
+const timeInput: React.CSSProperties = {
+  width: 130,
+  padding: "9px 12px",
+  borderRadius: 9,
+  border: "1px solid var(--line2)",
+  background: "var(--sunken)",
+  color: "var(--text)",
+  fontSize: 13,
+  fontFamily: FONT_MONO,
+};

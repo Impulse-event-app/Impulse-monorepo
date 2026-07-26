@@ -1,12 +1,13 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { dealApi, venueApi, type Deal } from "@/lib/api";
 import { useVenue } from "@/providers/VenueProvider";
 import { formatCurrency } from "@/lib/utils";
-import { Pencil, Trash2, BookOpen } from "lucide-react";
+import { FONT_DISPLAY, FONT_MONO, card, btnPrimary, iconBtn, iconBtnDanger, switchTrack, switchKnob } from "@/lib/ui";
+
+const COLS = "2.4fr 1.2fr 1.2fr 1.4fr .8fr 1fr";
 
 export default function DealsPage() {
   const { venue } = useVenue();
@@ -20,8 +21,7 @@ export default function DealsPage() {
   });
 
   const toggleActive = useMutation({
-    mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
-      dealApi.update(id, { is_active }),
+    mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) => dealApi.update(id, { is_active }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["deals", venue?.id] }),
   });
 
@@ -31,125 +31,85 @@ export default function DealsPage() {
   });
 
   function confirmDelete(deal: Deal) {
-    if (confirm(`Delete "${deal.title}"? This cannot be undone.`)) {
-      deleteDeal.mutate(deal.id);
-    }
+    if (confirm(`Delete "${deal.title}"? This cannot be undone.`)) deleteDeal.mutate(deal.id);
   }
 
   if (!venue) return null;
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
+    <div style={{ padding: "38px 44px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
         <div>
-          <h1 className="text-2xl font-bold" style={{color:'var(--text)'}}>Deals</h1>
-          <p className="mt-1 text-sm" style={{color:'var(--muted)'}}>Manage your discounted slots</p>
+          <div style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 8 }}>Your deals</div>
+          <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 32, letterSpacing: "-.02em", margin: 0 }}>Deals</h1>
         </div>
-        <Link
-          href="/dashboard/deals/new"
-          className="rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-80"
-          style={{background:'var(--accent)', color:'var(--accent-ink)'}}
-        >
+        <button onClick={() => router.push("/dashboard/deals/new")} style={{ ...btnPrimary, padding: "12px 18px", borderRadius: 11, boxShadow: "0 8px 22px var(--accent-soft)" }}>
           + New deal
-        </Link>
+        </button>
       </div>
 
       {isLoading ? (
-        <div className="space-y-2">
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-16 animate-pulse rounded-xl" style={{background:'var(--surface)'}} />
+            <div key={i} style={{ ...card, borderRadius: 16, height: 72, animation: "pm-glow 1.4s ease-in-out infinite" }} />
           ))}
         </div>
       ) : deals.length === 0 ? (
-        <div className="rounded-2xl p-10 text-center" style={{background:'var(--surface)', border:'1px solid var(--line)'}}>
-          <p style={{color:'var(--muted)'}}>No deals yet.</p>
-          <Link
-            href="/dashboard/deals/new"
-            className="mt-4 inline-block text-sm font-medium hover:underline"
-            style={{color:'var(--accent)'}}
-          >
+        <div style={{ ...card, borderRadius: 16, padding: 48, textAlign: "center" }}>
+          <p style={{ color: "var(--muted)", margin: 0 }}>No deals yet.</p>
+          <button onClick={() => router.push("/dashboard/deals/new")} style={{ marginTop: 16, background: "none", border: "none", color: "var(--accent)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
             Create your first deal →
-          </Link>
+          </button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl" style={{background:'var(--surface)', border:'1px solid var(--line)'}}>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs font-semibold uppercase tracking-wider" style={{borderBottom:'1px solid var(--line)', background:'var(--surface2)', color:'var(--faint)'}}>
-                <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Price</th>
-                <th className="px-4 py-3">Spots</th>
-                <th className="px-4 py-3">Active</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {deals.map((deal) => (
-                <tr key={deal.id} className="transition-colors hover:bg-surface2" style={{borderBottom:'1px solid var(--line)'}}>
-                  <td className="px-4 py-3 font-medium" style={{color:'var(--text)'}}>
-                    {deal.title}
-                    <span className="ml-2 rounded px-1.5 py-0.5 text-xs" style={{background:'var(--chip-bg)', color:'var(--faint)'}}>
-                      {deal.category}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3" style={{color:'var(--muted)'}}>{deal.date}</td>
-                  <td className="px-4 py-3">
-                    <span className="font-semibold" style={{color:'var(--accent)'}}>
-                      {formatCurrency(deal.deal_price)}
-                    </span>
-                    {deal.unit && <span style={{color:'var(--faint)'}}> {deal.unit}</span>}
-                    <span className="ml-1 text-xs line-through" style={{color:'var(--faint)'}}>
-                      {formatCurrency(deal.original_price)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3" style={{color:'var(--muted)'}}>
-                    {deal.spots_remaining}/{deal.total_spots}
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => toggleActive.mutate({ id: deal.id, is_active: !deal.is_active })}
-                      className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors"
-                      style={{background: deal.is_active ? 'var(--accent)' : 'var(--ph)'}}
-                    >
-                      <span
-                        className="inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform"
-                        style={{transform: deal.is_active ? 'translateX(1rem)' : 'translateX(0.125rem)'}}
-                      />
-                    </button>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => router.push(`/dashboard/bookings?deal_id=${deal.id}`)}
-                        className="transition-colors hover:text-accent"
-                        style={{color:'var(--faint)'}}
-                        title="View bookings"
-                      >
-                        <BookOpen size={15} />
-                      </button>
-                      <Link
-                        href={`/dashboard/deals/${deal.id}/edit`}
-                        className="transition-colors"
-                        style={{color:'var(--faint)'}}
-                        title="Edit"
-                      >
-                        <Pencil size={15} />
-                      </Link>
-                      <button
-                        onClick={() => confirmDelete(deal)}
-                        className="transition-colors"
-                        style={{color:'var(--faint)'}}
-                        title="Delete"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ ...card, borderRadius: 16, overflow: "hidden" }}>
+          {/* Header row */}
+          <div style={{ display: "grid", gridTemplateColumns: COLS, gap: 14, padding: "14px 22px", background: "var(--surface2)", fontFamily: FONT_MONO, fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--faint)" }}>
+            <span>Deal</span><span>Date</span><span>Price</span><span>Spots</span><span>Active</span><span style={{ textAlign: "right" }}>Actions</span>
+          </div>
+
+          {deals.map((d) => {
+            const filled = d.total_spots - d.spots_remaining;
+            const pct = d.total_spots > 0 ? Math.round((filled / d.total_spots) * 100) : 0;
+            const barColor = d.spots_remaining === 0 ? "var(--bad)" : "var(--accent)";
+            return (
+              <div key={d.id} style={{ display: "grid", gridTemplateColumns: COLS, gap: 14, alignItems: "center", padding: "18px 22px", borderTop: "1px solid var(--line)" }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14.5, marginBottom: 4 }}>{d.title}</div>
+                  <span style={{ fontFamily: FONT_MONO, fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--accent)", background: "var(--accent-soft)", padding: "3px 8px", borderRadius: 6 }}>{d.category}</span>
+                </div>
+                <div style={{ fontSize: 13, color: "var(--muted)" }}>{d.date}</div>
+                <div>
+                  <span style={{ fontWeight: 700, fontSize: 15 }}>{formatCurrency(d.deal_price)}</span>
+                  <span style={{ fontSize: 12, color: "var(--faint)", textDecoration: "line-through", marginLeft: 6 }}>{formatCurrency(d.original_price)}</span>
+                  {d.unit && <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 2 }}>{d.unit}</div>}
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, marginBottom: 6 }}>
+                    <span style={{ fontWeight: 600 }}>{d.spots_remaining}</span> <span style={{ color: "var(--faint)" }}>/ {d.total_spots} left</span>
+                  </div>
+                  <div style={{ height: 5, borderRadius: 5, background: "var(--sunken)", overflow: "hidden" }}>
+                    <span style={{ display: "block", height: "100%", width: `${pct}%`, background: barColor }} />
+                  </div>
+                </div>
+                <div>
+                  <button
+                    onClick={() => toggleActive.mutate({ id: d.id, is_active: !d.is_active })}
+                    style={switchTrack(d.is_active)}
+                    title={d.is_active ? "Deactivate" : "Activate"}
+                  >
+                    <span style={switchKnob(d.is_active)} />
+                  </button>
+                </div>
+                <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                  <button onClick={() => router.push(`/dashboard/bookings?deal_id=${d.id}`)} title="Bookings" style={iconBtn}>☰</button>
+                  <button onClick={() => router.push(`/dashboard/deals/${d.id}/edit`)} title="Edit" style={iconBtn}>✎</button>
+                  <button onClick={() => confirmDelete(d)} title="Delete" style={iconBtnDanger}>✕</button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

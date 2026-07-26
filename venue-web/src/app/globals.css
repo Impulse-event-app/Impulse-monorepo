@@ -1,7 +1,10 @@
 @import "tailwindcss";
 
-/* ── Impulse design tokens (mirrors mobile-sdk54/src/theme.tsx dark mode) ── */
-:root {
+/* ── Impulse design tokens — mirrors "Impulse Venue Redesign.dc.html" ────────── */
+/* Two themes, keyed on <html data-theme>. Managed by ThemeProvider. */
+
+[data-theme="dark"] {
+  color-scheme: dark;
   --bg:        #0F0E0D;
   --surface:   #1A1817;
   --surface2:  #232120;
@@ -14,8 +17,46 @@
   --accent:    #FF5A4D;
   --accent-ink:#1A0B08;
   --accent-soft:rgba(255,90,77,0.17);
+  --good: oklch(0.74 0.13 152);
+  --warn: oklch(0.79 0.13 74);
+  --bad:  oklch(0.66 0.17 28);
+  --info: oklch(0.70 0.12 265);
+  --shadow:    0 24px 70px rgba(0,0,0,.55);
+  --shadow-sm: 0 8px 24px rgba(0,0,0,.4);
+  /* legacy tokens still referenced by a few controls */
   --chip-bg:   rgba(244,241,234,0.07);
   --ph:        #211E1C;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg:        #F6F3ED;
+  --surface:   #FFFFFF;
+  --surface2:  #F0EBE1;
+  --sunken:    #EBE5DA;
+  --text:      #17120F;
+  --muted:     rgba(23,18,15,0.58);
+  --faint:     rgba(23,18,15,0.40);
+  --line:      rgba(23,18,15,0.12);
+  --line2:     rgba(23,18,15,0.18);
+  --accent:    #FF5A4D;
+  --accent-ink:#FFF1EE;
+  --accent-soft:rgba(255,90,77,0.13);
+  --good: oklch(0.62 0.13 152);
+  --warn: oklch(0.66 0.14 66);
+  --bad:  oklch(0.58 0.18 28);
+  --info: oklch(0.58 0.12 265);
+  --shadow:    0 24px 60px rgba(23,18,15,.13);
+  --shadow-sm: 0 8px 24px rgba(23,18,15,.08);
+  --chip-bg:   rgba(23,18,15,0.05);
+  --ph:        #EBE5DA;
+}
+
+/* Font-family tokens (fonts loaded via next/font in layout.tsx) */
+:root {
+  --font-body:    var(--font-archivo), "Archivo", system-ui, sans-serif;
+  --font-display: var(--font-grotesk), "Space Grotesk", system-ui, sans-serif;
+  --font-mono-sg: var(--font-space-mono), "Space Mono", ui-monospace, monospace;
 }
 
 @theme inline {
@@ -33,17 +74,32 @@
   --color-accent-soft:  var(--accent-soft);
   --color-chip:         var(--chip-bg);
   --color-ph:           var(--ph);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-mono-sg);
 }
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; padding: 0; }
 
 body {
   background-color: var(--bg);
   color: var(--text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+::selection { background: rgba(255,90,77,.28); }
+
+input, button, select, textarea { font-family: inherit; }
+input:focus, textarea:focus, select:focus { outline: none; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent); opacity: .8; }
+
+/* Scrollbar for the main app scroll region */
+.app-scroll::-webkit-scrollbar { width: 10px; }
+.app-scroll::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 10px; }
+
+@keyframes pm-ring { 0% { transform: scale(.7); opacity: .55; } 100% { transform: scale(2.4); opacity: 0; } }
+@keyframes pm-glow { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+@keyframes fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
