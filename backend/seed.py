@@ -51,6 +51,7 @@ VENUES = [
         email="info@glenmore.com.au",
         website="https://theglenmore.com.au",
         opening_hours="Mon–Sun 11am–1am",
+        image_url="https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=800&q=80&auto=format&fit=crop",
     ),
     dict(
         name="Babylon Rooftop Bar",
@@ -63,6 +64,7 @@ VENUES = [
         email="events@babylonbar.com.au",
         website="https://babylonbar.com.au",
         opening_hours="Thu–Sat 5pm–3am",
+        image_url="https://images.unsplash.com/photo-1470337458703-46ad1756a187?w=800&q=80&auto=format&fit=crop",
     ),
     dict(
         name="Strike Bowling Darling Harbour",
@@ -75,6 +77,7 @@ VENUES = [
         email="sydney@strikebowling.com.au",
         website="https://strikebowling.com.au",
         opening_hours="Mon–Thu 10am–11pm, Fri–Sat 10am–1am, Sun 10am–10pm",
+        image_url="https://images.pexels.com/photos/344029/pexels-photo-344029.jpeg?auto=compress&cs=tinysrgb&w=800",
     ),
     dict(
         name="Marquee Sydney",
@@ -87,6 +90,7 @@ VENUES = [
         email="info@marquee.com.au",
         website="https://marquee.com.au",
         opening_hours="Fri–Sat 10pm–6am",
+        image_url="https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&q=80&auto=format&fit=crop",
     ),
     dict(
         name="Ivy Pool Club",
@@ -99,6 +103,7 @@ VENUES = [
         email="hello@ivysydney.com.au",
         website="https://merivale.com/ivypool",
         opening_hours="Fri 4pm–midnight, Sat–Sun 1pm–midnight",
+        image_url="https://images.unsplash.com/photo-1540541338287-41700207dee6?w=800&q=80&auto=format&fit=crop",
     ),
 ]
 
