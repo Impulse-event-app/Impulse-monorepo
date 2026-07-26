@@ -28,21 +28,23 @@ function PulseRings() {
   const { T } = useApp();
   const vals = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
   useEffect(() => {
-    // On web the native animated module is missing, so useNativeDriver falls
-    // back to JS — and react-native-web's Animated.loop fails to restart under
-    // that fallback, playing the rings once. Drive on the JS driver on web so
-    // the loop repeats; keep the native driver on iOS/Android.
+    // react-native-web's Animated.loop won't reliably restart a sequence-with-
+    // delay (the rings played once, then froze as a dot). Drive each ring with
+    // a timing that resets and re-runs itself in its completion callback — this
+    // loops identically on web and native. JS driver on web (no native module),
+    // native driver on iOS/Android.
     const useNativeDriver = Platform.OS !== 'web';
-    const loops = vals.map((v, i) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(i * 860),
-          Animated.timing(v, { toValue: 1, duration: 2600, easing: Easing.out(Easing.ease), useNativeDriver }),
-        ]),
-      ),
-    );
-    loops.forEach((l) => l.start());
-    return () => loops.forEach((l) => l.stop());
+    let cancelled = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const runRing = (v: Animated.Value) => {
+      if (cancelled) return;
+      v.setValue(0);
+      Animated.timing(v, { toValue: 1, duration: 2600, easing: Easing.out(Easing.ease), useNativeDriver })
+        .start(({ finished }) => { if (finished && !cancelled) runRing(v); });
+    };
+    // Stagger the three rings so they radiate one after another.
+    vals.forEach((v, i) => { timers.push(setTimeout(() => runRing(v), i * 860)); });
+    return () => { cancelled = true; timers.forEach(clearTimeout); };
   }, [vals]);
   return (
     <View style={{ width: 150, height: 150, alignItems: 'center', justifyContent: 'center' }}>
