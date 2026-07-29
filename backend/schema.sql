@@ -1,7 +1,7 @@
 -- ──────────────────────────────────────────────────────────────
 -- Impulse · Supabase schema
 -- Run this once in the Supabase SQL editor:
---   https://supabase.com/dashboard/project/ihxaejkvyowkdzynhhuv/sql
+--   https://supabase.com/dashboard/project/pdcevxkvgtptjczzsmkh/sql
 -- ──────────────────────────────────────────────────────────────
 
 -- ── public.users ─────────────────────────────────────────────

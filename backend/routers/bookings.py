@@ -398,7 +398,7 @@ def redeem_booking(
                 payer_id=booking.pinch_payer_id,
                 source_id=booking.pinch_source_id,
                 amount_cents=balance_cents,
-                application_fee_cents=round(balance_cents * 0.20),
+                application_fee_cents=round(balance_cents * payments.BALANCE_APPLICATION_FEE_RATE),
                 description=f"Impulse balance — {venue_name} {slot}",
                 metadata={
                     "impulseBookingId": booking.id,

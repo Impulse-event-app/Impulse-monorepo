@@ -316,6 +316,54 @@ class StatsResponse(BaseModel):
     total_spots: int
 
 
+# ── Payouts (venue view of Pinch transfers) ───────────────────────────────────
+
+class PayoutLine(BaseModel):
+    """One booking's contribution to a payout."""
+    booking_id: Optional[str]
+    confirmation_code: Optional[str]
+    deal_title: Optional[str]
+    kind: Optional[str]                 # deposit | balance
+    line_type: Optional[str]            # Settlement | Dishonour | ...
+    amount_cents: int                   # what the venue is owed for this line
+    transaction_date: Optional[datetime]
+
+
+class PayoutResponse(BaseModel):
+    """A Pinch transfer, sliced to the part that belongs to one venue.
+
+    `amount_cents` is this venue's share, not the whole transfer — with every
+    charge currently on the single Impulse merchant, one transfer covers many
+    venues. `transfer_net_cents` is the full transfer for reference.
+    """
+    id: str
+    pinch_transfer_id: str
+    status: str
+    reference: Optional[str]
+    currency: str
+    amount_cents: int
+    transfer_net_cents: int
+    transfer_date: Optional[datetime]
+    account_name: Optional[str]
+    bsb: Optional[str]
+    account_number: Optional[str]
+    lines: List[PayoutLine]
+
+
+class PayoutSummary(BaseModel):
+    """Header figures for the payouts page."""
+    paid_cents: int        # settled and complete
+    in_transit_cents: int  # transfer raised, not yet complete
+    awaiting_cents: int    # earned on redeemed bookings, not yet in any transfer
+    payout_count: int
+    last_payout_date: Optional[datetime]
+
+
+class PayoutsResponse(BaseModel):
+    summary: PayoutSummary
+    payouts: List[PayoutResponse]
+
+
 class DealPerformanceItem(BaseModel):
     """One completed deal, scored on how well it sold. `date`/`slots` are the
     raw display strings — venue-web renders the time window from them."""

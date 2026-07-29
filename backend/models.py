@@ -212,6 +212,71 @@ class Waitlist(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class Settlement(Base):
+    """One Pinch transfer — money actually leaving Pinch for a bank account.
+
+    Mirrors GET /transfers/{id}. This is the signal a venue cares about:
+    an approved payment only means the card worked, whereas a transfer means
+    the funds have been sent. Amounts are integer cents, matching Pinch.
+
+    Today every charge runs through the single Impulse merchant, so one
+    transfer spans many venues and the per-venue split lives in the lines.
+    Once venues become managed merchants a transfer maps to exactly one
+    venue, and `venue_id` here is set — the lines keep working either way.
+    """
+    __tablename__ = "settlements"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    pinch_transfer_id = Column(Text, nullable=False, unique=True)   # tra_XXX
+    pinch_merchant_id = Column(Text, nullable=True)                 # mch_XXX the transfer settled for
+    venue_id = Column(UUID(as_uuid=False), ForeignKey("venues.id"), nullable=True, index=True)
+    # processing | negative-balance | complete | pending-return | failed | failed-return | withheld
+    status = Column(Text, nullable=False, server_default="processing")
+    amount_cents = Column(Integer, nullable=False, server_default="0")      # net actually transferred
+    total_fees_cents = Column(Integer, nullable=False, server_default="0")
+    currency = Column(Text, nullable=False, server_default="AUD")
+    reference = Column(Text, nullable=True)                         # what shows on the bank statement
+    account_name = Column(Text, nullable=True)
+    bsb = Column(Text, nullable=True)
+    account_number = Column(Text, nullable=True)                    # Pinch returns this already masked
+    transfer_date = Column(DateTime(timezone=True), nullable=True)
+    # Pinch's own breakdown: Settlements / Dishonours / Application Fees / Transfer Fee / Refunds
+    summary = Column(JSONB, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    lines: List["SettlementLine"] = relationship("SettlementLine", back_populates="settlement")
+
+
+class SettlementLine(Base):
+    """A single line inside a transfer — mirrors GET /transfers/items/{id}.
+
+    `venue_amount_cents` is deliberately computed from our own booking ledger
+    rather than read off Pinch: Pinch reports gross and its own fees, but the
+    Impulse application fee split is our rule, so deriving it here keeps the
+    venue-facing number correct regardless of how Pinch reports platform fees.
+    """
+    __tablename__ = "settlement_lines"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    settlement_id = Column(UUID(as_uuid=False), ForeignKey("settlements.id"), nullable=False, index=True)
+    pinch_line_id = Column(Text, nullable=True)                     # id of the line as Pinch reports it
+    pinch_payment_id = Column(Text, nullable=True, index=True)      # pmt_XXX, when resolvable
+    booking_id = Column(UUID(as_uuid=False), ForeignKey("bookings.id"), nullable=True, index=True)
+    venue_id = Column(UUID(as_uuid=False), ForeignKey("venues.id"), nullable=True, index=True)
+    kind = Column(Text, nullable=True)                              # deposit | balance
+    # Pinch line type: Settlement | Dishonour | Application Fee | Transfer Fee | Refund
+    line_type = Column(Text, nullable=True)
+    gross_cents = Column(Integer, nullable=False, server_default="0")
+    fees_cents = Column(Integer, nullable=False, server_default="0")
+    total_cents = Column(Integer, nullable=False, server_default="0")
+    venue_amount_cents = Column(Integer, nullable=False, server_default="0")
+    description = Column(Text, nullable=True)
+    transaction_date = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    settlement: "Settlement" = relationship("Settlement", back_populates="lines")
+
+
 class UserVenueInteraction(Base):
     """
     Recommender signal table.

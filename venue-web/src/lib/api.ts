@@ -31,10 +31,10 @@ async function request<T>(
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: body \!== undefined ? JSON.stringify(body) : undefined,
   });
 
-  if (!res.ok) {
+  if (\!res.ok) {
     // Capture error detail from the API if available
     let detail = res.statusText;
     try {
@@ -122,6 +122,47 @@ export interface StatsResponse {
   total_spots: number;
 }
 
+// ── Payouts ───────────────────────────────────────────────────────────────────
+
+export interface PayoutLine {
+  booking_id: string | null;
+  confirmation_code: string | null;
+  deal_title: string | null;
+  kind: "deposit" | "balance" | null;
+  line_type: string | null;
+  amount_cents: number;
+  transaction_date: string | null;
+}
+
+export interface Payout {
+  id: string;
+  pinch_transfer_id: string;
+  status: string;
+  reference: string | null;
+  currency: string;
+  /** This venue's share of the transfer, not the whole transfer. */
+  amount_cents: number;
+  transfer_net_cents: number;
+  transfer_date: string | null;
+  account_name: string | null;
+  bsb: string | null;
+  account_number: string | null;
+  lines: PayoutLine[];
+}
+
+export interface PayoutSummary {
+  paid_cents: number;
+  in_transit_cents: number;
+  awaiting_cents: number;
+  payout_count: number;
+  last_payout_date: string | null;
+}
+
+export interface PayoutsResponse {
+  summary: PayoutSummary;
+  payouts: Payout[];
+}
+
 /** One finished deal, scored on how well it sold. */
 export interface DealPerformanceItem {
   deal_id: string;
@@ -152,6 +193,8 @@ export const venueApi = {
     request<Deal[]>("GET", `/venues/${id}/deals`),
   dealPerformance: (id: string, limit = 10) =>
     request<DealPerformanceItem[]>("GET", `/venues/${id}/deal-performance?limit=${limit}`),
+  payouts: (id: string) =>
+    request<PayoutsResponse>("GET", `/venues/${id}/payouts`),
 };
 
 // ── Deals ─────────────────────────────────────────────────────────────────────

@@ -1,14 +1,55 @@
 import json
 import logging
+import os
 
 from fastapi import APIRouter, BackgroundTasks, Request
 from sqlalchemy import or_
 
+import settlements
 from database import SessionLocal
 from models import Booking
+from pinch_client import PinchError
 
 router = APIRouter()
 logger = logging.getLogger("impulse.webhooks")
+
+# Which merchant a transfer settled for. Every charge currently runs through
+# the one Impulse merchant; once venues are managed merchants the event itself
+# identifies the merchant and this becomes the fallback.
+DEFAULT_MERCHANT_ID: str = os.environ["PINCH_TEST_MERCHANT_ID"]
+
+
+def _process_transfer(payload: dict, data: dict) -> None:
+    """A transfer means funds actually left Pinch for a bank account — the
+    event a venue reads as "the money went in". The webhook only carries the
+    id, so the detail is fetched and written to the settlements ledger."""
+    transfer_id = data.get("id") or data.get("transferId") or payload.get("transferId")
+    if not transfer_id or not str(transfer_id).startswith("tra_"):
+        logger.warning("transfer webhook without a tra_ id: %s", json.dumps(payload))
+        return
+
+    merchant_id = (
+        data.get("merchantId") or payload.get("merchantId")
+        or data.get("currentMerchant") or DEFAULT_MERCHANT_ID
+    )
+
+    db = SessionLocal()
+    try:
+        settlement = settlements.ingest_transfer(db, str(transfer_id), str(merchant_id))
+        logger.info(
+            "Transfer %s ingested as settlement %s (%s, net %sc)",
+            transfer_id, settlement.id, settlement.status, settlement.amount_cents,
+        )
+    except PinchError as e:
+        # Leave it un-ingested rather than half-written; Pinch retries, and the
+        # transfer can also be back-filled from List all transfers.
+        db.rollback()
+        logger.error("Failed to fetch transfer %s: %s %s", transfer_id, e.status_code, e.body)
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to ingest transfer %s", transfer_id)
+    finally:
+        db.close()
 
 
 def _process_event(payload: dict) -> None:
@@ -16,6 +57,9 @@ def _process_event(payload: dict) -> None:
     event_type = payload.get("event") or payload.get("type") or ""
     data = payload.get("data") or payload
 
+    if event_type == "transfer":
+        _process_transfer(payload, data)
+        return
     if event_type != "realtime-payment":
         logger.info("Ignoring Pinch webhook event type %r", event_type)
         return
