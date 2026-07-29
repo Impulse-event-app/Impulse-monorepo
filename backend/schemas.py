@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # ── User ──────────────────────────────────────────────────────────────────────
@@ -425,3 +425,95 @@ class HuddleRedeemResponse(BaseModel):
     members: List[HuddleRedeemMemberResult]
     total_charged_cents: int
     declines: int
+
+
+# ── Waitlist ──────────────────────────────────────────────────────────────────
+
+WaitlistActivity = Literal[
+    "Bowling", "Escape Room", "Karaoke", "Mini Golf",
+    "Go-karting", "Comedy", "Live Music", "Something else",
+]
+
+OTHER_ACTIVITY = "Something else"
+
+WaitlistArea = Literal[
+    "CBD", "Inner West", "Eastern Suburbs",
+    "North Shore", "South Sydney", "Western Sydney",
+]
+
+
+# Same shape venue-web validates onboarding emails against — deliberately
+# permissive. email-validator isn't a backend dependency and one waitlist form
+# isn't reason enough to add it.
+EMAIL_PATTERN = r"^[^\s@]+@[^\s@]+\.[^\s@]+$"
+
+
+class WaitlistCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    email: str = Field(min_length=3, max_length=254, pattern=EMAIL_PATTERN)
+    preferred_activities: List[WaitlistActivity] = Field(min_length=1)
+    # Only meaningful alongside "Something else"; ignored otherwise.
+    other_activity: Optional[str] = Field(default=None, max_length=80)
+    area: WaitlistArea
+    # Raw ?ref= code from the URL. Unknown codes are ignored silently.
+    referred_by: Optional[str] = Field(default=None, max_length=32)
+
+    @model_validator(mode="after")
+    def _check_activities(self) -> "WaitlistCreate":
+        # Dedupe while preserving the order they were ticked in.
+        seen: set = set()
+        self.preferred_activities = [
+            a for a in self.preferred_activities
+            if not (a in seen or seen.add(a))
+        ]
+
+        typed = (self.other_activity or "").strip()
+        if OTHER_ACTIVITY in self.preferred_activities:
+            if not typed:
+                raise ValueError('Tell us what else you\'re into, or untick "Something else"')
+            self.other_activity = typed
+        else:
+            # Drop stray free text so it can't arrive without the choice that
+            # justifies it — otherwise the stats long tail fills with orphans.
+            self.other_activity = None
+        return self
+
+
+class WaitlistEntryResponse(BaseModel):
+    """What the signup gets back — everything the confirmation card renders.
+    Returned on a fresh signup (201) and on a duplicate email (409 detail), so
+    someone who signs up twice gets their existing link rather than an error."""
+    name: str
+    position: int
+    referral_code: str
+    referral_count: int
+    already_on_list: bool = False
+
+
+class WaitlistCountResponse(BaseModel):
+    count: int
+
+
+class WaitlistReferrerResponse(BaseModel):
+    """Public lookup for the "You were invited by ..." banner. First name only —
+    codes are guessable in principle, so this exposes as little as possible."""
+    name: str
+
+
+class WaitlistTopReferrer(BaseModel):
+    name: str
+    referral_code: str
+    referral_count: int
+    position: Optional[int]
+
+
+class WaitlistStatsResponse(BaseModel):
+    total: int
+    # Multi-select, so these counts sum to MORE than `total` — each person is
+    # counted once per activity they picked.
+    by_preferred_activity: Dict[str, int]
+    # Free text from everyone who chose "Something else", most common first.
+    # The demand signal for categories we don't list yet.
+    other_activities: Dict[str, int]
+    by_area: Dict[str, int]
+    top_referrers: List[WaitlistTopReferrer]

@@ -185,6 +185,33 @@ class HuddleMember(Base):
     huddle: "Huddle" = relationship("Huddle", back_populates="members", foreign_keys=[huddle_id])
 
 
+class Waitlist(Base):
+    """Pre-launch signups from the landing page. Anonymous — no auth, no FK
+    into users; the same person can later create an account with no link back.
+
+    `referral_code` is this entry's own code (handed back so they can recruit);
+    `referred_by` is whoever recruited them — a raw code, deliberately not a
+    foreign key, so an unknown ?ref= is ignored rather than rejected.
+    """
+    __tablename__ = "waitlist"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    name = Column(Text, nullable=False)
+    email = Column(Text, nullable=False, unique=True)
+    # Multi-select, validated against a closed set by the API.
+    preferred_activities = Column(ARRAY(Text()), nullable=False, server_default="{}")
+    # Free text, only set when "Something else" is among the choices.
+    other_activity = Column(Text, nullable=True)
+    area = Column(Text, nullable=False)
+    referral_code = Column(Text, nullable=False, unique=True)
+    referred_by = Column(Text, nullable=True)
+    referral_count = Column(Integer, nullable=False, server_default="0")
+    # Denormalised: base rank by created_at, minus referral_count, floored at 1.
+    # Only the referrer's value is recomputed on a referred signup.
+    position = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class UserVenueInteraction(Base):
     """
     Recommender signal table.

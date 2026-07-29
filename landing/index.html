@@ -53,7 +53,13 @@
     }
 
     * { box-sizing: border-box; }
+    /* The [hidden] attribute has to beat our own display rules. The UA
+       stylesheet's `[hidden] { display: none }` loses to any class rule that
+       sets display (flex/grid/inline-flex), which silently breaks every
+       JS-toggled element below. */
+    [hidden] { display: none !important; }
     html, body { margin: 0; padding: 0; overflow-x: hidden; }
+    html { scroll-behavior: smooth; }
     body {
       background: var(--bg);
       color: var(--text);
@@ -194,6 +200,9 @@
     }
     .btn-going { background: #1A0B08; color: #F4F1EA; }
     .btn-venue { background: #FF5A4D; color: #1A0B08; }
+    /* Hero CTA sits in the hero's own flex gap — it doesn't need .btn's card spacing. */
+    .btn-hero { margin-top: 6px; }
+    .btn-hero:hover .arrow { transform: translateX(4px); }
     .arrow { transition: transform .2s ease; }
     .card:hover .arrow { transform: translateX(4px); }
 
@@ -242,6 +251,207 @@
     }
     .footer-nav a:hover { color: var(--text); }
 
+    /* ---- Waitlist ---- */
+    .waitlist { scroll-margin-top: clamp(20px, 4vw, 40px); }
+    .wl-card {
+      background: var(--surface);
+      border: 1px solid var(--hairline);
+      border-radius: 22px;
+      padding: clamp(24px, 3.4vw, 48px);
+      box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.6);
+      /* Entrance: fade up once, on scroll into view. */
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity .2s ease, transform .2s ease;
+    }
+    .wl-card.is-visible { opacity: 1; transform: none; }
+
+    .wl-counter {
+      display: inline-flex; align-items: center; gap: 10px;
+      font-family: 'Space Mono', ui-monospace, monospace;
+      font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--muted);
+      border: 1px solid var(--hairline); border-radius: 100px;
+      padding: 8px 16px; margin: 0 0 clamp(18px, 2vw, 26px);
+    }
+    .wl-counter .dot { width: 8px; height: 8px; }
+    .wl-counter b { color: var(--text); font-weight: 700; }
+
+    .wl-head {
+      font-family: 'Archivo', ui-sans-serif, sans-serif;
+      font-weight: 900;
+      font-size: clamp(30px, 4.4vw, 52px);
+      line-height: 0.98; letter-spacing: -0.03em;
+      margin: 10px 0 0; color: var(--text); max-width: 18ch;
+    }
+    .wl-sub {
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-size: clamp(15px, 1.4vw, 18px);
+      line-height: 1.45; color: var(--muted);
+      margin: 14px 0 0; max-width: 52ch;
+    }
+
+    .wl-invite {
+      display: flex; align-items: center; gap: 10px;
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-size: 14px; color: var(--muted);
+      background: color-mix(in oklab, var(--accent) 10%, transparent);
+      border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
+      border-radius: 100px; padding: 10px 18px;
+      margin: clamp(20px, 2.4vw, 28px) 0 0; align-self: flex-start;
+      width: fit-content;
+    }
+    .wl-invite b { color: var(--text); font-weight: 600; }
+
+    /* ---- Form ---- */
+    .wl-form {
+      display: grid; grid-template-columns: 1fr;
+      gap: clamp(16px, 1.8vw, 20px);
+      margin-top: clamp(24px, 3vw, 34px);
+    }
+    .wl-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    .wl-label {
+      font-family: 'Space Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--muted);
+    }
+    .wl-input, .wl-select select {
+      width: 100%;
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      /* 16px keeps iOS Safari from zooming the viewport on focus. */
+      font-size: 16px; font-weight: 500;
+      color: var(--text); background: var(--bg);
+      border: 1px solid var(--hairline); border-radius: 14px;
+      padding: 15px 16px; min-height: 52px;
+      transition: border-color .15s ease;
+    }
+    .wl-input::placeholder { color: var(--muted); opacity: .7; }
+    .wl-input:hover, .wl-select select:hover { border-color: var(--muted); }
+    .wl-input:focus-visible, .wl-select select:focus-visible, .wl-btn:focus-visible,
+    .wl-share-btn:focus-visible, .theme-toggle:focus-visible, a:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .wl-input[aria-invalid="true"], .wl-select select[aria-invalid="true"] {
+      border-color: var(--accent);
+    }
+
+    /* Native select for one-thumb use; only the chevron is custom. */
+    .wl-select { position: relative; display: flex; }
+    .wl-select select { appearance: none; -webkit-appearance: none; padding-right: 42px; cursor: pointer; }
+    .wl-select::after {
+      content: '';
+      position: absolute; right: 18px; top: 50%;
+      width: 8px; height: 8px; margin-top: -6px;
+      border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+      transform: rotate(45deg); pointer-events: none;
+    }
+
+    /* Multi-select as toggle chips — native checkboxes underneath, so keyboard
+       and screen-reader behaviour is the browser's, not ours. A <select multiple>
+       is close to unusable one-thumbed on a phone. */
+    .wl-chips { display: flex; flex-wrap: wrap; gap: 10px; }
+    .wl-chip { display: inline-flex; position: relative; cursor: pointer; }
+    .wl-chip input {
+      /* Visually hidden but still focusable and hit-testable. */
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      opacity: 0; margin: 0; cursor: pointer;
+    }
+    .wl-chip span {
+      display: inline-flex; align-items: center;
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-weight: 600; font-size: 15px;
+      color: var(--text); background: var(--bg);
+      border: 1px solid var(--hairline); border-radius: 100px;
+      padding: 12px 18px; min-height: 46px;
+      transition: background .15s ease, color .15s ease, border-color .15s ease;
+    }
+    .wl-chip:hover span { border-color: var(--muted); }
+    .wl-chip input:checked + span {
+      background: var(--accent); color: var(--accent-ink); border-color: transparent;
+    }
+    .wl-chip input:focus-visible + span {
+      outline: 2px solid var(--accent); outline-offset: 2px;
+    }
+    .wl-other { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+
+    .wl-error {
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-size: 13px; color: var(--accent); margin: 0;
+    }
+    .wl-error:empty { display: none; }
+
+    .wl-btn {
+      width: 100%;
+      display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-weight: 700; font-size: 16px;
+      background: var(--accent); color: var(--accent-ink);
+      border: none; border-radius: 100px;
+      padding: 17px 26px; min-height: 56px; cursor: pointer;
+      transition: opacity .15s ease, transform .15s ease;
+    }
+    .wl-btn:hover:not(:disabled) { transform: translateY(-2px); }
+    .wl-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+    /* ---- Confirmation ---- */
+    .wl-confirm { margin-top: clamp(24px, 3vw, 34px); }
+    .wl-confirm { animation: wl-pop .26s ease-out both; }
+    .wl-position {
+      font-family: 'Archivo', ui-sans-serif, sans-serif;
+      font-weight: 900; font-size: clamp(34px, 5vw, 56px);
+      line-height: 1; letter-spacing: -0.03em;
+      color: var(--accent); margin: 0;
+    }
+    .wl-confirm-sub {
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-size: clamp(15px, 1.4vw, 17px); line-height: 1.45;
+      color: var(--muted); margin: 12px 0 0; max-width: 46ch;
+    }
+    .wl-link-row {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+      background: var(--bg); border: 1px solid var(--hairline);
+      border-radius: 14px; padding: 12px 14px;
+      margin-top: clamp(20px, 2.4vw, 28px);
+    }
+    .wl-link {
+      flex: 1 1 200px; min-width: 0;
+      font-family: 'Space Mono', ui-monospace, monospace;
+      font-size: 13px; color: var(--text);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .wl-shares { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .wl-share-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-weight: 600; font-size: 14px;
+      color: var(--text); background: transparent;
+      border: 1px solid var(--hairline); border-radius: 100px;
+      padding: 11px 18px; min-height: 44px; cursor: pointer;
+      transition: border-color .15s ease, color .15s ease;
+    }
+    .wl-share-btn:hover { border-color: var(--muted); }
+    .wl-share-btn.is-primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+    .wl-referrals {
+      font-family: 'Space Mono', ui-monospace, monospace;
+      font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--muted); margin: clamp(18px, 2vw, 24px) 0 0;
+    }
+    .wl-referrals b { color: var(--text); }
+
+    @media (min-width: 640px) {
+      .wl-form { grid-template-columns: 1fr 1fr; }
+      .wl-form .wl-submit, .wl-form .wl-field-wide { grid-column: 1 / -1; }
+      /* The chip group wants the full row; a lone select doesn't. */
+      .wl-field-wide .wl-select { max-width: 340px; }
+      .wl-field-wide .wl-other { max-width: 460px; }
+      .wl-btn { width: auto; justify-self: start; padding-inline: 34px; }
+    }
+
+    @keyframes wl-pop {
+      from { opacity: 0; transform: scale(.97); }
+      to   { opacity: 1; transform: none; }
+    }
     @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
     @keyframes pulse {
       0%   { box-shadow: 0 0 0 0 rgba(255, 90, 77, 0.55), 0 0 16px rgba(255, 90, 77, 0.7); }
@@ -249,9 +459,15 @@
       100% { box-shadow: 0 0 0 0 rgba(255, 90, 77, 0), 0 0 16px rgba(255, 90, 77, 0.7); }
     }
     @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
       .marquee { animation: none; }
       .dot { animation: none; }
       .card, .arrow, body { transition: none; }
+      /* Waitlist: no entrance or celebration motion — the card is simply there. */
+      .wl-card { opacity: 1; transform: none; transition: none; }
+      .wl-confirm { animation: none; }
+      .wl-btn, .wl-input, .wl-select select, .wl-share-btn { transition: none; }
+      .wl-btn:hover:not(:disabled) { transform: none; }
     }
   </style>
 </head>
@@ -271,6 +487,7 @@
       <h1 class="wordmark">Impulse</h1>
       <p class="tagline">Plans, on impulse.</p>
       <p class="lede">Last-minute things to do in Sydney, with the price already worked out.</p>
+      <a class="btn btn-venue btn-hero" href="#waitlist">Join the waitlist <span class="arrow">→</span></a>
     </section>
 
     <!--
@@ -327,6 +544,116 @@
       </div>
     </section>
 
+    <section class="waitlist" id="waitlist" aria-labelledby="wl-head">
+      <div class="wl-card" id="wl-card">
+
+        <span class="eyebrow">Early access</span>
+
+        <!-- Counter is hidden until the count resolves, so it never flashes "0". -->
+        <p class="wl-counter" id="wl-counter" hidden>
+          <span class="dot" aria-hidden="true"></span>
+          <span id="wl-counter-text"></span>
+        </p>
+
+        <h2 class="wl-head" id="wl-head">Be first to see deals before they fill</h2>
+        <p class="wl-sub">
+          Waitlist members get early access to deals before they go public.
+          Top referrers become Founding Members with permanent priority access.
+        </p>
+
+        <!-- Invite banner — only shown when ?ref= resolves to a real entry. -->
+        <p class="wl-invite" id="wl-invite" hidden>
+          You were invited by <b id="wl-invite-name"></b>
+        </p>
+
+        <form class="wl-form" id="wl-form" novalidate>
+          <div class="wl-field">
+            <label class="wl-label" for="wl-name">Name</label>
+            <input class="wl-input" id="wl-name" name="name" type="text"
+                   autocomplete="name" required placeholder="Your name"
+                   aria-describedby="wl-name-error">
+            <p class="wl-error" id="wl-name-error" role="alert"></p>
+          </div>
+
+          <div class="wl-field">
+            <label class="wl-label" for="wl-email">Email</label>
+            <input class="wl-input" id="wl-email" name="email" type="email"
+                   autocomplete="email" inputmode="email" required placeholder="you@email.com"
+                   aria-describedby="wl-email-error">
+            <p class="wl-error" id="wl-email-error" role="alert"></p>
+          </div>
+
+          <div class="wl-field wl-field-wide">
+            <span class="wl-label" id="wl-activity-label">What activities do you love doing?</span>
+            <div class="wl-chips" role="group" aria-labelledby="wl-activity-label"
+                 aria-describedby="wl-activity-error" id="wl-activities">
+              <label class="wl-chip"><input type="checkbox" value="Bowling"><span>Bowling</span></label>
+              <label class="wl-chip"><input type="checkbox" value="Escape Room"><span>Escape Room</span></label>
+              <label class="wl-chip"><input type="checkbox" value="Karaoke"><span>Karaoke</span></label>
+              <label class="wl-chip"><input type="checkbox" value="Mini Golf"><span>Mini Golf</span></label>
+              <label class="wl-chip"><input type="checkbox" value="Go-karting"><span>Go-karting</span></label>
+              <label class="wl-chip"><input type="checkbox" value="Comedy"><span>Comedy</span></label>
+              <label class="wl-chip"><input type="checkbox" value="Live Music"><span>Live Music</span></label>
+              <label class="wl-chip"><input type="checkbox" value="Something else" id="wl-other-toggle"><span>Something else</span></label>
+            </div>
+            <p class="wl-error" id="wl-activity-error" role="alert"></p>
+
+            <!-- Revealed only when "Something else" is ticked. -->
+            <div class="wl-other" id="wl-other-wrap" hidden>
+              <label class="wl-label" for="wl-other">What else are you into?</label>
+              <input class="wl-input" id="wl-other" type="text" maxlength="80"
+                     placeholder="Axe throwing, trivia, rock climbing…"
+                     aria-describedby="wl-other-error">
+              <p class="wl-error" id="wl-other-error" role="alert"></p>
+            </div>
+          </div>
+
+          <div class="wl-field wl-field-wide">
+            <label class="wl-label" for="wl-area">Where in Sydney?</label>
+            <span class="wl-select">
+              <select id="wl-area" name="area" required aria-describedby="wl-area-error">
+                <option value="CBD">CBD</option>
+                <option value="Inner West">Inner West</option>
+                <option value="Eastern Suburbs">Eastern Suburbs</option>
+                <option value="North Shore">North Shore</option>
+                <option value="South Sydney">South Sydney</option>
+                <option value="Western Sydney">Western Sydney</option>
+              </select>
+            </span>
+            <p class="wl-error" id="wl-area-error" role="alert"></p>
+          </div>
+
+          <div class="wl-submit">
+            <button class="wl-btn" id="wl-submit" type="submit">Join the waitlist</button>
+            <p class="wl-error" id="wl-form-error" role="alert" style="margin-top:12px"></p>
+          </div>
+        </form>
+
+        <!-- Post-signup. Replaces the form in place; no navigation. -->
+        <div class="wl-confirm" id="wl-confirm" hidden>
+          <p class="wl-position" id="wl-position"></p>
+          <p class="wl-confirm-sub" id="wl-confirm-sub">
+            Share your link to move up — top 50 become Founding Members
+          </p>
+
+          <div class="wl-link-row">
+            <span class="wl-link" id="wl-link"></span>
+            <button class="wl-share-btn is-primary" id="wl-copy" type="button">Copy link</button>
+          </div>
+
+          <div class="wl-shares">
+            <button class="wl-share-btn" id="wl-share" type="button" hidden>Share</button>
+            <button class="wl-share-btn" id="wl-whatsapp" type="button">WhatsApp</button>
+            <button class="wl-share-btn" id="wl-instagram" type="button">Instagram Stories</button>
+          </div>
+          <p class="wl-error" id="wl-share-status" role="status" style="margin-top:10px"></p>
+
+          <p class="wl-referrals" id="wl-referrals"></p>
+        </div>
+
+      </div>
+    </section>
+
     <footer class="footer">
       <span class="footer-note">impulse · made in sydney</span>
       <nav class="footer-nav">
@@ -349,6 +676,270 @@
         root.setAttribute('data-theme', next);
         try { localStorage.setItem('impulse-theme', next); } catch (e) {}
         btn.textContent = label();
+      });
+    })();
+  </script>
+
+  <script>
+    /*
+      WAITLIST — talks to the FastAPI backend (backend/routers/waitlist.py).
+
+      API_BASE must point at the deployed API. There is no build step here, so
+      it's a literal: update it when the backend gets a public URL. Until then
+      this only works against a locally running backend, and the section fails
+      soft — the counter hides and the form reports a friendly error rather than
+      breaking the rest of the page.
+    */
+    (function () {
+      var API_BASE = 'http://localhost:8000';
+
+      var $ = function (id) { return document.getElementById(id); };
+      var card = $('wl-card');
+      var form = $('wl-form');
+      if (!card || !form) return;
+
+      var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      var refCode = new URLSearchParams(location.search).get('ref');
+
+      // ---- Entrance animation: fade up once, on scroll into view ----
+      if ('IntersectionObserver' in window) {
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) {
+            if (!e.isIntersecting) return;
+            e.target.classList.add('is-visible');
+            io.unobserve(e.target);
+          });
+        }, { threshold: 0.15 });
+        io.observe(card);
+      } else {
+        card.classList.add('is-visible');
+      }
+
+      // ---- Live counter (page load only — never polled) ----
+      fetch(API_BASE + '/api/waitlist/count')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data || typeof data.count !== 'number' || data.count < 1) return;
+          $('wl-counter-text').textContent =
+            data.count.toLocaleString('en-AU') +
+            (data.count === 1 ? ' person on the waitlist' : ' people on the waitlist');
+          $('wl-counter').hidden = false;
+        })
+        .catch(function () { /* counter simply stays hidden */ });
+
+      // ---- Invite banner: only if ?ref= resolves to a real entry ----
+      if (refCode) {
+        fetch(API_BASE + '/api/waitlist/referrer/' + encodeURIComponent(refCode))
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.name) return;   // unknown code → ignored silently
+            $('wl-invite-name').textContent = data.name;
+            $('wl-invite').hidden = false;
+          })
+          .catch(function () { /* no banner */ });
+      }
+
+      // ---- Field errors ----
+      // Error slot ids follow the field id, except where the thing being
+      // validated isn't a single control: the chip group is marked on its
+      // role="group" wrapper, and form-level errors mark nothing at all.
+      var ERROR_TARGET = { 'wl-activity': 'wl-activities', 'wl-form': null };
+
+      function setError(fieldId, message) {
+        var slot = $(fieldId + '-error');
+        if (slot) slot.textContent = message || '';
+        var targetId = fieldId in ERROR_TARGET ? ERROR_TARGET[fieldId] : fieldId;
+        var field = targetId ? $(targetId) : null;
+        if (!field) return;
+        if (message) field.setAttribute('aria-invalid', 'true');
+        else field.removeAttribute('aria-invalid');
+      }
+
+      ['wl-name', 'wl-email', 'wl-other'].forEach(function (id) {
+        $(id).addEventListener('input', function () { setError(id, ''); });
+      });
+
+      // ---- Activity chips: multi-select, with free text behind "Something else" ----
+      var otherToggle = $('wl-other-toggle');
+      var otherWrap = $('wl-other-wrap');
+      var otherInput = $('wl-other');
+      var activityBoxes = Array.prototype.slice.call(
+        $('wl-activities').querySelectorAll('input[type="checkbox"]')
+      );
+
+      function syncOther() {
+        var on = otherToggle.checked;
+        otherWrap.hidden = !on;
+        if (on) otherInput.focus();
+        else { otherInput.value = ''; setError('wl-other', ''); }
+      }
+      otherToggle.addEventListener('change', syncOther);
+
+      activityBoxes.forEach(function (box) {
+        box.addEventListener('change', function () { setError('wl-activity', ''); });
+      });
+
+      function checkedActivities() {
+        return activityBoxes.filter(function (b) { return b.checked; })
+                            .map(function (b) { return b.value; });
+      }
+
+      function validate(values) {
+        var ok = true;
+        if (!values.name) { setError('wl-name', 'Enter your name'); ok = false; }
+        else setError('wl-name', '');
+
+        if (!values.email) { setError('wl-email', 'Enter your email'); ok = false; }
+        else if (!EMAIL_RE.test(values.email)) { setError('wl-email', 'Enter a valid email address'); ok = false; }
+        else setError('wl-email', '');
+
+        if (!values.preferred_activities.length) {
+          setError('wl-activity', 'Pick at least one activity');
+          ok = false;
+        } else setError('wl-activity', '');
+
+        if (otherToggle.checked && !values.other_activity) {
+          setError('wl-other', 'Tell us what else you’re into, or untick “Something else”');
+          ok = false;
+        } else setError('wl-other', '');
+
+        return ok;
+      }
+
+      // ---- Confirmation ----
+      function shareMessage(link) {
+        return 'I just joined the Impulse waitlist — last-minute deals on activities in Sydney. ' +
+               'Join through my link and we both move up: ' + link;
+      }
+
+      function status(text) { $('wl-share-status').textContent = text || ''; }
+
+      function showConfirmation(entry, already) {
+        var link = location.origin + location.pathname + '?ref=' + entry.referral_code;
+        var message = shareMessage(link);
+
+        $('wl-position').textContent = "You're #" + entry.position + ' on the waitlist';
+        $('wl-confirm-sub').textContent = already
+          ? "You're already on the list! Share your link to move up — top 50 become Founding Members"
+          : 'Share your link to move up — top 50 become Founding Members';
+        $('wl-link').textContent = link;
+
+        var n = entry.referral_count || 0;
+        $('wl-referrals').innerHTML =
+          '<b>' + n + '</b> ' + (n === 1 ? 'friend' : 'friends') + ' joined through your link';
+
+        function copy() {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            return navigator.clipboard.writeText(link);
+          }
+          // Fallback for non-secure contexts / older browsers.
+          return new Promise(function (resolve, reject) {
+            try {
+              var ta = document.createElement('textarea');
+              ta.value = link;
+              ta.setAttribute('readonly', '');
+              ta.style.position = 'fixed';
+              ta.style.opacity = '0';
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand('copy');
+              document.body.removeChild(ta);
+              resolve();
+            } catch (e) { reject(e); }
+          });
+        }
+
+        $('wl-copy').addEventListener('click', function () {
+          copy().then(function () { status('Link copied.'); })
+                .catch(function () { status('Copy failed — select the link above.'); });
+        });
+
+        // Native share where the browser supports it; the copy button above is
+        // the fallback everywhere else, so this button just stays hidden.
+        if (navigator.share) {
+          var shareBtn = $('wl-share');
+          shareBtn.hidden = false;
+          shareBtn.addEventListener('click', function () {
+            navigator.share({ title: 'Impulse', text: message })
+              .then(function () { status(''); })
+              .catch(function () { /* user dismissed the sheet */ });
+          });
+        }
+
+        $('wl-whatsapp').addEventListener('click', function () {
+          window.open('https://wa.me/?text=' + encodeURIComponent(message), '_blank', 'noopener');
+        });
+
+        // Instagram has no Stories deep link from the web — copying is the
+        // honest behaviour, so say so rather than pretending to open the app.
+        $('wl-instagram').addEventListener('click', function () {
+          copy().then(function () { status('Link copied — paste it into your story.'); })
+                .catch(function () { status('Copy failed — select the link above.'); });
+        });
+
+        form.hidden = true;
+        $('wl-invite').hidden = true;
+        $('wl-confirm').hidden = false;
+      }
+
+      // ---- Submit ----
+      var submitBtn = $('wl-submit');
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        setError('wl-form', '');
+
+        var values = {
+          name: $('wl-name').value.trim(),
+          email: $('wl-email').value.trim(),
+          preferred_activities: checkedActivities(),
+          other_activity: otherToggle.checked ? otherInput.value.trim() : null,
+          area: $('wl-area').value
+        };
+        if (refCode) values.referred_by = refCode;
+
+        if (!validate(values)) {
+          // The chip group carries aria-invalid but isn't focusable — send focus
+          // to the first checkbox instead so keyboard users land on the problem.
+          var firstBad = form.querySelector('input[aria-invalid="true"], select[aria-invalid="true"]');
+          if (!firstBad && $('wl-activities').getAttribute('aria-invalid') === 'true') {
+            firstBad = activityBoxes[0];
+          }
+          if (firstBad) firstBad.focus();
+          return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Joining…';
+
+        fetch(API_BASE + '/api/waitlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values)
+        })
+          .then(function (res) {
+            return res.json().catch(function () { return null; })
+              .then(function (body) { return { status: res.status, body: body }; });
+          })
+          .then(function (r) {
+            if (r.status === 201) { showConfirmation(r.body, false); return; }
+
+            // Already on the list — the API hands back their real entry, so
+            // they still get their position and referral link.
+            if (r.status === 409 && r.body && r.body.detail && r.body.detail.referral_code) {
+              showConfirmation(r.body.detail, true);
+              return;
+            }
+
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Join the waitlist';
+            setError('wl-form', 'Something went wrong — try again in a moment.');
+          })
+          .catch(function () {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Join the waitlist';
+            setError('wl-form', "Couldn't reach the server — check your connection and try again.");
+          });
       });
     })();
   </script>
