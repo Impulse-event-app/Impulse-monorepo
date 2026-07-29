@@ -12,15 +12,16 @@ from database import get_db
 from huddle_logic import parse_slot_datetime
 from models import Booking, Deal, Settlement, SettlementLine, Venue
 from schemas import (
-    (
     DealPerformanceItem,
-    DealResponse, PayoutLine, PayoutResponse, PayoutsResponse, PayoutSummary,
-   
+    DealResponse,
+    PayoutLine,
+    PayoutResponse,
+    PayoutsResponse,
+    PayoutSummary,
     StatsResponse,
     VenueCreate,
     VenueResponse,
     VenueUpdate,
-),
 )
 
 router = APIRouter()
