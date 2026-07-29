@@ -59,6 +59,13 @@
        JS-toggled element below. */
     [hidden] { display: none !important; }
     html, body { margin: 0; padding: 0; overflow-x: hidden; }
+    /* `overflow-x: hidden` forces overflow-y to `auto`, which makes body a
+       scroll container and silently breaks `position: sticky` on the demo
+       phone. `clip` does the same clipping without creating one. The `hidden`
+       above stays as the fallback for anything that lacks clip support. */
+    @supports (overflow-x: clip) {
+      html, body { overflow-x: clip; }
+    }
     html { scroll-behavior: smooth; }
     body {
       background: var(--bg);
@@ -250,6 +257,244 @@
       font-size: 14px; color: var(--muted); transition: color .15s ease;
     }
     .footer-nav a:hover { color: var(--text); }
+
+    /* ---- Scroll demo: sticky phone, stepped copy ---- */
+    .demo-head { margin-bottom: clamp(28px, 4vw, 52px); }
+    .demo-title {
+      font-family: 'Archivo', ui-sans-serif, sans-serif;
+      font-weight: 900; font-size: clamp(30px, 5vw, 60px);
+      line-height: .98; letter-spacing: -.035em;
+      margin: 12px 0 0; max-width: 15ch;
+    }
+    .demo-grid {
+      display: grid; grid-template-columns: 1fr auto;
+      gap: clamp(30px, 6vw, 90px); align-items: start;
+    }
+    /* Explicit placement, so the phone can come FIRST in the DOM (where mobile
+       needs it) while still rendering on the right at desktop widths. */
+    .demo-steps     { grid-column: 1; grid-row: 1; }
+    .demo-phone-col { grid-column: 2; grid-row: 1; }
+
+    /* Steps column */
+    .demo-step {
+      min-height: 74vh; display: flex; flex-direction: column; justify-content: center;
+      opacity: .32; transition: opacity .35s ease;
+    }
+    .demo-step.is-on { opacity: 1; }
+    .demo-step-n {
+      display: inline-flex; align-items: center; gap: 10px;
+      font-family: 'Space Mono', ui-monospace, monospace;
+      font-size: 12px; letter-spacing: .22em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 16px;
+    }
+    .demo-step-n::before {
+      content: ''; width: 26px; height: 2px; background: var(--accent);
+      transform: scaleX(.25); transform-origin: left; transition: transform .35s ease;
+    }
+    .demo-step.is-on .demo-step-n::before { transform: scaleX(1); }
+    .demo-step h3 {
+      font-family: 'Archivo', ui-sans-serif, sans-serif;
+      font-weight: 800; font-size: clamp(24px, 3.2vw, 38px);
+      line-height: 1.04; letter-spacing: -.025em; margin: 0; max-width: 16ch;
+    }
+    .demo-step p {
+      font-size: clamp(15px, 1.5vw, 18px); line-height: 1.5;
+      color: var(--muted); margin: 14px 0 0; max-width: 40ch;
+    }
+
+    /* Phone column */
+    .demo-phone-col { position: sticky; top: calc(50vh - 310px); justify-self: center; }
+    .phone {
+      /* App tokens — the real values from mobile-sdk54/src/theme.tsx, so the
+         screen is the app's palette, not an approximation of it. */
+      --app-bg: #0F0E0D; --app-surface: #1A1817; --app-surface2: #232120;
+      --app-text: #F4F1EA; --app-muted: rgba(244,241,234,.60); --app-faint: rgba(244,241,234,.38);
+      --app-line: rgba(244,241,234,.10); --app-ph: #211E1C;
+      --app-accent: #FF5A4D; --app-accent-ink: #1A0B08; --app-accent-soft: rgba(255,90,77,.17);
+      width: 300px; height: 620px; flex-shrink: 0;
+      background: #080706; border-radius: 46px; padding: 11px;
+      border: 1px solid rgba(244,241,234,.14);
+      box-shadow: 0 40px 90px -30px rgba(0,0,0,.75), 0 0 0 1px rgba(0,0,0,.5) inset;
+    }
+    :root[data-theme="light"] .phone {
+      --app-bg: #F6F3ED; --app-surface: #FFFFFF; --app-surface2: #F0ECE4;
+      --app-text: #17120F; --app-muted: rgba(23,18,15,.60); --app-faint: rgba(23,18,15,.42);
+      --app-line: rgba(23,18,15,.10); --app-ph: #EAE5DC;
+      --app-accent-soft: rgba(255,90,77,.13);
+      box-shadow: 0 40px 90px -34px rgba(40,30,20,.45);
+    }
+    .phone-screen {
+      position: relative; width: 100%; height: 100%; overflow: hidden;
+      border-radius: 36px; background: var(--app-bg); color: var(--app-text);
+    }
+    .phone-island {
+      position: absolute; top: 9px; left: 50%; transform: translateX(-50%);
+      width: 86px; height: 24px; border-radius: 999px; background: #080706; z-index: 5;
+    }
+    .phone-status {
+      position: absolute; top: 14px; left: 0; right: 0; z-index: 4;
+      display: flex; justify-content: space-between; padding: 0 22px;
+      font-family: 'Space Mono', ui-monospace, monospace; font-size: 11px;
+      color: var(--app-text);
+    }
+
+    /* Screens stack; the active one fades up. */
+    .scr {
+      position: absolute; inset: 0; padding: 46px 14px 14px;
+      /* Column so a screen can pin its CTA / tab bar to the bottom edge with
+         margin-top:auto, the way the real screens do. */
+      display: flex; flex-direction: column;
+      opacity: 0; transform: translateY(14px);
+      transition: opacity .45s ease, transform .45s ease;
+      pointer-events: none; overflow: hidden;
+    }
+    .scr.is-on { opacity: 1; transform: none; }
+
+    /* App primitives — mirrors of the real RN components */
+    .app-eyebrow {
+      font-family: 'Space Mono', ui-monospace, monospace;
+      font-size: 9.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--app-faint);
+    }
+    .app-h1 {
+      font-family: 'Archivo', ui-sans-serif, sans-serif; font-weight: 700;
+      font-size: 25px; letter-spacing: -.03em; margin: 3px 0 0; color: var(--app-text);
+    }
+    .app-chips { display: flex; gap: 6px; margin: 13px 0 12px; }
+    .app-chip {
+      font-size: 11px; font-weight: 500; padding: 6px 11px; border-radius: 999px;
+      background: rgba(244,241,234,.07); color: var(--app-muted); white-space: nowrap;
+    }
+    :root[data-theme="light"] .app-chip { background: rgba(23,18,15,.05); }
+    .app-chip.on { background: var(--app-text); color: var(--app-bg); font-weight: 600; }
+    .app-card {
+      background: var(--app-surface); border-radius: 19px; overflow: hidden;
+      box-shadow: 0 10px 22px -12px rgba(0,0,0,.6);
+    }
+    .app-photo {
+      height: 106px; background: var(--app-ph);
+      display: grid; place-items: center; position: relative;
+    }
+    .app-photo span {
+      font-family: 'Space Mono', ui-monospace, monospace;
+      font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--app-faint);
+    }
+    .app-pill {
+      position: absolute; top: 9px; left: 9px; display: flex; gap: 5px;
+    }
+    .app-pill b {
+      background: rgba(244,241,234,.92); color: #0F0E0D;
+      font-size: 10px; font-weight: 600; padding: 4px 9px; border-radius: 999px;
+    }
+    .app-pill i {
+      display: inline-flex; align-items: center; gap: 4px; font-style: normal;
+      background: var(--app-accent); color: var(--app-accent-ink);
+      font-family: 'Space Mono', ui-monospace, monospace; font-weight: 700;
+      font-size: 9.5px; padding: 4px 8px; border-radius: 6px;
+    }
+    .app-body { padding: 11px 13px 13px; }
+    .app-venue {
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif; font-weight: 600;
+      font-size: 16px; letter-spacing: -.03em; color: var(--app-text);
+    }
+    .app-meta { font-size: 11px; color: var(--app-muted); margin-top: 2px; }
+    .app-price { display: flex; align-items: baseline; gap: 7px; margin-top: 9px; }
+    .app-now {
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif; font-weight: 700;
+      font-size: 21px; letter-spacing: -.03em; color: var(--app-text);
+    }
+    .app-now small { font-size: 10px; font-weight: 500; color: var(--app-muted); }
+    .app-was { font-size: 11.5px; color: var(--app-faint); text-decoration: line-through; }
+    .app-off {
+      font-family: 'Space Mono', ui-monospace, monospace; font-weight: 700; font-size: 10px;
+      color: var(--app-accent); background: var(--app-accent-soft);
+      padding: 2px 6px; border-radius: 5px;
+    }
+    .app-when {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; color: var(--app-faint); margin-top: 9px;
+    }
+    .app-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--app-accent); flex: none; }
+    .app-cta {
+      display: block; text-align: center; background: var(--app-accent); color: var(--app-accent-ink);
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif; font-weight: 700; font-size: 14px;
+      padding: 14px; border-radius: 14px; margin-top: 14px;
+    }
+    .app-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 0; border-bottom: 1px solid var(--app-line);
+    }
+    .app-row:last-child { border-bottom: none; }
+    .app-av {
+      width: 32px; height: 32px; border-radius: 50%; flex: none;
+      background: var(--app-surface2); color: var(--app-muted);
+      display: grid; place-items: center;
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif; font-weight: 700; font-size: 13px;
+    }
+    .app-av.done { background: var(--app-accent); color: var(--app-accent-ink); }
+    .app-tag {
+      font-family: 'Space Mono', ui-monospace, monospace; font-size: 9.5px;
+      letter-spacing: .08em; text-transform: uppercase; color: var(--app-faint);
+    }
+    .app-tag.on { color: var(--app-accent); }
+    .app-code {
+      font-family: 'Space Mono', ui-monospace, monospace; font-weight: 700;
+      font-size: 38px; letter-spacing: .14em; color: var(--app-accent);
+      text-align: center; white-space: nowrap;
+      /* Trailing letter-spacing would shift it off-centre. */
+      text-indent: .14em;
+    }
+    /* Bottom tab bar — only the feed sits inside the app's (tabs) group; the
+       claim, huddle and code screens are pushed over it in the real app. */
+    .app-tabs {
+      margin-top: auto; display: flex; justify-content: space-around;
+      padding: 11px 4px 3px; border-top: 1px solid var(--app-line);
+    }
+    .app-tab {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      font-size: 9.5px; color: var(--app-faint);
+    }
+    .app-tab i { width: 15px; height: 15px; border-radius: 4px; background: currentColor; opacity: .5; font-style: normal; }
+    .app-tab.on { color: var(--app-accent); }
+    .app-tab.on i { opacity: 1; }
+    /* The code screen has little content — centre it rather than stranding a
+       gap between the code and the totals. */
+    .scr[data-screen="code"] { justify-content: center; }
+    .app-foot { margin-top: 22px; }
+
+    @media (max-width: 900px) {
+      /* Drop out of grid entirely: a sticky grid item is confined to its own
+         row, so it would unpin as soon as the steps row began. In normal flow
+         the phone's containing block is the whole section and it stays put. */
+      .demo-grid { display: block; }
+      .demo-phone-col { position: sticky; top: 12px; z-index: 3; display: flex; justify-content: center; }
+      .phone { width: 214px; height: 440px; border-radius: 34px; padding: 8px; }
+      .phone-screen { border-radius: 26px; }
+      .phone-island { width: 62px; height: 18px; top: 7px; }
+      .phone-status { font-size: 9px; top: 10px; padding: 0 15px; }
+      .scr { padding: 34px 10px 10px; }
+      .app-h1 { font-size: 19px; }
+      .app-photo { height: 76px; }
+      .app-code { font-size: 27px; }
+      /* The huddle screen is the tallest — tighten its rows so the share row
+         at the bottom isn't clipped by the shorter mobile phone. */
+      .app-row { padding: 6px 0; gap: 8px; }
+      .app-av { width: 26px; height: 26px; font-size: 11px; }
+      .app-chips { margin: 10px 0 9px; }
+      .app-chip { font-size: 10px; padding: 5px 9px; }
+      .app-body { padding: 9px 11px 11px; }
+      .app-venue { font-size: 14.5px; }
+      .app-now { font-size: 18px; }
+      .app-cta { padding: 12px; font-size: 13px; }
+      /* Steps sit in the band below the pinned phone rather than centred, so
+         copy never scrolls behind it. */
+      .demo-step {
+        min-height: 46vh; justify-content: flex-end;
+        padding-bottom: 26px; margin-left: 0;
+      }
+      .demo-steps { margin-top: 26px; }
+      .demo-step h3 { font-size: clamp(21px, 6vw, 27px); }
+      .demo-step p { font-size: 14.5px; }
+    }
 
     /* ---- Waitlist ---- */
     .waitlist { scroll-margin-top: clamp(20px, 4vw, 40px); }
@@ -463,6 +708,10 @@
       .marquee { animation: none; }
       .dot { animation: none; }
       .card, .arrow, body { transition: none; }
+      /* Scroll demo: every step legible at once, no fading or sliding. */
+      .demo-step { opacity: 1; transition: none; }
+      .demo-step-n::before { transform: scaleX(1); transition: none; }
+      .scr { transition: none; }
       /* Waitlist: no entrance or celebration motion — the card is simply there. */
       .wl-card { opacity: 1; transform: none; transition: none; }
       .wl-confirm { animation: none; }
@@ -541,6 +790,173 @@
           <span class="chip">Darts<span class="sep">·</span></span>
           <span class="chip">Bars<span class="sep">·</span></span>
         </div>
+      </div>
+    </section>
+
+    <section class="demo" id="how-it-works" aria-labelledby="demo-title">
+      <div class="demo-head">
+        <span class="eyebrow">How it works</span>
+        <h2 class="demo-title" id="demo-title">Empty tables tonight, priced to fill.</h2>
+      </div>
+
+      <div class="demo-grid">
+        <div class="demo-phone-col">
+          <!-- Decorative: the copy beside it already says everything this shows. -->
+          <div class="phone" role="img" aria-label="The Impulse app, showing each step of booking a last-minute night out">
+            <div class="phone-island" aria-hidden="true"></div>
+            <div class="phone-screen">
+              <div class="phone-status" aria-hidden="true"><span>7:42</span><span>▂▄▆ ⌁</span></div>
+
+              <!-- 01 · home feed -->
+              <div class="scr is-on" data-screen="feed">
+                <span class="app-eyebrow">Sydney · tonight</span>
+                <h4 class="app-h1">On now</h4>
+                <div class="app-chips">
+                  <span class="app-chip on">All</span>
+                  <span class="app-chip">Bowling</span>
+                  <span class="app-chip">Karaoke</span>
+                  <span class="app-chip">Pool</span>
+                </div>
+                <div class="app-card">
+                  <div class="app-photo">
+                    <span>Bowling · venue photo</span>
+                    <div class="app-pill"><b>Bowling</b></div>
+                  </div>
+                  <div class="app-body">
+                    <div class="app-venue">Pins &amp; Needles</div>
+                    <div class="app-meta">Moore Park · 1.2 km · ★ 4.6</div>
+                    <div class="app-price">
+                      <span class="app-now">$18<small>/lane</small></span>
+                      <span class="app-was">$24</span>
+                      <span class="app-off">−25%</span>
+                    </div>
+                    <div class="app-when"><span class="app-dot"></span> On now · ends 9:00pm</div>
+                  </div>
+                </div>
+                <div class="app-card" style="margin-top:11px">
+                  <div class="app-photo" style="height:70px">
+                    <span>Escape rooms · venue photo</span>
+                    <div class="app-pill"><b>Escape rooms</b><i>ends in 2:08</i></div>
+                  </div>
+                </div>
+                <div class="app-tabs">
+                  <span class="app-tab on"><i></i>Tonight</span>
+                  <span class="app-tab"><i></i>Map</span>
+                  <span class="app-tab"><i></i>Plans</span>
+                  <span class="app-tab"><i></i>You</span>
+                </div>
+              </div>
+
+              <!-- 02 · claim -->
+              <div class="scr" data-screen="claim">
+                <div class="app-card">
+                  <div class="app-photo" style="height:128px"><span>Escape rooms · venue photo</span></div>
+                  <div class="app-body">
+                    <div class="app-venue">The Lockup</div>
+                    <div class="app-meta">Newtown · 3.4 km · ★ 4.8</div>
+                    <div class="app-price">
+                      <span class="app-now">$28<small>pp</small></span>
+                      <span class="app-was">$39</span>
+                      <span class="app-off">−28%</span>
+                    </div>
+                  </div>
+                </div>
+                <div style="margin-top:13px">
+                  <span class="app-eyebrow">What you get</span>
+                  <p style="font-size:12px;line-height:1.45;color:var(--app-muted);margin:5px 0 0">
+                    A 60-minute room for your group, held the moment you claim it.
+                  </p>
+                </div>
+                <div style="margin-top:13px;padding:11px 12px;border-radius:12px;background:var(--app-accent-soft)">
+                  <div style="font-size:12px;font-weight:600;color:var(--app-text)">Pay $5.60 now</div>
+                  <div style="font-size:11px;color:var(--app-muted);margin-top:2px">$22.40 at the venue</div>
+                </div>
+                <span class="app-cta" style="margin-top:auto">Claim this spot</span>
+              </div>
+
+              <!-- 03 · huddle -->
+              <div class="scr" data-screen="huddle">
+                <span class="app-eyebrow">Your huddle</span>
+                <h4 class="app-h1">Everyone’s voted</h4>
+                <div style="margin-top:13px">
+                  <div class="app-row"><span class="app-av done">R</span><span style="flex:1;font-size:13px;font-weight:600">Rahul</span><span class="app-tag on">Voted</span></div>
+                  <div class="app-row"><span class="app-av done">M</span><span style="flex:1;font-size:13px;font-weight:600">Mei</span><span class="app-tag on">Voted</span></div>
+                  <div class="app-row"><span class="app-av done">J</span><span style="flex:1;font-size:13px;font-weight:600">Jonas</span><span class="app-tag on">Voted</span></div>
+                  <div class="app-row"><span class="app-av done">A</span><span style="flex:1;font-size:13px;font-weight:600">Ada</span><span class="app-tag on">Voted</span></div>
+                </div>
+                <div class="app-card" style="margin-top:13px">
+                  <div class="app-body">
+                    <span class="app-eyebrow">The group picked</span>
+                    <div class="app-venue" style="margin-top:4px">Echo Room</div>
+                    <div class="app-meta">Karaoke · CBD · 8:30pm</div>
+                    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:10px;padding-top:10px;border-top:1px solid var(--app-line)">
+                      <span style="font-size:11.5px;color:var(--app-muted)">Your share</span>
+                      <span class="app-now" style="font-size:18px">$14.50</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 04 · code -->
+              <div class="scr" data-screen="code">
+                <div style="text-align:center;margin-top:16px">
+                  <span class="app-eyebrow">Show this at the door</span>
+                </div>
+                <div class="app-card" style="margin-top:14px;padding:22px 14px">
+                  <div class="app-code">482916</div>
+                  <div style="text-align:center;margin-top:14px">
+                    <div class="app-venue" style="font-size:15px">Echo Room</div>
+                    <div class="app-meta">Karaoke · CBD · 8:30pm · 4 people</div>
+                  </div>
+                </div>
+                <div style="margin-top:13px;padding:11px 12px;border-radius:12px;background:var(--app-surface)">
+                  <div style="display:flex;align-items:center;gap:7px">
+                    <span class="app-dot"></span>
+                    <span style="font-size:11.5px;color:var(--app-muted)">Balance charged when it’s scanned</span>
+                  </div>
+                </div>
+                <div class="app-foot" style="padding-top:12px;border-top:1px solid var(--app-line)">
+                  <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--app-faint)">
+                    <span>Paid on booking</span><span style="color:var(--app-text);font-weight:600">$11.60</span>
+                  </div>
+                  <div style="margin-top:6px;display:flex;justify-content:space-between;font-size:11.5px;color:var(--app-faint)">
+                    <span>Due tonight</span><span style="color:var(--app-text);font-weight:600">$46.40</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <div class="demo-steps">
+
+          <article class="demo-step is-on" data-screen="feed">
+            <span class="demo-step-n">Step 01</span>
+            <h3>See what’s on tonight</h3>
+            <p>Venues drop their quiet slots at a discount. Everything you see is live, nearby, and bookable right now — no vouchers, no minimum spend.</p>
+          </article>
+
+          <article class="demo-step" data-screen="claim">
+            <span class="demo-step-n">Step 02</span>
+            <h3>Claim it in two taps</h3>
+            <p>A small deposit holds your spot the second you claim it. The rest is settled at the venue when you turn up.</p>
+          </article>
+
+          <article class="demo-step" data-screen="huddle">
+            <span class="demo-step-n">Step 03</span>
+            <h3>Can’t agree? Start a huddle</h3>
+            <p>Send one link. Everyone ranks their picks, the group decides, and the cost splits itself evenly — no chasing anyone for cash.</p>
+          </article>
+
+          <article class="demo-step" data-screen="code">
+            <span class="demo-step-n">Step 04</span>
+            <h3>Show your code at the door</h3>
+            <p>Staff type in your six digits, your balance is charged, and you’re in. That’s the whole night sorted.</p>
+          </article>
+
+        </div>
+
       </div>
     </section>
 
@@ -677,6 +1093,43 @@
         try { localStorage.setItem('impulse-theme', next); } catch (e) {}
         btn.textContent = label();
       });
+    })();
+  </script>
+
+  <script>
+    /*
+      SCROLL DEMO — a sticky phone whose screen follows the step you're reading.
+
+      Driven by IntersectionObserver against a thin band across the middle of the
+      viewport, not a scroll listener: the callback only fires when a step enters
+      or leaves that band, so there's no per-frame work and nothing to throttle.
+    */
+    (function () {
+      var steps = document.querySelectorAll('.demo-step');
+      var screens = document.querySelectorAll('.scr');
+      if (!steps.length || !screens.length) return;
+
+      // Reduced motion: leave every step legible and the phone on screen one.
+      // The section still reads top to bottom, it just doesn't animate.
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        steps.forEach(function (s) { s.classList.add('is-on'); });
+        return;
+      }
+
+      function show(name) {
+        steps.forEach(function (s) { s.classList.toggle('is-on', s.dataset.screen === name); });
+        screens.forEach(function (s) { s.classList.toggle('is-on', s.dataset.screen === name); });
+      }
+
+      if (!('IntersectionObserver' in window)) { steps.forEach(function (s) { s.classList.add('is-on'); }); return; }
+
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) show(e.target.dataset.screen);
+        });
+      }, { rootMargin: '-48% 0px -48% 0px', threshold: 0 });
+
+      steps.forEach(function (s) { io.observe(s); });
     })();
   </script>
 
