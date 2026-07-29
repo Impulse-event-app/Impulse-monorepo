@@ -1,14 +1,23 @@
 from datetime import date as dt_date
-from typing import List
+from datetime import datetime, timezone
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from auth import get_current_user
 from database import get_db
+from huddle_logic import parse_slot_datetime
 from models import Booking, Deal, Venue
-from schemas import DealResponse, StatsResponse, VenueCreate, VenueResponse, VenueUpdate
+from schemas import (
+    DealPerformanceItem,
+    DealResponse,
+    StatsResponse,
+    VenueCreate,
+    VenueResponse,
+    VenueUpdate,
+)
 
 router = APIRouter()
 
@@ -146,3 +155,90 @@ def get_stats(
         spots_filled=total_spots - spots_remaining,
         total_spots=total_spots,
     )
+
+
+def _deal_ended_at(deal: Deal) -> Optional[datetime]:
+    """When the deal finished running: its last slot, else expires_at. Naive
+    parses are read as UTC — same convention as huddles._cutoff()."""
+    slot_times = [t for s in (deal.slots or []) if (t := parse_slot_datetime(deal.date, s))]
+    ended = max(slot_times) if slot_times else deal.expires_at
+    if ended is None:
+        return None
+    return ended if ended.tzinfo else ended.replace(tzinfo=timezone.utc)
+
+
+@router.get("/{venue_id}/deal-performance", response_model=List[DealPerformanceItem])
+def get_deal_performance(
+    venue_id: str,
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Admin: how the venue's finished deals actually sold — fill rate and how
+    long each took to draw its last booking. Newest first."""
+    venue = _get_venue_or_404(venue_id, db)
+    _assert_owner(venue, user)
+
+    now = datetime.now(timezone.utc)
+    completed: List[Deal] = []
+    for deal in (
+        db.query(Deal)
+        .filter(Deal.venue_id == venue_id)
+        .order_by(Deal.created_at.desc())
+        .all()
+    ):
+        ended = _deal_ended_at(deal)
+        if ended is not None and ended <= now:
+            completed.append(deal)
+        if len(completed) == limit:
+            break
+
+    if not completed:
+        return []
+
+    # Cancelled bookings release their spots, so they don't count as demand.
+    booking_rows = (
+        db.query(
+            Booking.deal_id,
+            func.count(Booking.id),
+            func.max(Booking.created_at),
+        )
+        .filter(
+            Booking.deal_id.in_([d.id for d in completed]),
+            Booking.status != "cancelled",
+        )
+        .group_by(Booking.deal_id)
+        .all()
+    )
+    by_deal = {deal_id: (count, last) for deal_id, count, last in booking_rows}
+
+    items = []
+    for deal in completed:
+        bookings, last_booking_at = by_deal.get(deal.id, (0, None))
+        filled = deal.total_spots - deal.spots_remaining
+
+        minutes = None
+        if last_booking_at is not None:
+            live_at = deal.created_at
+            if live_at.tzinfo is None:
+                live_at = live_at.replace(tzinfo=timezone.utc)
+            if last_booking_at.tzinfo is None:
+                last_booking_at = last_booking_at.replace(tzinfo=timezone.utc)
+            minutes = max(0, round((last_booking_at - live_at).total_seconds() / 60))
+
+        items.append(
+            DealPerformanceItem(
+                deal_id=deal.id,
+                title=deal.title,
+                category=deal.category,
+                discount_pct=float(deal.discount_pct),
+                date=deal.date,
+                slots=deal.slots or [],
+                total_spots=deal.total_spots,
+                spots_filled=filled,
+                fill_rate=round(filled / deal.total_spots * 100, 1) if deal.total_spots else 0.0,
+                bookings=bookings,
+                minutes_to_last_booking=minutes,
+            )
+        )
+    return items

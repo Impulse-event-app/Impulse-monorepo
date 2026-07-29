@@ -316,6 +316,23 @@ class StatsResponse(BaseModel):
     total_spots: int
 
 
+class DealPerformanceItem(BaseModel):
+    """One completed deal, scored on how well it sold. `date`/`slots` are the
+    raw display strings — venue-web renders the time window from them."""
+
+    deal_id: str
+    title: str
+    category: str
+    discount_pct: float
+    date: str
+    slots: List[str]
+    total_spots: int
+    spots_filled: int
+    fill_rate: float                            # 0–100, 1dp
+    bookings: int
+    minutes_to_last_booking: Optional[int]      # deal created_at → newest booking
+
+
 # ── Huddle (group voting → shared booking) ────────────────────────────────────
 
 class HuddleCreate(BaseModel):

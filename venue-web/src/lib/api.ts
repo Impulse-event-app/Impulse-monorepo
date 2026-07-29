@@ -122,6 +122,21 @@ export interface StatsResponse {
   total_spots: number;
 }
 
+/** One finished deal, scored on how well it sold. */
+export interface DealPerformanceItem {
+  deal_id: string;
+  title: string;
+  category: string;
+  discount_pct: number;
+  date: string;
+  slots: string[];
+  total_spots: number;
+  spots_filled: number;
+  fill_rate: number; // 0–100
+  bookings: number;
+  minutes_to_last_booking: number | null;
+}
+
 export const venueApi = {
   create: (body: VenueCreate) =>
     request<Venue>("POST", "/venues", body),
@@ -135,6 +150,8 @@ export const venueApi = {
     request<StatsResponse>("GET", `/venues/${id}/stats`),
   deals: (id: string) =>
     request<Deal[]>("GET", `/venues/${id}/deals`),
+  dealPerformance: (id: string, limit = 10) =>
+    request<DealPerformanceItem[]>("GET", `/venues/${id}/deal-performance?limit=${limit}`),
 };
 
 // ── Deals ─────────────────────────────────────────────────────────────────────

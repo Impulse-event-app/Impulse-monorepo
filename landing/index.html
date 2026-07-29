@@ -441,8 +441,12 @@
       /* Drop out of grid entirely: a sticky grid item is confined to its own
          row, so it would unpin as soon as the steps row began. In normal flow
          the phone's containing block is the whole section and it stays put. */
+      /* No sticky on phones. The pinned column is dropped entirely and each
+         step carries its own phone inline (cloned in JS), so the section is a
+         plain vertical scroll: screen, copy, screen, copy. */
       .demo-grid { display: block; }
-      .demo-phone-col { position: sticky; top: 12px; z-index: 3; display: flex; justify-content: center; }
+      .demo-phone-col { display: none; position: static; }
+      .step-phone { display: flex; justify-content: center; margin-bottom: 20px; }
       .phone { width: 214px; height: 440px; border-radius: 34px; padding: 8px; }
       .phone-screen { border-radius: 26px; }
       .phone-island { width: 62px; height: 18px; top: 7px; }
@@ -462,13 +466,17 @@
       .app-now { font-size: 18px; }
       .app-cta { padding: 12px; font-size: 13px; }
       .app-strip { height: 32px; }
-      /* Steps sit in the band below the pinned phone rather than centred, so
-         copy never scrolls behind it. */
+      /* Steps become plain stacked blocks — no viewport-height maths, nothing
+         pinned, every step fully legible as it passes. */
       .demo-step {
-        min-height: 46vh; justify-content: flex-end;
-        padding-bottom: 26px; margin-left: 0;
+        min-height: 0; display: block;
+        opacity: 1; transition: none;
+        padding: 0 0 clamp(44px, 10vw, 72px);
+        margin-left: 0;
       }
-      .demo-steps { margin-top: 26px; }
+      .demo-step:last-child { padding-bottom: 0; }
+      .demo-step-n::before { transform: scaleX(1); }
+      .demo-steps { margin-top: 0; }
       .demo-step h3 { font-size: clamp(21px, 6vw, 27px); }
       .demo-step p { font-size: 14.5px; }
     }
@@ -1123,6 +1131,47 @@
       var steps = document.querySelectorAll('.demo-step');
       var screens = document.querySelectorAll('.scr');
       if (!steps.length || !screens.length) return;
+
+      var frame = document.querySelector('.demo-phone-col .phone');
+      var small = window.matchMedia('(max-width: 900px)');
+
+      // ---- Mobile: unroll the pinned sequence into a plain list ----
+      // Each step gets its own phone showing only that step's screen. Nothing
+      // sticks, nothing swaps, so the section is an ordinary vertical scroll.
+      function buildInline() {
+        if (document.querySelector('.step-phone')) return;
+        steps.forEach(function (step) {
+          var clone = frame.cloneNode(true);
+          clone.removeAttribute('role');
+          clone.removeAttribute('aria-label');
+          clone.setAttribute('aria-hidden', 'true');   // the step copy says it all
+          Array.prototype.forEach.call(clone.querySelectorAll('.scr'), function (s) {
+            if (s.dataset.screen === step.dataset.screen) s.classList.add('is-on');
+            else s.parentNode.removeChild(s);
+          });
+          var wrap = document.createElement('div');
+          wrap.className = 'step-phone';
+          wrap.appendChild(clone);
+          step.insertBefore(wrap, step.firstChild);
+          step.classList.add('is-on');
+        });
+      }
+
+      function teardownInline() {
+        Array.prototype.forEach.call(document.querySelectorAll('.step-phone'), function (el) {
+          el.parentNode.removeChild(el);
+        });
+      }
+
+      function sync() {
+        if (small.matches) buildInline();
+        else teardownInline();
+      }
+      sync();
+      if (small.addEventListener) small.addEventListener('change', sync);
+
+      // Everything below drives the desktop sticky phone only.
+      if (small.matches) return;
 
       // Reduced motion: leave every step legible and the phone on screen one.
       // The section still reads top to bottom, it just doesn't animate.
