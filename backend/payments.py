@@ -17,6 +17,10 @@ import json
 import pinch_client
 from pinch_client import PinchError  # re-exported for callers
 
+# Impulse's cut of the balance charge. The deposit has no rate — Impulse keeps
+# all of it (applicationFee == amount), which is why there is no constant for it.
+BALANCE_APPLICATION_FEE_RATE = 0.20
+
 
 class PaymentNotApproved(PinchError):
     """A charge returned a non-approved status. Carries the payment body."""

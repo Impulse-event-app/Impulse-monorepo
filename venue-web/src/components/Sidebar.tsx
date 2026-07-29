@@ -12,6 +12,7 @@ const NAV: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: "/dashboard", label: "Dashboard", match: (p) => p === "/dashboard" },
   { href: "/dashboard/deals", label: "Deals", match: (p) => p.startsWith("/dashboard/deals") },
   { href: "/dashboard/bookings", label: "Bookings", match: (p) => p.startsWith("/dashboard/bookings") },
+  { href: "/dashboard/payouts", label: "Payouts", match: (p) => p.startsWith("/dashboard/payouts") },
   { href: "/dashboard/redeem", label: "Redeem", match: (p) => p.startsWith("/dashboard/redeem") },
 ];
 

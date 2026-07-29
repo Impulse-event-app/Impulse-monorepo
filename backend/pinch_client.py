@@ -18,6 +18,7 @@ sources src_XXX, refunds ref_XXX.
 import os
 import threading
 import time
+from typing import Optional
 
 import httpx
 from dotenv import load_dotenv
@@ -115,6 +116,53 @@ def get_payment(payment_id: str, merchant_id: str) -> dict:
     if resp.status_code < 200 or resp.status_code >= 300:
         raise PinchError(resp.status_code, resp.text)
     return resp.json()
+
+
+def _get(path: str, merchant_id: str, params: Optional[dict] = None) -> dict:
+    url = f"{PINCH_BASE_URL}{path}"
+    resp = httpx.get(url, headers=_headers(merchant_id), params=params, timeout=_TIMEOUT)
+    if resp.status_code < 200 or resp.status_code >= 300:
+        raise PinchError(resp.status_code, resp.text)
+    return resp.json()
+
+
+def get_transfer(transfer_id: str, merchant_id: str) -> dict:
+    """GET /transfers/{id} — a transfer is Pinch actually sending funds to a
+    bank account, as opposed to a payment merely being approved.
+
+    Returns id (tra_XXX), transferDate, amount (net cents), currency, totalFees,
+    reference, accountName, bsb, accountNumber, status and a `summary` array
+    broken down by Settlements / Dishonours / Application Fees / Transfer Fee /
+    Refunds.
+    """
+    return _get(f"/transfers/{transfer_id}", merchant_id)
+
+
+def list_transfer_line_items(transfer_id: str, merchant_id: str,
+                             page: int = 1, page_size: int = 500) -> dict:
+    """GET /transfers/items/{id} — the individual payments inside a transfer.
+
+    Paginated: returns page, pageSize, totalPages, totalItems and `data`, where
+    each item carries id, type, gross, fees, total, currency, description,
+    transactionDate and metadata. `metadata` comes back as a JSON *string* —
+    the same string payments.py wrote — so it still contains impulseBookingId.
+    """
+    return _get(
+        f"/transfers/items/{transfer_id}", merchant_id,
+        params={"page": page, "pageSize": page_size},
+    )
+
+
+def iter_transfer_line_items(transfer_id: str, merchant_id: str) -> list:
+    """Every line item across all pages, in Pinch's order."""
+    items: list = []
+    page = 1
+    while True:
+        body = list_transfer_line_items(transfer_id, merchant_id, page=page)
+        items.extend(body.get("data") or [])
+        if page >= int(body.get("totalPages") or 1):
+            return items
+        page += 1
 
 
 def create_refund(input: dict, merchant_id: str) -> dict:
