@@ -1,41 +1,32 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <title>Impulse — Plans, on impulse.</title>
-  <meta name="description" content="Last-minute things to do in Sydney, with the price already worked out. Find something tonight, or list your venue.">
+  <meta name="description" content="Last-minute things to do in Sydney, with the price already worked out. Join the waitlist for early access.">
   <meta name="theme-color" content="#0F0E0D">
+  <!-- Dark only: no theme switching, so tell the UA to render form controls dark. -->
+  <meta name="color-scheme" content="dark">
 
   <!-- Social sharing -->
   <meta property="og:type" content="website">
   <meta property="og:title" content="Impulse — Plans, on impulse.">
-  <meta property="og:description" content="Last-minute things to do in Sydney, with the price already worked out.">
+  <meta property="og:description" content="Last-minute things to do in Sydney, with the price already worked out. Join the waitlist for early access.">
   <meta name="twitter:card" content="summary_large_image">
 
   <!-- PulseMark favicon: coral concentric rings + centre dot on warm near-black -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230F0E0D'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23FF5A4D' stroke-opacity='.3' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='6.5' fill='none' stroke='%23FF5A4D' stroke-opacity='.6' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23FF5A4D'/%3E%3C/svg%3E">
-
-  <!-- Set theme before first paint to avoid a flash; defaults to dark like the design. -->
-  <script>
-    (function () {
-      try {
-        var t = localStorage.getItem('impulse-theme');
-        document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark');
-      } catch (e) {
-        document.documentElement.setAttribute('data-theme', 'dark');
-      }
-    })();
-  </script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 
   <style>
-    /* ---- Palette (dark is the default; light overrides via [data-theme]) ---- */
+    /* ---- Palette (dark only) ---- */
     :root {
+      color-scheme: dark;
       --accent: #FF5A4D;
       --accent-ink: #1A0B08;
       --bg: #0F0E0D;
@@ -43,13 +34,6 @@
       --text: #F4F1EA;
       --muted: rgba(244, 241, 234, 0.60);
       --hairline: rgba(244, 241, 234, 0.12);
-    }
-    :root[data-theme="light"] {
-      --bg: #F6F3ED;
-      --surface: #FFFFFF;
-      --text: #17120F;
-      --muted: rgba(23, 18, 15, 0.58);
-      --hairline: rgba(23, 18, 15, 0.12);
     }
 
     * { box-sizing: border-box; }
@@ -103,19 +87,6 @@
       font-size: 13px; letter-spacing: 0.28em; text-transform: uppercase;
       color: var(--muted);
     }
-    .theme-toggle {
-      font-family: 'Space Mono', ui-monospace, monospace;
-      font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
-      color: var(--muted);
-      background: transparent;
-      border: 1px solid var(--hairline);
-      border-radius: 100px;
-      padding: 9px 16px;
-      cursor: pointer;
-      transition: color .15s ease, border-color .15s ease;
-    }
-    .theme-toggle:hover { color: var(--text); border-color: var(--muted); }
-
     /* ---- Hero ---- */
     .hero {
       display: flex; flex-direction: column;
@@ -148,70 +119,19 @@
       color: var(--muted);
     }
 
-    /* ---- Cards ---- */
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
-      gap: clamp(16px, 2.2vw, 24px);
-    }
-    .card {
-      display: flex; flex-direction: column; justify-content: space-between;
-      border-radius: 22px;
-      padding: clamp(24px, 3vw, 40px);
-      min-height: clamp(300px, 32vw, 380px);
-      transition: transform .2s ease, box-shadow .2s ease;
-    }
-    .card:hover { transform: translateY(-4px); }
-    .card-going {
-      background: #FF5A4D;
-      box-shadow: 0 24px 60px -24px rgba(255, 90, 77, 0.55);
-    }
-    .card-going:hover { box-shadow: 0 30px 70px -22px rgba(255, 90, 77, 0.62); }
-    .card-venue {
-      background: var(--surface);
-      border: 1px solid var(--hairline);
-      box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.6);
-    }
-    .card-head {
-      font-family: 'Archivo', ui-sans-serif, sans-serif;
-      font-weight: 900;
-      font-size: clamp(30px, 4.4vw, 52px);
-      line-height: 0.95; letter-spacing: -0.03em; margin: 0;
-    }
-    .card-eyebrow {
-      font-family: 'Space Mono', ui-monospace, monospace;
-      font-size: 12px; letter-spacing: 0.28em; text-transform: uppercase;
-    }
-    .card-copy {
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
-      font-size: clamp(15px, 1.4vw, 18px);
-      line-height: 1.45; margin: 0; max-width: 34ch;
-    }
-    .card-top { display: flex; flex-direction: column; gap: 14px; }
-
-    /* Consumer card lives on coral; its ink is the warm near-black. */
-    .card-going .card-eyebrow { color: #1A0B08; opacity: 0.7; }
-    .card-going .card-head { color: #1A0B08; }
-    .card-going .card-copy { color: #1A0B08; opacity: 0.82; }
-
-    /* Venue card follows the theme. */
-    .card-venue .card-eyebrow { color: #FF5A4D; }
-    .card-venue .card-head { color: var(--text); }
-    .card-venue .card-copy { color: var(--muted); }
-
+    /* ---- Hero CTA ---- */
     .btn {
       display: inline-flex; align-items: center; gap: 10px; align-self: flex-start;
       font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
       font-weight: 700; font-size: 16px;
-      padding: 14px 24px; border-radius: 100px; margin-top: 26px;
+      padding: 14px 24px; border-radius: 100px; margin-top: 6px;
+      background: var(--accent); color: var(--accent-ink);
+      box-shadow: 0 16px 40px -16px rgba(255, 90, 77, 0.55);
+      transition: transform .2s ease, box-shadow .2s ease;
     }
-    .btn-going { background: #1A0B08; color: #F4F1EA; }
-    .btn-venue { background: #FF5A4D; color: #1A0B08; }
-    /* Hero CTA sits in the hero's own flex gap — it doesn't need .btn's card spacing. */
-    .btn-hero { margin-top: 6px; }
-    .btn-hero:hover .arrow { transform: translateX(4px); }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 20px 46px -16px rgba(255, 90, 77, 0.62); }
+    .btn:hover .arrow { transform: translateX(4px); }
     .arrow { transition: transform .2s ease; }
-    .card:hover .arrow { transform: translateX(4px); }
 
     /* ---- Category marquee ---- */
     .strip {
@@ -316,13 +236,6 @@
       border: 1px solid rgba(244,241,234,.14);
       box-shadow: 0 40px 90px -30px rgba(0,0,0,.75), 0 0 0 1px rgba(0,0,0,.5) inset;
     }
-    :root[data-theme="light"] .phone {
-      --app-bg: #F6F3ED; --app-surface: #FFFFFF; --app-surface2: #F0ECE4;
-      --app-text: #17120F; --app-muted: rgba(23,18,15,.60); --app-faint: rgba(23,18,15,.42);
-      --app-line: rgba(23,18,15,.10); --app-ph: #EAE5DC;
-      --app-accent-soft: rgba(255,90,77,.13);
-      box-shadow: 0 40px 90px -34px rgba(40,30,20,.45);
-    }
     .phone-screen {
       position: relative; width: 100%; height: 100%; overflow: hidden;
       border-radius: 36px; background: var(--app-bg); color: var(--app-text);
@@ -364,10 +277,6 @@
       font-size: 11px; font-weight: 500; padding: 6px 11px; border-radius: 999px;
       background: rgba(244,241,234,.07); color: var(--app-muted); white-space: nowrap;
     }
-    /* :not(.on) matters — this selector outranks `.app-chip.on` (0,3,0 vs
-       0,2,0), so without it the light theme repaints the *selected* chip with
-       the unselected background. */
-    :root[data-theme="light"] .app-chip:not(.on) { background: rgba(23,18,15,.05); }
     .app-chip.on { background: var(--app-text); color: var(--app-bg); font-weight: 600; }
     .app-card {
       background: var(--app-surface); border-radius: 19px; overflow: hidden;
@@ -583,7 +492,7 @@
     .wl-input::placeholder { color: var(--muted); opacity: .7; }
     .wl-input:hover, .wl-select select:hover { border-color: var(--muted); }
     .wl-input:focus-visible, .wl-select select:focus-visible, .wl-btn:focus-visible,
-    .wl-share-btn:focus-visible, .theme-toggle:focus-visible, a:focus-visible {
+    .wl-share-btn:focus-visible, a:focus-visible {
       outline: 2px solid var(--accent);
       outline-offset: 2px;
     }
@@ -717,7 +626,8 @@
       html { scroll-behavior: auto; }
       .marquee { animation: none; }
       .dot { animation: none; }
-      .card, .arrow, body { transition: none; }
+      .btn, .arrow, body { transition: none; }
+      .btn:hover { transform: none; }
       /* Scroll demo: every step legible at once, no fading or sliding. */
       .demo-step { opacity: 1; transition: none; }
       .demo-step-n::before { transform: scaleX(1); transition: none; }
@@ -801,7 +711,6 @@
         <div class="dot"></div>
         <span class="brand-name">impulse</span>
       </div>
-      <button id="theme-toggle" class="theme-toggle" aria-label="Toggle colour theme">Lights on</button>
     </header>
 
     <section class="hero">
@@ -809,34 +718,7 @@
       <h1 class="wordmark">Impulse</h1>
       <p class="tagline">Plans, on impulse.</p>
       <p class="lede">Last-minute things to do in Sydney, with the price already worked out.</p>
-      <a class="btn btn-venue btn-hero" href="#waitlist">Join the waitlist <span class="arrow">→</span></a>
-    </section>
-
-    <!--
-      LINKS — update these two hrefs to your live deployments:
-        · Consumer app (mobile-sdk54 on EAS Hosting)
-        · Venue dashboard (venue-web on Vercel)
-    -->
-    <section class="cards">
-
-      <a class="card card-going" href="https://impulseapp.expo.app/sign-in">
-        <div class="card-top">
-          <span class="card-eyebrow">Going out</span>
-          <h2 class="card-head">Something<br>on tonight?</h2>
-          <p class="card-copy">Last-minute deals near you. Your slot's held the second you claim it.</p>
-        </div>
-        <span class="btn btn-going">Find something tonight <span class="arrow">→</span></span>
-      </a>
-
-      <a class="card card-venue" href="https://venue-web-five.vercel.app/login">
-        <div class="card-top">
-          <span class="card-eyebrow">For venues</span>
-          <h2 class="card-head">Turn a quiet<br>night around.</h2>
-          <p class="card-copy">List deals, fill your empty slots, manage the lot. Quiet nights into booked-out ones.</p>
-        </div>
-        <span class="btn btn-venue">List your venue <span class="arrow">→</span></span>
-      </a>
-
+      <a class="btn" href="#waitlist">Join the waitlist <span class="arrow">→</span></a>
     </section>
 
     <section class="strip" aria-label="Categories">
@@ -1158,22 +1040,6 @@
     </footer>
 
   </div>
-
-  <script>
-    (function () {
-      var root = document.documentElement;
-      var btn = document.getElementById('theme-toggle');
-      function label() { return root.getAttribute('data-theme') === 'dark' ? 'Lights on' : 'Lights off'; }
-      if (!btn) return;
-      btn.textContent = label();
-      btn.addEventListener('click', function () {
-        var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-        root.setAttribute('data-theme', next);
-        try { localStorage.setItem('impulse-theme', next); } catch (e) {}
-        btn.textContent = label();
-      });
-    })();
-  </script>
 
   <script>
     /*
