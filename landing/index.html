@@ -364,7 +364,10 @@
       font-size: 11px; font-weight: 500; padding: 6px 11px; border-radius: 999px;
       background: rgba(244,241,234,.07); color: var(--app-muted); white-space: nowrap;
     }
-    :root[data-theme="light"] .app-chip { background: rgba(23,18,15,.05); }
+    /* :not(.on) matters — this selector outranks `.app-chip.on` (0,3,0 vs
+       0,2,0), so without it the light theme repaints the *selected* chip with
+       the unselected background. */
+    :root[data-theme="light"] .app-chip:not(.on) { background: rgba(23,18,15,.05); }
     .app-chip.on { background: var(--app-text); color: var(--app-bg); font-weight: 600; }
     .app-card {
       background: var(--app-surface); border-radius: 19px; overflow: hidden;
@@ -378,6 +381,12 @@
       font-family: 'Space Mono', ui-monospace, monospace;
       font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--app-faint);
     }
+    /* `slice` so the artwork crops rather than distorts across the different
+       photo heights (128px hero, 106px card, 48px strip). */
+    .app-art { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    /* Thin artwork band on the huddle winner card — the tallest screen, so this
+       shrinks at mobile size to keep the share row clear of the bottom edge. */
+    .app-strip { height: 48px; }
     .app-pill {
       position: absolute; top: 9px; left: 9px; display: flex; gap: 5px;
     }
@@ -485,6 +494,7 @@
       .app-venue { font-size: 14.5px; }
       .app-now { font-size: 18px; }
       .app-cta { padding: 12px; font-size: 13px; }
+      .app-strip { height: 32px; }
       /* Steps sit in the band below the pinned phone rather than centred, so
          copy never scrolls behind it. */
       .demo-step {
@@ -721,6 +731,69 @@
   </style>
 </head>
 <body>
+
+  <!--
+    Category artwork for the demo phone. Original line work, not photography —
+    the app itself shows a category placeholder until a venue uploads a real
+    photo via venue-web, so this stands in for that. Drawn with the app's own
+    CSS variables, so it follows the light/dark toggle like everything else.
+    To swap in real photos later, replace the <svg class="app-art"> in a screen
+    with <img class="app-art" src="..." alt="">.
+  -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <path id="pin" d="M5 .8c1.85 0 3.1 1.6 3.1 3.3 0 1.15-.55 1.95-1.05 2.6-.45.6-.65 1.2-.5 2.05l1.55 10.7c.2 1.45-1.35 2.4-3.1 2.4s-3.3-.95-3.1-2.4L3.45 8.75c.15-.85-.05-1.45-.5-2.05C2.45 6.05 1.9 5.25 1.9 4.1 1.9 2.4 3.15.8 5 .8Z"/>
+      <linearGradient id="floorFade" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="var(--app-bg)" stop-opacity="0"/>
+        <stop offset="1" stop-color="var(--app-bg)" stop-opacity=".5"/>
+      </linearGradient>
+
+      <!-- Every motif is centred on y=84 and kept inside roughly y=34–134, the
+           band that survives the tightest crop (a 32px strip shows only the
+           middle ~40% of the viewBox). Nothing rectangular in the background,
+           since straight edges make the crop obvious. -->
+      <g id="art-bowling">
+        <rect width="300" height="168" fill="var(--app-ph)"/>
+        <circle cx="150" cy="84" r="74" fill="var(--app-accent)" opacity=".09"/>
+        <g fill="var(--app-accent)">
+          <use href="#pin" transform="translate(112 40) scale(2.1)"/>
+          <use href="#pin" transform="translate(139 33) scale(2.1)"/>
+          <use href="#pin" transform="translate(166 40) scale(2.1)"/>
+        </g>
+        <circle cx="68" cy="108" r="23" fill="var(--app-accent)" opacity=".85"/>
+        <g fill="var(--app-ph)">
+          <circle cx="61" cy="101" r="3.4"/><circle cx="75" cy="100" r="3.4"/><circle cx="69" cy="111" r="3.4"/>
+        </g>
+      </g>
+
+      <g id="art-escape">
+        <rect width="300" height="168" fill="var(--app-ph)"/>
+        <g fill="none" stroke="var(--app-accent)" stroke-width="2.5">
+          <circle cx="150" cy="84" r="68" opacity=".12"/>
+          <circle cx="150" cy="84" r="49" opacity=".22"/>
+        </g>
+        <circle cx="150" cy="70" r="23" fill="var(--app-accent)"/>
+        <path d="M143 86h14l6 34h-26Z" fill="var(--app-accent)"/>
+      </g>
+
+      <g id="art-karaoke">
+        <rect width="300" height="168" fill="var(--app-ph)"/>
+        <g fill="none" stroke="var(--app-accent)" stroke-width="3" stroke-linecap="round">
+          <path d="M100 54a38 38 0 0 0 0 60" opacity=".38"/>
+          <path d="M200 54a38 38 0 0 1 0 60" opacity=".38"/>
+          <path d="M78 40a62 62 0 0 0 0 88" opacity=".16"/>
+          <path d="M222 40a62 62 0 0 1 0 88" opacity=".16"/>
+        </g>
+        <rect x="131" y="34" width="38" height="68" rx="19" fill="var(--app-accent)"/>
+        <g stroke="var(--app-ph)" stroke-width="2.4" opacity=".45">
+          <path d="M137 52h26M137 63h26M137 74h26M137 85h26"/>
+        </g>
+        <path d="M127 99a23 23 0 0 0 46 0" fill="none" stroke="var(--app-accent)" stroke-width="4.5"/>
+        <rect x="146" y="117" width="8" height="21" rx="4" fill="var(--app-accent)"/>
+      </g>
+    </defs>
+  </svg>
+
   <div class="wrap">
 
     <header class="header">
@@ -796,7 +869,7 @@
     <section class="demo" id="how-it-works" aria-labelledby="demo-title">
       <div class="demo-head">
         <span class="eyebrow">How it works</span>
-        <h2 class="demo-title" id="demo-title">Empty tables tonight, priced to fill.</h2>
+        <h2 class="demo-title" id="demo-title">Find it, claim it, show up.</h2>
       </div>
 
       <div class="demo-grid">
@@ -819,7 +892,7 @@
                 </div>
                 <div class="app-card">
                   <div class="app-photo">
-                    <span>Bowling · venue photo</span>
+                    <svg class="app-art" viewBox="0 0 300 168" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-bowling"/></svg>
                     <div class="app-pill"><b>Bowling</b></div>
                   </div>
                   <div class="app-body">
@@ -835,7 +908,7 @@
                 </div>
                 <div class="app-card" style="margin-top:11px">
                   <div class="app-photo" style="height:70px">
-                    <span>Escape rooms · venue photo</span>
+                    <svg class="app-art" viewBox="0 0 300 168" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-escape"/></svg>
                     <div class="app-pill"><b>Escape rooms</b><i>ends in 2:08</i></div>
                   </div>
                 </div>
@@ -850,7 +923,10 @@
               <!-- 02 · claim -->
               <div class="scr" data-screen="claim">
                 <div class="app-card">
-                  <div class="app-photo" style="height:128px"><span>Escape rooms · venue photo</span></div>
+                  <div class="app-photo" style="height:128px">
+                    <svg class="app-art" viewBox="0 0 300 168" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-escape"/></svg>
+                    <div class="app-pill"><b>Escape rooms</b></div>
+                  </div>
                   <div class="app-body">
                     <div class="app-venue">The Lockup</div>
                     <div class="app-meta">Newtown · 3.4 km · ★ 4.8</div>
@@ -885,6 +961,9 @@
                   <div class="app-row"><span class="app-av done">A</span><span style="flex:1;font-size:13px;font-weight:600">Ada</span><span class="app-tag on">Voted</span></div>
                 </div>
                 <div class="app-card" style="margin-top:13px">
+                  <div class="app-photo app-strip">
+                    <svg class="app-art" viewBox="0 0 300 168" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-karaoke"/></svg>
+                  </div>
                   <div class="app-body">
                     <span class="app-eyebrow">The group picked</span>
                     <div class="app-venue" style="margin-top:4px">Echo Room</div>
