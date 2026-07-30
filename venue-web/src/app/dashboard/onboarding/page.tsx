@@ -96,7 +96,7 @@ function validateFields(form: VenueCreate): FieldErrors {
 }
 
 export default function VenueOnboardingPage() {
-  const { venue, loading, setVenue } = useVenue();
+  const { venue, loading, error: venueLoadError, refetch, setVenue } = useVenue();
   const router = useRouter();
   const { theme, toggle } = useTheme();
 
@@ -125,6 +125,28 @@ export default function VenueOnboardingPage() {
   }, [loading, venue, router]);
 
   if (!loading && venue) return null;
+
+  // If the venue lookup failed (backend down / token rejected) we can't be sure
+  // the user is venue-less — block the create form so we don't spawn a duplicate.
+  if (venueLoadError) {
+    return (
+      <div style={{ display: "grid", placeItems: "center", minHeight: "70vh", padding: 24 }}>
+        <div style={{ ...card, borderRadius: 18, padding: 32, maxWidth: 460, textAlign: "center" }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 20, marginBottom: 8 }}>
+            Can&apos;t confirm your venue
+          </div>
+          <p style={{ color: "var(--muted)", fontSize: 14, lineHeight: 1.6, margin: "0 0 20px" }}>
+            We couldn&apos;t reach the server to check whether you already have a venue. To avoid
+            creating a duplicate, we&apos;ve paused setup — retry once you&apos;re back online.
+            <span style={{ display: "block", marginTop: 8, fontFamily: FONT_MONO, fontSize: 11, color: "var(--faint)" }}>
+              {venueLoadError.status ? `Error ${venueLoadError.status}` : "Network error"} · {venueLoadError.message}
+            </span>
+          </p>
+          <button onClick={refetch} style={{ ...btnPrimary, padding: "12px 22px" }}>Try again</button>
+        </div>
+      </div>
+    );
+  }
 
   function setField<K extends keyof VenueCreate>(key: K, value: VenueCreate[K]) {
     setForm((f) => ({ ...f, [key]: value }));

@@ -1,21 +1,29 @@
 "use client";
 
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { bookingApi, venueApi, type Booking, type Deal, type StatsResponse } from "@/lib/api";
-import { useVenue } from "@/providers/VenueProvider";
+import { bookingApi, venueApi, type ApiError, type Booking, type Deal, type StatsResponse } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
+import { useVenue } from "@/providers/VenueProvider";
 import { formatCurrency } from "@/lib/utils";
 import { FONT_DISPLAY, FONT_MONO, card, btnPrimary, btnGhost } from "@/lib/ui";
 
 export default function DashboardPage() {
-  const { venue, loading } = useVenue();
+  const { venue, loading, error, refetch } = useVenue();
   const router = useRouter();
 
-  // If venue not configured yet, send to onboarding
-  if (!loading && !venue) {
-    router.replace("/dashboard/onboarding");
-    return null;
+  // Only send to onboarding once we've CONFIRMED there's no venue (a 404).
+  // A backend error (down API / rejected token) must not masquerade as
+  // "no venue" — that wrongly dumps an existing owner on create-venue.
+  useEffect(() => {
+    if (!loading && !venue && !error) {
+      router.replace("/dashboard/onboarding");
+    }
+  }, [loading, venue, error, router]);
+
+  if (error) {
+    return <VenueLoadError error={error} onRetry={refetch} />;
   }
 
   if (loading || !venue) {
@@ -23,6 +31,28 @@ export default function DashboardPage() {
   }
 
   return <DashboardContent venueId={venue.id} venueName={venue.name} />;
+}
+
+function VenueLoadError({ error, onRetry }: { error: ApiError; onRetry: () => void }) {
+  const auth = error.status === 401 || error.status === 403;
+  return (
+    <div style={{ display: "grid", placeItems: "center", minHeight: "70vh", padding: 24 }}>
+      <div style={{ ...card, borderRadius: 18, padding: 32, maxWidth: 460, textAlign: "center" }}>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 20, marginBottom: 8 }}>
+          Couldn&apos;t load your venue
+        </div>
+        <p style={{ color: "var(--muted)", fontSize: 14, lineHeight: 1.6, margin: "0 0 20px" }}>
+          {auth
+            ? "Your session couldn't be verified. Sign out and back in, then try again."
+            : "We couldn't reach the server. This is a connection issue, not a missing venue — your venue is safe."}
+          <span style={{ display: "block", marginTop: 8, fontFamily: FONT_MONO, fontSize: 11, color: "var(--faint)" }}>
+            {error.status ? `Error ${error.status}` : "Network error"} · {error.message}
+          </span>
+        </p>
+        <button onClick={onRetry} style={{ ...btnPrimary, padding: "12px 22px" }}>Try again</button>
+      </div>
+    </div>
+  );
 }
 
 function greeting(): string {

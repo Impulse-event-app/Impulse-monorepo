@@ -5,21 +5,34 @@ flow (routers/bookings.py) and the huddle group flow (routers/huddles.py) call
 these, so the fee model, surcharge rules, metadata encoding, and nonce handling
 live in exactly one place.
 
-Fee model (decided 2026-07-25):
-- Deposit: Impulse keeps the full amount (applicationFee = amount). Pinch caps
-  applicationFee at amount − transaction fees, so card fees are surcharged to
-  the customer. Metadata MUST be a JSON string — an object nulls Pinch's request.
-- Balance: Impulse takes applicationFee (20% of balance), no surcharge — the
+Fee model (revised 2026-07-30):
+- Deposit: the confirming 20% is Impulse's entire take. Impulse keeps the full
+  amount (applicationFee = amount). Pinch caps applicationFee at amount −
+  transaction fees, so card fees are surcharged to the customer. Metadata MUST
+  be a JSON string — an object nulls Pinch's request.
+- Balance: no application fee. The balance belongs to the venue in full; the
   customer pays exactly the quoted balance and the venue absorbs Pinch's fees.
+
+Superseded: the balance previously carried a 20% applicationFee, which stacked
+with the deposit to a 36% effective take. Impulse's take is now the deposit and
+nothing else.
+
+Note this is the *fee* split, not the *routing*. Both charges still run through
+the single Impulse merchant, so a zero application fee means Impulse collects
+the balance and owes it onward. Routing the balance to each venue's own managed
+merchant is what makes the money actually land in their account.
 """
 import json
 
 import pinch_client
 from pinch_client import PinchError  # re-exported for callers
 
-# Impulse's cut of the balance charge. The deposit has no rate — Impulse keeps
-# all of it (applicationFee == amount), which is why there is no constant for it.
-BALANCE_APPLICATION_FEE_RATE = 0.20
+# Impulse's cut of the balance charge. Zero by decision (2026-07-30): the whole
+# 20% deposit is Impulse's take, and the balance is entirely the venue's.
+# Previously 0.20, which stacked to a 36% effective take once the deposit was
+# counted. Kept as a constant rather than inlined so reinstating a balance fee
+# is one edit — settlements, payouts and the seed script all read it.
+BALANCE_APPLICATION_FEE_RATE = 0.0
 
 
 class PaymentNotApproved(PinchError):
