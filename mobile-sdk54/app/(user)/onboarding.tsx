@@ -16,10 +16,11 @@ import { isOnboarded, markOnboarded, syncUserProfile } from '../../src/auth';
 import { requestLocationAccess, requestNotificationAccess, syncPushToken } from '../../src/permissions';
 import { supabase } from '../../src/supabase';
 import { Lede, Panel, SCREEN_W as W } from '../../src/onboardingUI';
+import { useWallet, WalletPanel } from '../../src/wallet';
 
 const SUBURBS = ['Sydney CBD', 'Surry Hills', 'Newtown', 'Bondi', 'Marrickville', 'Enmore', 'Darlinghurst', 'Redfern', 'Chippendale', 'Glebe', 'Paddington', 'Manly'];
 const ACTIVITIES = CATEGORIES.filter((c) => c !== 'All');
-const STEPS = 6; // location, notifications, age, suburb, accessibility, activities
+const STEPS = 7; // location, notifications, age, suburb, accessibility, activities, card
 
 function PermIcon({ children }: { children: React.ReactNode }) {
   const { T } = useApp();
@@ -47,6 +48,8 @@ export default function Onboarding() {
   // Gate rendering until the session guard resolves, so we never flash the
   // onboarding steps at someone who's about to be redirected away.
   const [ready, setReady] = useState(false);
+  const wallet = useWallet();
+  const hasSavedCard = !!wallet.cards?.length;
 
   // Guard: this flow is for signed-in, not-yet-onboarded users only.
   useEffect(() => {
@@ -311,12 +314,12 @@ export default function Onboarding() {
           top={insets.top + 24}
           footer={
             <>
-              <Btn full onPress={complete} disabled={acts.length === 0}>{acts.length === 0 ? 'Pick a few' : `Done — ${acts.length} picked`}</Btn>
-              {skipLink('Skip — show me everything', complete)}
+              <Btn full onPress={next} disabled={acts.length === 0}>{acts.length === 0 ? 'Pick a few' : `Continue — ${acts.length} picked`}</Btn>
+              {skipLink('Skip — show me everything', next)}
             </>
           }
         >
-          <Lede kicker="Last bit" title="What are you into?" body="We'll bump these to the top. You can change it later." />
+          <Lede kicker="Almost there" title="What are you into?" body="We'll bump these to the top. You can change it later." />
           <View style={{ paddingHorizontal: 22, paddingTop: 22, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
             {ACTIVITIES.map((a) => {
               const on = acts.includes(a);
@@ -331,6 +334,28 @@ export default function Onboarding() {
                 </Pressable>
               );
             })}
+          </View>
+        </Panel>
+
+        {/* 6 — card on file. Always skippable: a card wall at the end of
+            onboarding is a good way to lose someone who hasn't booked yet.
+            Skipping loses nothing — checkout still offers "save this card". */}
+        <Panel
+          top={insets.top + 24}
+          footer={
+            <>
+              {hasSavedCard && <Btn full onPress={complete}>Done</Btn>}
+              {skipLink(hasSavedCard ? 'Not now' : 'Skip — I\'ll add one when I book', complete)}
+            </>
+          }
+        >
+          <Lede
+            kicker="Last bit"
+            title="Book in one tap"
+            body="Save a card now and claiming a drop is a single tap. Your card is held securely by our payment provider — Impulse never sees the number."
+          />
+          <View style={{ paddingHorizontal: 22, paddingTop: 24 }}>
+            <WalletPanel wallet={wallet} depositLabel="Save card" />
           </View>
         </Panel>
       </ScrollView>

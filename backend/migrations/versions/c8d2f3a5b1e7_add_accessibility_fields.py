@@ -22,26 +22,21 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        'users',
-        sa.Column(
-            'accessibility_needs',
-            postgresql.ARRAY(sa.Text()),
-            nullable=False,
-            server_default='{}',
-        ),
+    # IF NOT EXISTS because schema.sql is applied to the database by hand
+    # (supabase/migrations/…_remote_schema.sql is empty), so these columns can
+    # already be present without alembic having recorded this revision. Same
+    # resulting schema either way; this just lets `alembic upgrade` run through
+    # a database that was set up out of band.
+    op.execute(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+        "accessibility_needs TEXT[] NOT NULL DEFAULT '{}'"
     )
-    op.add_column(
-        'venues',
-        sa.Column(
-            'accessibility_features',
-            postgresql.ARRAY(sa.Text()),
-            nullable=False,
-            server_default='{}',
-        ),
+    op.execute(
+        "ALTER TABLE venues ADD COLUMN IF NOT EXISTS "
+        "accessibility_features TEXT[] NOT NULL DEFAULT '{}'"
     )
 
 
 def downgrade() -> None:
-    op.drop_column('venues', 'accessibility_features')
-    op.drop_column('users', 'accessibility_needs')
+    op.execute("ALTER TABLE venues DROP COLUMN IF EXISTS accessibility_features")
+    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS accessibility_needs")

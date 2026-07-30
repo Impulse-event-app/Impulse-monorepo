@@ -33,12 +33,43 @@ class User(Base):
     age_bracket = Column(Integer, nullable=True)               # 18 | 25 | 35 | 45
     notifications_enabled = Column(Boolean, nullable=False, server_default="false")
     expo_push_token = Column(Text, nullable=True)              # ExponentPushToken[...] for push
+    # One Pinch payer per user, created on first card save and reused forever.
+    # Cards vault as sources against it — see PaymentMethod.
+    pinch_payer_id = Column(Text, nullable=True)               # pyr_XXX
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     venues: List["Venue"] = relationship("Venue", back_populates="owner")
     bookings: List["Booking"] = relationship("Booking", back_populates="user")
     interactions: List["UserVenueInteraction"] = relationship("UserVenueInteraction", back_populates="user")
+    payment_methods: List["PaymentMethod"] = relationship(
+        "PaymentMethod", back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class PaymentMethod(Base):
+    """A card the user chose to keep on file — one Pinch source, plus the
+    display fields needed to render it without another API call.
+
+    Only what Pinch returns from create-source is stored: never a PAN, never a
+    CVV. `display_card_number` is the bare last 4 ("4654"), so the UI builds its
+    own mask; `card_scheme` arrives lowercase ("visa") and is title-cased for
+    display."""
+    __tablename__ = "payment_methods"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"),
+                     nullable=False, index=True)
+    pinch_source_id = Column(Text, nullable=False, unique=True)    # src_XXX
+    card_scheme = Column(Text, nullable=True)                      # "visa" | "mastercard" | ...
+    display_card_number = Column(Text, nullable=True)              # bare last 4
+    expiry_date = Column(Text, nullable=True)                      # as Pinch returns it
+    card_holder_name = Column(Text, nullable=True)
+    funding = Column(Text, nullable=True)                          # credit | debit | prepaid | ...
+    is_default = Column(Boolean, nullable=False, server_default="false")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user: "User" = relationship("User", back_populates="payment_methods")
 
 
 class Venue(Base):

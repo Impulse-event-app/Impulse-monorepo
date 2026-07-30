@@ -26,17 +26,50 @@ class PaymentNotApproved(PinchError):
     """A charge returned a non-approved status. Carries the payment body."""
 
 
-def vault_card(*, first_name: str, last_name: str, email: str, token: str, merchant_id: str):
-    """Create a Pinch payer and vault a CaptureJs card token as a reusable
-    source. Returns (payer_id, source_id). Raises PinchError on failure."""
+def create_payer(*, first_name: str, last_name: str, email: str, merchant_id: str) -> str:
+    """Create a Pinch payer and return its id (pyr_XXX)."""
     payer = pinch_client.create_payer(
         {"firstName": first_name, "lastName": last_name, "email": email},
         merchant_id,
     )
-    source = pinch_client.create_payment_source(
-        payer["id"], {"sourceType": "credit-card", "token": token}, merchant_id,
+    return payer["id"]
+
+
+def vault_source(*, payer_id: str, token: str, merchant_id: str) -> dict:
+    """Vault a CaptureJs token against an existing payer. Returns the full
+    source object — callers persist id plus the display fields
+    (displayCardNumber, cardScheme, expiryDate, funding, cardHolderName)."""
+    return pinch_client.create_payment_source(
+        payer_id, {"sourceType": "credit-card", "token": token}, merchant_id,
     )
-    return payer["id"], source["id"]
+
+
+def vault_card(*, first_name: str, last_name: str, email: str, token: str, merchant_id: str):
+    """Create a payer and vault a card against it in one step.
+
+    Kept for the throwaway path — a card used for exactly one booking and never
+    saved. Saved cards go through create_payer + vault_source so the payer can
+    be reused, which is what stops a returning customer minting a fresh payer
+    on every booking."""
+    payer_id = create_payer(
+        first_name=first_name, last_name=last_name, email=email, merchant_id=merchant_id,
+    )
+    source = vault_source(payer_id=payer_id, token=token, merchant_id=merchant_id)
+    return payer_id, source["id"]
+
+
+def source_is_chargeable(*, payer_id: str, source_id: str, merchant_id: str) -> bool:
+    """Whether a stored source can still be charged via the realtime endpoint.
+
+    Pinch has no list-sources endpoint — the payer object embeds `sources`, and
+    each carries `supportsRealtime`. Checking it before a saved-card charge is
+    the cleanest guard against a card that vaulted fine but can't be charged
+    synchronously. Unknown sources return False."""
+    payer = pinch_client.get_payer(payer_id, merchant_id)
+    for source in payer.get("sources") or []:
+        if source.get("id") == source_id:
+            return bool(source.get("supportsRealtime"))
+    return False
 
 
 def _require_approved(payment: dict) -> dict:

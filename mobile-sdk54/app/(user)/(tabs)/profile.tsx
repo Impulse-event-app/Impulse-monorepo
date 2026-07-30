@@ -7,13 +7,14 @@ import { fontDisplay, fontMono, fontUI, useApp } from '../../../src/theme';
 import { Btn, Switch } from '../../../src/components';
 import { ChevronRight, RowIcons } from '../../../src/icons';
 import { signOut as supabaseSignOut, syncUserProfile } from '../../../src/auth';
+import { useWallet, WalletPanel } from '../../../src/wallet';
+import { describeCard } from '../../../src/api';
 import { FLOATING_TAB_CLEARANCE } from './_layout';
 
 const SUBURBS = ['Sydney CBD', 'Surry Hills', 'Newtown', 'Bondi', 'Marrickville', 'Enmore', 'Darlinghurst', 'Redfern', 'Chippendale', 'Glebe', 'Paddington', 'Manly', 'Strathfield'];
 const ACTIVITIES = CATEGORIES.filter((c) => c !== 'All');
 
 type Editor = null | 'suburb' | 'favourites' | 'party' | 'payment';
-type Card = { last4: string; exp: string; name: string };
 
 function Group({ label, children }: { label?: string; children: React.ReactNode }) {
   const { T } = useApp();
@@ -98,16 +99,15 @@ export default function ProfileScreen() {
   const [draftSuburb, setDraftSuburb] = useState('');
   const [draftActs, setDraftActs] = useState<string[]>([]);
   const [draftParty, setDraftParty] = useState(2);
-  // Payment is a mock: stored in app state only (no real card is ever collected).
-  const [card, setCard] = useState<Card>({ last4: '4242', exp: '04/28', name: '' });
-  const [cardName, setCardName] = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExp, setCardExp] = useState('');
+  // Real cards on file, vaulted at Pinch — this screen only ever sees the
+  // scheme and last 4 that Pinch returns.
+  const wallet = useWallet();
+  const defaultCard = wallet.cards?.find((c) => c.is_default) ?? wallet.cards?.[0] ?? null;
 
   const openSuburb = () => { setDraftSuburb(profile.suburb); setEditor('suburb'); };
   const openFavourites = () => { setDraftActs(profile.acts || []); setEditor('favourites'); };
   const openParty = () => { setDraftParty(profile.party || 2); setEditor('party'); };
-  const openPayment = () => { setCardName(card.name); setCardNumber(''); setCardExp(card.exp); setEditor('payment'); };
+  const openPayment = () => setEditor('payment');
   const close = () => setEditor(null);
 
   const saveSuburb = () => {
@@ -123,17 +123,6 @@ export default function ProfileScreen() {
   const saveParty = () => {
     setProfile((p) => ({ ...p, party: draftParty }));
     syncUserProfile({ party_size: draftParty }).catch(console.warn);
-    close();
-  };
-  const savePayment = () => {
-    const digits = cardNumber.replace(/\D/g, '');
-    // Keep only the last 4 — the full number is never stored, synced, or sent.
-    setCard({
-      last4: digits.length >= 4 ? digits.slice(-4) : card.last4,
-      exp: cardExp.trim() || card.exp,
-      name: cardName.trim(),
-    });
-    setCardNumber(''); // drop the full PAN from memory immediately
     close();
   };
   const toggleDraftAct = (a: string) =>
@@ -236,7 +225,12 @@ export default function ProfileScreen() {
 
         <Group label="App">
           <Row icon={RowIcons.moon(T.accent)} label="Nocturnal theme" trailing={<Switch on={dark} onChange={setDark} />} />
-          <Row icon={RowIcons.card(T.accent)} label="Payment" value={`•••• ${card.last4}`} onPress={openPayment} />
+          <Row
+            icon={RowIcons.card(T.accent)}
+            label="Payment"
+            value={defaultCard ? describeCard(defaultCard) : 'Add a card'}
+            onPress={openPayment}
+          />
         </Group>
 
         <Group label="Support">
@@ -314,33 +308,11 @@ export default function ProfileScreen() {
 
           {editor === 'payment' && (
             <>
-              <Text style={{ fontFamily: fontDisplay(700), fontSize: 22, color: T.text, letterSpacing: -0.44, marginBottom: 6 }}>Payment method</Text>
-              <Text style={{ fontFamily: fontUI(400), fontSize: 13, color: T.faint, marginBottom: 18 }}>Demo only — don't enter a real card number.</Text>
-              <TextInput
-                value={cardName}
-                onChangeText={setCardName}
-                placeholder="Name on card"
-                placeholderTextColor={T.faint}
-                autoCapitalize="words"
-                style={{ fontFamily: fontUI(400), fontSize: 16, color: T.text, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14, marginBottom: 11 }}
-              />
-              <TextInput
-                value={cardNumber}
-                onChangeText={(t) => setCardNumber(t.replace(/[^\d ]/g, '').slice(0, 19))}
-                placeholder="Card number"
-                placeholderTextColor={T.faint}
-                keyboardType="number-pad"
-                style={{ fontFamily: fontUI(400), fontSize: 16, color: T.text, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14, marginBottom: 11 }}
-              />
-              <TextInput
-                value={cardExp}
-                onChangeText={(t) => setCardExp(t.replace(/[^\d/]/g, '').slice(0, 5))}
-                placeholder="MM/YY"
-                placeholderTextColor={T.faint}
-                keyboardType="number-pad"
-                style={{ fontFamily: fontUI(400), fontSize: 16, color: T.text, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14, marginBottom: 20 }}
-              />
-              <Btn full onPress={savePayment}>Save card</Btn>
+              <Text style={{ fontFamily: fontDisplay(700), fontSize: 22, color: T.text, letterSpacing: -0.44, marginBottom: 6 }}>Payment methods</Text>
+              <Text style={{ fontFamily: fontUI(400), fontSize: 14.5, color: T.muted, marginBottom: 18 }}>
+                Saved cards let you book in one tap. Your card is held securely by our payment provider — Impulse never sees the number.
+              </Text>
+              <WalletPanel wallet={wallet} depositLabel="Save card" />
             </>
           )}
         </View>

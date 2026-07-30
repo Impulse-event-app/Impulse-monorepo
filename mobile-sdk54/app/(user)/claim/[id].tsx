@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { money, apiDealToDrop, apiBookingToPlan } from '../../../src/data';
 import { fontDisplay, fontUI, useApp } from '../../../src/theme';
-import { createBooking, getMe, payBooking, ApiError, ApiBooking } from '../../../src/api';
+import {
+  createBooking, getMe, payBooking, listPaymentMethods, describeCard,
+  ApiError, ApiBooking, PaymentMethod,
+} from '../../../src/api';
 import { Btn, Chip, Stepper } from '../../../src/components';
 import { ChevronBack } from '../../../src/icons';
 import { PinchCardField } from '../../../src/PinchCardField';
@@ -33,6 +36,18 @@ export default function ClaimScreen() {
   const [loading, setLoading] = useState(false);
   // Once the slot is reserved we hold the unpaid booking and collect card details.
   const [pendingBooking, setPendingBooking] = useState<ApiBooking | null>(null);
+  // Cards on file. `null` = not loaded yet; a saved card short-circuits the
+  // card form entirely, so it's fetched up front rather than at payment time.
+  const [savedCards, setSavedCards] = useState<PaymentMethod[] | null>(null);
+  const [useNewCard, setUseNewCard] = useState(false);
+  // Opt-in, not assumed — keeping a card on file needs explicit consent.
+  const [saveCard, setSaveCard] = useState(false);
+
+  useEffect(() => {
+    listPaymentMethods().then(setSavedCards).catch(() => setSavedCards([]));
+  }, []);
+
+  const defaultCard = savedCards?.find((c) => c.is_default) ?? savedCards?.[0] ?? null;
 
   if (!d || !apiDeal) {
     return (
@@ -67,6 +82,39 @@ export default function ClaimScreen() {
     }
   };
 
+  const finishPayment = async (paid: ApiBooking) => {
+    addPlan(apiBookingToPlan(paid));
+    router.replace(
+      `/(user)/confirm?code=${encodeURIComponent(paid.confirmation_code ?? '')}&balance=${paid.balance_amount_cents ?? balanceCents}`,
+    );
+  };
+
+  const onPaymentError = (err: unknown) => {
+    const message =
+      err instanceof ApiError ? err.message : 'Something went wrong. Please try again.';
+    Alert.alert('Payment failed', message);
+  };
+
+  /** Charge a card already on file — no card form, no re-entry. */
+  const onPayWithSavedCard = async () => {
+    if (!pendingBooking || !defaultCard) return;
+    setLoading(true);
+    try {
+      finishPayment(await payBooking(pendingBooking.id, { payment_method_id: defaultCard.id }));
+    } catch (err) {
+      // A saved card the server won't charge (expired, detached, never
+      // authorised) comes back 409 — drop straight to the card form.
+      if (err instanceof ApiError && err.status === 409) {
+        setUseNewCard(true);
+        Alert.alert('Card unavailable', err.message);
+      } else {
+        onPaymentError(err);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const onCardToken = async (token: string, cardHolderName: string) => {
     if (!pendingBooking) return;
     setLoading(true);
@@ -74,23 +122,16 @@ export default function ClaimScreen() {
       const profile = await getMe().catch(() => null);
       const fullName = (profile?.full_name ?? cardHolderName).trim();
       const [firstName, ...rest] = fullName.split(/\s+/);
-      const paid = await payBooking(pendingBooking.id, {
+      finishPayment(await payBooking(pendingBooking.id, {
         token,
+        save_card: saveCard,
         card_holder_name: cardHolderName,
         email: profile?.email ?? `no-email-${pendingBooking.id.slice(0, 8)}@impulse.app`,
         first_name: firstName || 'Impulse',
         last_name: rest.join(' ') || 'Customer',
-      });
-      addPlan(apiBookingToPlan(paid));
-      router.replace(
-        `/(user)/confirm?code=${encodeURIComponent(paid.confirmation_code ?? '')}&balance=${paid.balance_amount_cents ?? balanceCents}`,
-      );
+      }));
     } catch (err) {
-      const message =
-        err instanceof ApiError
-          ? err.message
-          : 'Something went wrong. Please try again.';
-      Alert.alert('Payment failed', message);
+      onPaymentError(err);
     } finally {
       setLoading(false);
     }
@@ -130,13 +171,61 @@ export default function ClaimScreen() {
           </>
         ) : (
           <View style={{ marginTop: 26 }}>
-            <Text style={{ fontFamily: fontUI(600), fontSize: 17, color: T.text, marginBottom: 12 }}>Card details</Text>
-            <PinchCardField
-              depositLabel={fmtCents(depositCents)}
-              colors={{ bg: T.bg, text: T.text, muted: T.muted, line: T.line, accent: T.accent, surface: T.surface }}
-              onToken={({ token, cardHolderName }) => onCardToken(token, cardHolderName)}
-              onError={(message) => Alert.alert('Card error', message)}
-            />
+            {savedCards === null ? (
+              <ActivityIndicator color={T.accent} style={{ height: 48 }} />
+            ) : defaultCard && !useNewCard ? (
+              <>
+                <Text style={{ fontFamily: fontUI(600), fontSize: 17, color: T.text, marginBottom: 12 }}>Pay with</Text>
+                <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: T.surface, borderRadius: 16, borderWidth: 1, borderColor: T.accent }]}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: T.accent }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: fontUI(600), fontSize: 15, color: T.text }}>
+                      {describeCard(defaultCard)}
+                    </Text>
+                    {!!defaultCard.expiry_date && (
+                      <Text style={{ fontFamily: fontUI(400), fontSize: 12.5, color: T.faint, marginTop: 2 }}>
+                        Expires {defaultCard.expiry_date}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+                <Pressable onPress={() => setUseNewCard(true)} style={{ paddingVertical: 14 }}>
+                  <Text style={{ fontFamily: fontUI(600), fontSize: 14, color: T.accent }}>
+                    Use a different card
+                  </Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Text style={{ fontFamily: fontUI(600), fontSize: 17, color: T.text, marginBottom: 12 }}>Card details</Text>
+                <PinchCardField
+                  depositLabel={fmtCents(depositCents)}
+                  colors={{ bg: T.bg, text: T.text, muted: T.muted, line: T.line, accent: T.accent, surface: T.surface }}
+                  onToken={({ token, cardHolderName }) => onCardToken(token, cardHolderName)}
+                  onError={(message) => Alert.alert('Card error', message)}
+                />
+                <Pressable
+                  onPress={() => setSaveCard((v) => !v)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 16 }}
+                >
+                  <View style={{ width: 20, height: 20, borderRadius: 6, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: saveCard ? T.accent : T.line2, backgroundColor: saveCard ? T.accent : 'transparent' }}>
+                    {saveCard && (
+                      <Text style={{ fontFamily: fontUI(700), fontSize: 12, color: T.accentInk }}>✓</Text>
+                    )}
+                  </View>
+                  <Text style={{ flex: 1, fontFamily: fontUI(400), fontSize: 14, color: T.muted }}>
+                    Save this card for next time. You can remove it any time in your profile.
+                  </Text>
+                </Pressable>
+                {defaultCard && (
+                  <Pressable onPress={() => setUseNewCard(false)} style={{ paddingBottom: 6 }}>
+                    <Text style={{ fontFamily: fontUI(600), fontSize: 14, color: T.accent }}>
+                      Use {describeCard(defaultCard)} instead
+                    </Text>
+                  </Pressable>
+                )}
+              </>
+            )}
           </View>
         )}
 
@@ -171,9 +260,14 @@ export default function ClaimScreen() {
           )}
         </View>
       )}
-      {pendingBooking && loading && (
-        <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 14, paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 24, backgroundColor: T.bg, borderTopWidth: 0.5, borderTopColor: T.line }}>
-          <ActivityIndicator color={T.accent} style={{ height: 48 }} />
+      {/* The card form carries its own pay button; the saved-card path needs one. */}
+      {pendingBooking && (loading || (defaultCard && !useNewCard)) && (
+        <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 22, paddingTop: 14, paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 24, backgroundColor: T.bg, borderTopWidth: 0.5, borderTopColor: T.line }}>
+          {loading ? (
+            <ActivityIndicator color={T.accent} style={{ height: 48 }} />
+          ) : (
+            <Btn full onPress={onPayWithSavedCard}>Pay {fmtCents(depositCents)} deposit</Btn>
+          )}
         </View>
       )}
     </View>

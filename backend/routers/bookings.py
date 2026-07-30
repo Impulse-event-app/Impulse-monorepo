@@ -9,9 +9,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
 import payments
+import wallet
 from auth import get_current_user
 from database import get_db
-from models import Booking, Deal, Venue
+from models import Booking, Deal, User, Venue
 from pinch_client import PinchError
 from schemas import (
     BookingCreate,
@@ -218,14 +219,22 @@ def pay_deposit(
     venue_name = booking.deal.venue.name
     slot = f"{booking.deal.date} {booking.slot_time}"
 
+    row = db.query(User).filter(User.id == user["sub"]).first()
+    if not row:
+        row = User(id=user["sub"], email=user.get("email"))
+        db.add(row)
+        db.flush()
+
     try:
-        # 1+2. Vault the card (payer + reusable source)
-        booking.pinch_payer_id, booking.pinch_source_id = payments.vault_card(
+        # 1+2. A card on file, or a new one vaulted against the user's payer.
+        booking.pinch_payer_id, booking.pinch_source_id = wallet.resolve_source(
+            db, row,
+            payment_method_id=body.payment_method_id,
+            token=body.token,
+            save_card=body.save_card,
             first_name=body.first_name,
             last_name=body.last_name,
             email=body.email,
-            token=body.token,
-            merchant_id=PINCH_MERCHANT_ID,
         )
         # 3. Charge the deposit via the shared orchestration.
         payment = payments.charge_deposit(

@@ -95,9 +95,33 @@ def create_payer(input: dict, merchant_id: str) -> dict:
 def create_payment_source(payer_id: str, input: dict, merchant_id: str) -> dict:
     """
     POST /payers/{id}/sources — vault a card against a payer.
-    input: {"sourceType": "credit-card", "token": "tkn_XXX"}. Returns source with id src_XXX.
+    input: {"sourceType": "credit-card", "token": "tkn_XXX"}. Returns source with id src_XXX
+    plus the display fields we persist: displayCardNumber (bare last 4, not masked),
+    cardScheme (lowercase, e.g. "visa"), expiryDate, funding, cardHolderName.
     """
     return _post(f"/payers/{payer_id}/sources", input, merchant_id)
+
+
+def get_payer(payer_id: str, merchant_id: str) -> dict:
+    """
+    GET /payers/{id} — the payer with its embedded `sources` array. Each source
+    carries two fields the create-source response does not: isAuthorised and
+    supportsRealtime. There is no list-sources endpoint; this is how you read
+    a payer's stored cards back.
+    """
+    return _get(f"/payers/{payer_id}", merchant_id)
+
+
+def delete_source(payer_id: str, source_id: str, merchant_id: str) -> None:
+    """
+    DELETE /payers/{id}/sources/{sourceId} — detach a vaulted card.
+    Returns 200 with no body. An unknown source id returns 400 with
+    errorMessage "Source with id: src_XXX not found".
+    """
+    url = f"{PINCH_BASE_URL}/payers/{payer_id}/sources/{source_id}"
+    resp = httpx.delete(url, headers=_headers(merchant_id), timeout=_TIMEOUT)
+    if resp.status_code < 200 or resp.status_code >= 300:
+        raise PinchError(resp.status_code, resp.text)
 
 
 def create_payment(input: dict, merchant_id: str) -> dict:

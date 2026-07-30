@@ -145,13 +145,38 @@ export type BookingCreate = {
   num_people: number;
 };
 
+/** Pay with a card on file, or with a new one. Exactly one of
+ *  `payment_method_id` / `token` — the server rejects both or neither. */
 export type BookingPay = {
-  token: string;              // CaptureJs card token — never raw card details
-  card_holder_name: string;
-  email: string;
-  first_name: string;
-  last_name: string;
+  payment_method_id?: string;
+  token?: string;             // CaptureJs card token — never raw card details
+  save_card?: boolean;        // keep a new card on file for next time
+  card_holder_name?: string;
+  email?: string;
+  first_name?: string;
+  last_name?: string;
 };
+
+/** A card the user has kept on file. `display_card_number` is the bare last 4
+ *  and `card_scheme` is lowercase, exactly as Pinch returns them. */
+export type PaymentMethod = {
+  id: string;
+  card_scheme: string | null;
+  display_card_number: string | null;
+  expiry_date: string | null;
+  card_holder_name: string | null;
+  funding: string | null;
+  is_default: boolean;
+  created_at: string;
+};
+
+/** "visa" + "4654" → "Visa •••• 4654". */
+export function describeCard(m: PaymentMethod): string {
+  const scheme = m.card_scheme
+    ? m.card_scheme.charAt(0).toUpperCase() + m.card_scheme.slice(1)
+    : 'Card';
+  return m.display_card_number ? `${scheme} •••• ${m.display_card_number}` : scheme;
+}
 
 export type InteractionType = 'view' | 'save' | 'booking' | 'rating';
 
@@ -210,6 +235,31 @@ export async function payBooking(bookingId: string, body: BookingPay): Promise<A
   return request<ApiBooking>(`/bookings/${bookingId}/pay`, {
     method: 'POST',
     body: JSON.stringify(body),
+  });
+}
+
+// ── Saved cards ──────────────────────────────────────────────────────────────
+
+export async function listPaymentMethods(): Promise<PaymentMethod[]> {
+  return request<PaymentMethod[]>('/users/me/payment-methods');
+}
+
+export async function addPaymentMethod(body: {
+  token: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  make_default?: boolean;
+}): Promise<PaymentMethod> {
+  return request<PaymentMethod>('/users/me/payment-methods', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deletePaymentMethod(methodId: string): Promise<void> {
+  await request<void>(`/users/me/payment-methods/${encodeURIComponent(methodId)}`, {
+    method: 'DELETE',
   });
 }
 
@@ -325,12 +375,16 @@ export async function registerPushToken(expoPushToken: string): Promise<void> {
   });
 }
 
+/** Exactly one of `payment_method_id` / `token`. Saved cards need an account —
+ *  guests who joined by name via an invite link must send a token. */
 export type HuddlePayBody = {
-  token: string;
-  card_holder_name: string;
-  email: string;
-  first_name: string;
-  last_name: string;
+  payment_method_id?: string;
+  token?: string;
+  save_card?: boolean;
+  card_holder_name?: string;
+  email?: string;
+  first_name?: string;
+  last_name?: string;
 };
 
 /** Pay this member's deposit share of the winning deal (vault + charge). */

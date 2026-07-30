@@ -7,10 +7,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, Share, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fontDisplay, fontMono, fontUI, useApp } from '../../../src/theme';
-import { getHuddle, getHuddleCandidates, payHuddleShare, cancelHuddle, ApiHuddle, ApiError } from '../../../src/api';
+import { getHuddle, getHuddleCandidates, payHuddleShare, cancelHuddle, describeCard, ApiHuddle, ApiError } from '../../../src/api';
 import QRCode from 'react-native-qrcode-svg';
 import { Btn, HuddleMark } from '../../../src/components';
 import { PinchCardField } from '../../../src/PinchCardField';
+import { useWallet } from '../../../src/wallet';
 
 const POLL_MS = 4000;
 
@@ -100,6 +101,12 @@ export default function HuddlePopup() {
   const [huddle, setHuddle] = useState<ApiHuddle | null>(null);
   const [copied, setCopied] = useState(false);
   const [paying, setPaying] = useState(false);      // card field revealed
+  // Saved cards. A guest who joined by name has no account, so the wallet
+  // comes back empty and they simply get the card form.
+  const wallet = useWallet();
+  const defaultCard = wallet.cards?.find((c) => c.is_default) ?? wallet.cards?.[0] ?? null;
+  const [useNewCard, setUseNewCard] = useState(false);
+  const [saveCard, setSaveCard] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -147,6 +154,27 @@ export default function HuddlePopup() {
     }
   };
 
+  /** Charge a card already on file — no card form, no re-entry. */
+  const onPayWithSavedCard = async () => {
+    if (!id || !defaultCard) return;
+    setSubmitting(true);
+    try {
+      setHuddle(await payHuddleShare(id, { payment_method_id: defaultCard.id }, mt));
+      setPaying(false);
+    } catch (err) {
+      // 409 = the server won't charge this stored card (expired, detached,
+      // never authorised). Drop straight to the card form rather than dead-end.
+      if (err instanceof ApiError && err.status === 409) {
+        setUseNewCard(true);
+        Alert.alert('Card unavailable', err.message);
+      } else {
+        Alert.alert('Payment failed', err instanceof ApiError ? err.message : 'Please try again.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const onCardToken = async (token: string, cardHolderName: string) => {
     if (!id) return;
     setSubmitting(true);
@@ -155,6 +183,7 @@ export default function HuddlePopup() {
       const [firstName, ...rest] = fullName.split(/\s+/);
       const updated = await payHuddleShare(id, {
         token,
+        save_card: saveCard,
         card_holder_name: cardHolderName,
         email: profile.email || `no-email-${id.slice(0, 8)}@impulse.app`,
         first_name: firstName || 'Impulse',
@@ -298,13 +327,54 @@ export default function HuddlePopup() {
                   <View style={{ marginTop: 12 }}>
                     {submitting ? (
                       <ActivityIndicator color={T.accent} style={{ height: 120 }} />
+                    ) : defaultCard && !useNewCard ? (
+                      <>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 11, padding: 14, backgroundColor: T.surface, borderRadius: 14, borderWidth: 1, borderColor: T.accent }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: T.accent }} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontFamily: fontUI(600), fontSize: 14.5, color: T.text }}>{describeCard(defaultCard)}</Text>
+                            {!!defaultCard.expiry_date && (
+                              <Text style={{ fontFamily: fontUI(400), fontSize: 12, color: T.faint, marginTop: 2 }}>Expires {defaultCard.expiry_date}</Text>
+                            )}
+                          </View>
+                        </View>
+                        <View style={{ marginTop: 10 }}>
+                          <Btn full onPress={onPayWithSavedCard}>
+                            Pay ${((huddle.my_share?.deposit_cents ?? 0) / 100).toFixed(2)}
+                          </Btn>
+                        </View>
+                        <Pressable onPress={() => setUseNewCard(true)} style={{ paddingVertical: 12, alignItems: 'center' }}>
+                          <Text style={{ fontFamily: fontUI(600), fontSize: 13.5, color: T.accent }}>Use a different card</Text>
+                        </Pressable>
+                      </>
                     ) : (
-                      <PinchCardField
-                        depositLabel={`$${((huddle.my_share?.deposit_cents ?? 0) / 100).toFixed(2)}`}
-                        colors={{ bg: T.bg, text: T.text, muted: T.muted, line: T.line, accent: T.accent, surface: T.surface }}
-                        onToken={({ token, cardHolderName }) => onCardToken(token, cardHolderName)}
-                        onError={(m) => Alert.alert('Card error', m)}
-                      />
+                      <>
+                        <PinchCardField
+                          depositLabel={`$${((huddle.my_share?.deposit_cents ?? 0) / 100).toFixed(2)}`}
+                          colors={{ bg: T.bg, text: T.text, muted: T.muted, line: T.line, accent: T.accent, surface: T.surface }}
+                          onToken={({ token, cardHolderName }) => onCardToken(token, cardHolderName)}
+                          onError={(m) => Alert.alert('Card error', m)}
+                        />
+                        {/* Only offer to save for members with an account —
+                            guests who joined by name have nowhere to save it. */}
+                        {wallet.signedIn === true && (
+                          <Pressable onPress={() => setSaveCard((v) => !v)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14 }}>
+                            <View style={{ width: 19, height: 19, borderRadius: 6, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: saveCard ? T.accent : T.line2, backgroundColor: saveCard ? T.accent : 'transparent' }}>
+                              {saveCard && <Text style={{ fontFamily: fontUI(700), fontSize: 11, color: T.accentInk }}>✓</Text>}
+                            </View>
+                            <Text style={{ flex: 1, fontFamily: fontUI(400), fontSize: 13.5, color: T.muted }}>
+                              Save this card for next time
+                            </Text>
+                          </Pressable>
+                        )}
+                        {defaultCard && (
+                          <Pressable onPress={() => setUseNewCard(false)} style={{ paddingBottom: 8, alignItems: 'center' }}>
+                            <Text style={{ fontFamily: fontUI(600), fontSize: 13.5, color: T.accent }}>
+                              Use {describeCard(defaultCard)} instead
+                            </Text>
+                          </Pressable>
+                        )}
+                      </>
                     )}
                   </View>
                 ) : (

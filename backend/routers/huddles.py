@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 
 import payments
 import push
+import wallet
 from auth import get_current_user, get_optional_user
 from database import get_db
 from huddle_logic import compute_shares, deal_cutoff, resolve_borda
@@ -584,13 +585,36 @@ def pay_huddle_share(
     try:
         # Vault the member's card once (reuse on retry if already vaulted).
         if not (me.pinch_payer_id and me.pinch_source_id):
-            me.pinch_payer_id, me.pinch_source_id = payments.vault_card(
-                first_name=body.first_name,
-                last_name=body.last_name,
-                email=body.email,
-                token=body.token,
-                merchant_id=PINCH_MERCHANT_ID,
+            # Signed-in members go through the wallet, so a card saved here is
+            # reusable on their next booking and vice versa. Guests joined by
+            # name have no user row, so their card stays member-scoped.
+            row = (
+                db.query(User).filter(User.id == me.user_id).first()
+                if me.user_id else None
             )
+            if row:
+                me.pinch_payer_id, me.pinch_source_id = wallet.resolve_source(
+                    db, row,
+                    payment_method_id=body.payment_method_id,
+                    token=body.token,
+                    save_card=body.save_card,
+                    first_name=body.first_name,
+                    last_name=body.last_name,
+                    email=body.email,
+                )
+            else:
+                if body.payment_method_id:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Saved cards need an account — pay with a card instead.",
+                    )
+                me.pinch_payer_id, me.pinch_source_id = payments.vault_card(
+                    first_name=body.first_name,
+                    last_name=body.last_name,
+                    email=body.email,
+                    token=body.token,
+                    merchant_id=PINCH_MERCHANT_ID,
+                )
         payment = payments.charge_deposit(
             payer_id=me.pinch_payer_id,
             source_id=me.pinch_source_id,

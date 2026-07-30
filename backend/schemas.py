@@ -203,12 +203,52 @@ class BookingCreate(BaseModel):
 
 
 class BookingPay(BaseModel):
-    """CaptureJs card token + payer details for the Pinch deposit charge."""
+    """How to pay the deposit — either a saved card or a fresh CaptureJs token.
+
+    Exactly one of `payment_method_id` (charge a card already on file) or
+    `token` (a new card) must be supplied. With `token`, `save_card` decides
+    whether it is kept on file afterwards; the payer/card details are only
+    needed on that path."""
+    payment_method_id: Optional[str] = None
+    token: Optional[str] = None
+    save_card: bool = False
+    card_holder_name: Optional[str] = None
+    email: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _one_payment_path(self):
+        if bool(self.payment_method_id) == bool(self.token):
+            raise ValueError("Supply exactly one of payment_method_id or token")
+        if self.token and not (self.email and self.first_name and self.last_name):
+            raise ValueError("first_name, last_name and email are required with a new card")
+        return self
+
+
+class PaymentMethodResponse(BaseModel):
+    """A card on file. `display_card_number` is the bare last 4 and
+    `card_scheme` is lowercase, exactly as Pinch returns them — the client
+    builds the mask and title-cases the scheme."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    card_scheme: Optional[str]
+    display_card_number: Optional[str]
+    expiry_date: Optional[str]
+    card_holder_name: Optional[str]
+    funding: Optional[str]
+    is_default: bool
+    created_at: datetime
+
+
+class PaymentMethodCreate(BaseModel):
+    """Save a card to the user's wallet from a CaptureJs token."""
     token: str
-    card_holder_name: str
-    email: str
     first_name: str
     last_name: str
+    email: str
+    make_default: bool = True
 
 
 class BookingResponse(BaseModel):
@@ -448,12 +488,25 @@ class PushTokenRegister(BaseModel):
 
 
 class HuddlePay(BaseModel):
-    """CaptureJs card token + payer details for a member's deposit-share charge."""
-    token: str
-    card_holder_name: str
-    email: str
-    first_name: str
-    last_name: str
+    """How a member pays their deposit share — a saved card or a new one.
+
+    `payment_method_id` is only available to signed-in members; guests (who
+    join by name via an invite link and have no user row) must send a token."""
+    payment_method_id: Optional[str] = None
+    token: Optional[str] = None
+    save_card: bool = False
+    card_holder_name: Optional[str] = None
+    email: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _one_payment_path(self):
+        if bool(self.payment_method_id) == bool(self.token):
+            raise ValueError("Supply exactly one of payment_method_id or token")
+        if self.token and not (self.email and self.first_name and self.last_name):
+            raise ValueError("first_name, last_name and email are required with a new card")
+        return self
 
 
 # ── Huddle venue verification (group redemption) ──────────────────────────────
