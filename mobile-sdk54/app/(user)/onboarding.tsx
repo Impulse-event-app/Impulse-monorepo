@@ -15,7 +15,7 @@ import { GlyphBell, GlyphPin, Search } from '../../src/icons';
 import { isOnboarded, markOnboarded, syncUserProfile } from '../../src/auth';
 import { requestLocationAccess, requestNotificationAccess, syncPushToken } from '../../src/permissions';
 import { supabase } from '../../src/supabase';
-import { Lede, Panel, usePanelWidth } from '../../src/onboardingUI';
+import { Lede, Panel, usePagerWidth } from '../../src/onboardingUI';
 import { useWallet, WalletPanel } from '../../src/wallet';
 
 const SUBURBS = ['Sydney CBD', 'Surry Hills', 'Newtown', 'Bondi', 'Marrickville', 'Enmore', 'Darlinghurst', 'Redfern', 'Chippendale', 'Glebe', 'Paddington', 'Manly'];
@@ -36,7 +36,7 @@ export default function Onboarding() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
-  const W = usePanelWidth();
+  const [W, onPagerLayout] = usePagerWidth();
   const [page, setPage] = useState(0);
   const [suburb, setSuburb] = useState<string | null>(null);
   const [acts, setActs] = useState<string[]>([]);
@@ -153,10 +153,12 @@ export default function Onboarding() {
         pagingEnabled
         scrollEnabled={false}
         showsHorizontalScrollIndicator={false}
+        onLayout={onPagerLayout}
         style={{ flex: 1 }}
       >
         {/* 0 — location */}
         <Panel
+          width={W}
           footer={
             <>
               <Btn full onPress={allowLocation} disabled={permBusy}>
@@ -178,6 +180,7 @@ export default function Onboarding() {
 
         {/* 1 — notifications */}
         <Panel
+          width={W}
           footer={
             <>
               <Btn full onPress={allowNotifications} disabled={permBusy}>
@@ -199,6 +202,7 @@ export default function Onboarding() {
 
         {/* 2 — age */}
         <Panel
+          width={W}
           footer={
             <>
               <Btn full onPress={() => { setAgeBracket(18); next(); }}>Yes, I'm 18 or over</Btn>
@@ -231,6 +235,7 @@ export default function Onboarding() {
 
         {/* 3 — suburb */}
         <Panel
+          width={W}
           top={insets.top + 24}
           footer={<Btn full onPress={next} disabled={!suburb}>{suburb ? `Set to ${suburb}` : 'Pick your suburb'}</Btn>}
         >
@@ -288,6 +293,7 @@ export default function Onboarding() {
 
         {/* 4 — accessibility */}
         <Panel
+          width={W}
           top={insets.top + 24}
           footer={
             <>
@@ -320,6 +326,7 @@ export default function Onboarding() {
 
         {/* 5 — activities */}
         <Panel
+          width={W}
           top={insets.top + 24}
           footer={
             <>
@@ -350,6 +357,7 @@ export default function Onboarding() {
             onboarding is a good way to lose someone who hasn't booked yet.
             Skipping loses nothing — checkout still offers "save this card". */}
         <Panel
+          width={W}
           top={insets.top + 24}
           footer={
             <>

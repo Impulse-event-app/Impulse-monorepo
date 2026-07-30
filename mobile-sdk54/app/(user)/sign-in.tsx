@@ -22,7 +22,7 @@ import { Btn, Logo, PulseMark } from '../../src/components';
 import { AppleLogo, GoogleLogo, MailGlyph, PhoneGlyph } from '../../src/icons';
 import { fetchUserProfile, isOnboarded, markOnboarded, sendPhoneOtp, signInWithApple, signInWithGoogle, signInWithEmail, signUpWithEmail, syncUserProfile, verifyPhoneOtp } from '../../src/auth';
 import { supabase } from '../../src/supabase';
-import { Lede, Panel, usePanelWidth } from '../../src/onboardingUI';
+import { Lede, Panel, usePagerWidth } from '../../src/onboardingUI';
 
 function PulseRings() {
   const { T } = useApp();
@@ -92,7 +92,7 @@ export default function SignIn() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
-  const W = usePanelWidth();
+  const [W, onPagerLayout] = usePagerWidth();
   // Which panel we're on, so a viewport change can put us back on it.
   const [panel, setPanel] = useState(0);
 
@@ -207,10 +207,12 @@ export default function SignIn() {
         pagingEnabled
         scrollEnabled={false}
         showsHorizontalScrollIndicator={false}
+        onLayout={onPagerLayout}
         style={{ flex: 1 }}
       >
         {/* hero */}
         <Panel
+          width={W}
           top={insets.top + 8}
           footer={<Btn full onPress={goToAuth}>Get started</Btn>}
         >
@@ -233,6 +235,7 @@ export default function SignIn() {
 
         {/* sign in */}
         <Panel
+          width={W}
           top={insets.top + 24}
           footer={
             <Text style={{ fontFamily: fontUI(400), fontSize: 12, lineHeight: 17, color: T.faint, textAlign: 'center' }}>
