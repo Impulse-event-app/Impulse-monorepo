@@ -22,7 +22,7 @@ import { Btn, Logo, PulseMark } from '../../src/components';
 import { AppleLogo, GoogleLogo, MailGlyph, PhoneGlyph } from '../../src/icons';
 import { fetchUserProfile, isOnboarded, markOnboarded, sendPhoneOtp, signInWithApple, signInWithGoogle, signInWithEmail, signUpWithEmail, syncUserProfile, verifyPhoneOtp } from '../../src/auth';
 import { supabase } from '../../src/supabase';
-import { Lede, Panel, SCREEN_W as W } from '../../src/onboardingUI';
+import { Lede, Panel, usePanelWidth } from '../../src/onboardingUI';
 
 function PulseRings() {
   const { T } = useApp();
@@ -92,6 +92,9 @@ export default function SignIn() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
+  const W = usePanelWidth();
+  // Which panel we're on, so a viewport change can put us back on it.
+  const [panel, setPanel] = useState(0);
 
   const [phoneView, setPhoneView] = useState<'buttons' | 'phone' | 'otp' | 'email'>('buttons');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -113,7 +116,18 @@ export default function SignIn() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const goToAuth = () => scrollRef.current?.scrollTo({ x: AUTH_PANEL * W, animated: true });
+  const goToAuth = () => {
+    setPanel(AUTH_PANEL);
+    scrollRef.current?.scrollTo({ x: AUTH_PANEL * W, animated: true });
+  };
+
+  // Re-anchor when the viewport width changes. On mobile web that fires when
+  // the keyboard opens over the email/phone inputs and when the URL bar
+  // collapses — without this the pages resize under a stale scroll offset and
+  // the panel sits half off-screen.
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ x: panel * W, animated: false });
+  }, [W, panel]);
 
   // Where to go once signed in: the app if they've onboarded before, else the
   // onboarding flow. Web OAuth doesn't reach here (it reloads → app/index.tsx).
