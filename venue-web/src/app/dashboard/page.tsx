@@ -3,27 +3,20 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { bookingApi, venueApi, type ApiError, type Booking, type Deal, type StatsResponse } from "@/lib/api";
+import { bookingApi, venueApi, type ApiError, type Booking, type DealPerformanceItem, type Deal, type StatsResponse } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useVenue } from "@/providers/VenueProvider";
 import { formatCurrency } from "@/lib/utils";
-import { FONT_DISPLAY, FONT_MONO, card, btnPrimary, btnGhost } from "@/lib/ui";
+import { FONT_DISPLAY, FONT_MONO, card, btnPrimary, btnGhost, eyebrow } from "@/lib/ui";
 
 export default function DashboardPage() {
-  const { venue, loading, error, refetch } = useVenue();
+  const { venue, loading } = useVenue();
   const router = useRouter();
 
-  // Only send to onboarding once we've CONFIRMED there's no venue (a 404).
-  // A backend error (down API / rejected token) must not masquerade as
-  // "no venue" — that wrongly dumps an existing owner on create-venue.
-  useEffect(() => {
-    if (!loading && !venue && !error) {
-      router.replace("/dashboard/onboarding");
-    }
-  }, [loading, venue, error, router]);
-
-  if (error) {
-    return <VenueLoadError error={error} onRetry={refetch} />;
+  // If venue not configured yet, send to onboarding
+  if (!loading && !venue) {
+    router.replace("/dashboard/onboarding");
+    return null;
   }
 
   if (loading || !venue) {
@@ -66,6 +59,58 @@ function todayLabel(): string {
   return new Date().toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "short" }).replace(",", " ·");
 }
 
+// ── Deal performance formatting ──────────────────────────────────────────────
+// Deals store display strings, not timestamps: date "Monday 3 June 2026",
+// slots ["10:00 AM", "1:00 PM"]. Anything that doesn't match falls through
+// to the raw text rather than rendering a wrong window.
+
+const SLOT_RE = /^(\d{1,2}):(\d{2})\s*([AaPp])[Mm]$/;
+
+function slotMinutes(slot: string): number {
+  const m = SLOT_RE.exec(slot.trim());
+  if (!m) return 0;
+  const h = Number(m[1]) % 12;
+  return (m[3].toLowerCase() === "p" ? h + 12 : h) * 60 + Number(m[2]);
+}
+
+/** "1:00 PM" → "1pm"; "10:30 AM" → "10:30am". */
+function slotLabel(slot: string): string {
+  const m = SLOT_RE.exec(slot.trim());
+  if (!m) return slot;
+  const suffix = m[3].toLowerCase() === "p" ? "pm" : "am";
+  return m[2] === "00" ? `${Number(m[1])}${suffix}` : `${Number(m[1])}:${m[2]}${suffix}`;
+}
+
+/** ("Monday 3 June 2026", ["10:00 AM", "1:00 PM"]) → "Mon 10am — 1pm". */
+function timeWindow(date: string, slots: string[]): string {
+  const day = /^[A-Za-z]+day\b/.test(date) ? date.slice(0, 3) : "";
+  if (slots.length === 0) return day || date;
+
+  const sorted = [...slots].sort((a, b) => slotMinutes(a) - slotMinutes(b));
+  const first = slotLabel(sorted[0]);
+  const last = slotLabel(sorted[sorted.length - 1]);
+  const window = first === last ? first : `${first} — ${last}`;
+  return day ? `${day} ${window}` : window;
+}
+
+function formatDuration(mins: number): string {
+  if (mins < 1) return "under a minute";
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) {
+    const rem = mins % 60;
+    return rem ? `${hours}h ${rem}m` : `${hours}h`;
+  }
+  const days = Math.floor(hours / 24);
+  const rem = hours % 24;
+  return rem ? `${days}d ${rem}h` : `${days}d`;
+}
+
+/** 25.00 → "25", 12.50 → "12.5". */
+function trimPct(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 function DashboardContent({ venueId, venueName }: { venueId: string; venueName: string }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -77,6 +122,11 @@ function DashboardContent({ venueId, venueName }: { venueId: string; venueName: 
     queryKey: ["stats", venueId],
     queryFn: () => venueApi.stats(venueId),
     refetchInterval: 60_000,
+  });
+
+  const { data: performance = [], isLoading: perfLoading } = useQuery<DealPerformanceItem[]>({
+    queryKey: ["deal-performance", venueId],
+    queryFn: () => venueApi.dealPerformance(venueId, 10),
   });
 
   // Aggregate recent bookings across the venue's deals for the "tonight" feed.
@@ -189,12 +239,103 @@ function DashboardContent({ venueId, venueName }: { venueId: string; venueName: 
         </div>
       </div>
 
+      {/* Deal performance */}
+      <div style={{ marginTop: 34 }}>
+        <div style={{ ...eyebrow, marginBottom: 8 }}>Deal insights — helping you find your best window</div>
+        <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 22, letterSpacing: "-.02em", margin: "0 0 18px" }}>
+          Deal performance
+        </h2>
+
+        {perfLoading ? (
+          <div className="dash-perf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
+            {[...Array(2)].map((_, i) => (
+              <div key={i} style={{ ...card, borderRadius: 16, height: 172, animation: "pm-glow 1.4s ease-in-out infinite" }} />
+            ))}
+          </div>
+        ) : performance.length === 0 ? (
+          <div style={{ ...card, borderRadius: 16, padding: 40, textAlign: "center", color: "var(--faint)", fontSize: 14 }}>
+            No completed deals yet — insights appear once a deal has run.
+          </div>
+        ) : (
+          <div className="dash-perf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
+            {performance.map((p) => (
+              <DealPerformanceCard key={p.deal_id} deal={p} />
+            ))}
+          </div>
+        )}
+      </div>
+
       <style>{`
         @media (max-width: 1000px) {
           .dash-stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
           .dash-two-col { grid-template-columns: 1fr !important; }
+          .dash-perf-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
+    </div>
+  );
+}
+
+const metricLabel = {
+  fontFamily: FONT_MONO,
+  fontSize: 10,
+  letterSpacing: ".1em",
+  textTransform: "uppercase" as const,
+  color: "var(--faint)",
+  marginBottom: 7,
+};
+
+function DealPerformanceCard({ deal }: { deal: DealPerformanceItem }) {
+  const pct = Math.round(deal.fill_rate);
+  const barColor = pct >= 80 ? "var(--good)" : pct >= 40 ? "var(--accent)" : "var(--muted)";
+
+  return (
+    <div style={{ ...card, borderRadius: 16, padding: 20 }}>
+      {/* Deal + when it ran */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {deal.title}
+          </div>
+          <span style={{ fontFamily: FONT_MONO, fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--accent)", background: "var(--accent-soft)", padding: "3px 8px", borderRadius: 6 }}>
+            {deal.category}
+          </span>
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, letterSpacing: "-.01em" }}>
+            {trimPct(deal.discount_pct)}% off
+          </div>
+          <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 5, whiteSpace: "nowrap" }}>
+            {timeWindow(deal.date, deal.slots)}
+          </div>
+        </div>
+      </div>
+
+      {/* Numbers */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1.3fr", gap: 14, marginTop: 18, paddingTop: 16, borderTop: "1px solid var(--line)" }}>
+        <div>
+          <div style={metricLabel}>Spots filled</div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 19, lineHeight: 1 }}>
+            {deal.spots_filled}
+            <span style={{ color: "var(--faint)" }}> / {deal.total_spots}</span>
+          </div>
+        </div>
+        <div>
+          <div style={metricLabel}>Fill rate</div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 19, lineHeight: 1 }}>{pct}%</div>
+        </div>
+        <div>
+          <div style={metricLabel}>Live → last booking</div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 19, lineHeight: 1, color: deal.minutes_to_last_booking === null ? "var(--faint)" : undefined }}>
+            {deal.minutes_to_last_booking === null ? "—" : formatDuration(deal.minutes_to_last_booking)}
+          </div>
+        </div>
+      </div>
+
+      {/* Fill bar */}
+      <div style={{ height: 5, borderRadius: 5, background: "var(--sunken)", overflow: "hidden", marginTop: 16 }}>
+        <span style={{ display: "block", height: "100%", width: `${Math.min(100, Math.max(0, pct))}%`, background: barColor }} />
+      </div>
     </div>
   );
 }

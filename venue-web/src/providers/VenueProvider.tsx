@@ -4,100 +4,97 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useState,
 } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ApiError, venueApi, type Venue } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 
 interface VenueContextValue {
+  /** The venue every dashboard screen is currently scoped to. */
   venue: Venue | null;
+  /** All venues this owner has — drives the sidebar switcher. */
+  venues: Venue[];
   loading: boolean;
   /** Non-404 failure (401 token/project mismatch, 500, network). When set, the
    *  user has NOT been confirmed venue-less — do not send them to onboarding. */
   error: ApiError | null;
+  selectVenue: (id: string) => void;
   refetch: () => void;
   setVenue: (v: Venue) => void;
 }
 
 const VenueContext = createContext<VenueContextValue | null>(null);
 
-// We store the chosen venue id in sessionStorage so it survives client navigation.
+// The chosen venue id, so a switch survives client navigation and reloads.
 const VENUE_KEY = "impulse_venue_id";
+
+function describe(err: unknown): string {
+  if (err instanceof ApiError) {
+    return `Couldn't load your venues (${err.status}): ${err.message}`;
+  }
+  return "Couldn't reach the server to load your venues.";
+}
 
 export function VenueProvider({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
-  const [venue, setVenueState] = useState<Venue | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<ApiError | null>(null);
+  // Venue created during onboarding, adopted before the query refetches.
+  const [pending, setPending] = useState<Venue | null>(null);
+  // Read once on mount rather than every render. This provider only mounts
+  // client-side (RequireAuth gates it), so there's no hydration mismatch.
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : sessionStorage.getItem(VENUE_KEY)
+  );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    if (!session) {
-      setVenueState(null);
-      setLoading(false);
-      return;
-    }
-    try {
-      const stored = sessionStorage.getItem(VENUE_KEY);
-      let v: Venue | null = null;
+  const {
+    data,
+    isPending,
+    error: queryError,
+    refetch: refetchQuery,
+  } = useQuery<Venue[]>({
+    queryKey: ["my-venues", session?.user?.id],
+    queryFn: () => venueApi.mineAll(),
+    enabled: !!session,
+    // A 401 means the token is wrong, not that it's a bad moment — retrying
+    // just delays a real error the user needs to see.
+    retry: (count, err) => !(err instanceof ApiError && err.status < 500) && count < 2,
+  });
 
-      if (stored) {
-        try {
-          v = await venueApi.get(stored);
-        } catch (e) {
-          // A stale/foreign stored id (e.g. left over from the old project) 404s —
-          // drop it and fall through to /venues/mine. Any other failure must
-          // propagate so we don't misread it as "no venue".
-          if (e instanceof ApiError && e.status === 404) {
-            sessionStorage.removeItem(VENUE_KEY);
-          } else {
-            throw e;
-          }
-        }
-      }
+  const venues = data ?? (pending ? [pending] : []);
 
-      if (!v) v = await venueApi.mine(); // 404 here = genuinely no venue yet
+  // Honour the stored/selected venue only while it's still one of theirs —
+  // otherwise fall back to the first, so a deleted venue can't wedge the app.
+  const venue =
+    venues.find((v) => v.id === selectedId) ?? venues[0] ?? null;
 
-      sessionStorage.setItem(VENUE_KEY, v.id);
-      setVenueState(v);
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 404) {
-        // Genuinely no venue → onboarding is correct.
-        sessionStorage.removeItem(VENUE_KEY);
-        setVenueState(null);
-      } else {
-        // Backend down / token rejected / offline. Keep the user out of the
-        // create-venue flow — surface the error so the UI can retry instead.
-        setVenueState(null);
-        setError(
-          err instanceof ApiError
-            ? err
-            : new ApiError(0, err instanceof Error ? err.message : "Network error")
-        );
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [session]);
+  const selectVenue = useCallback((id: string) => {
+    sessionStorage.setItem(VENUE_KEY, id);
+    setSelectedId(id);
+  }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
+  // Used by onboarding: adopt the just-created venue without a round trip.
   const setVenue = useCallback((v: Venue) => {
     sessionStorage.setItem(VENUE_KEY, v.id);
-    setVenueState(v);
-    setError(null);
+    setPending(v);
+    setSelectedId(v.id);
   }, []);
 
   const refetch = useCallback(() => {
-    load();
-  }, [load]);
+    refetchQuery();
+  }, [refetchQuery]);
 
   return (
-    <VenueContext.Provider value={{ venue, loading, error, refetch, setVenue }}>
+    <VenueContext.Provider
+      value={{
+        venue,
+        venues,
+        loading: !!session && isPending,
+        error: queryError ? describe(queryError) : null,
+        selectVenue,
+        refetch,
+        setVenue,
+      }}
+    >
       {children}
     </VenueContext.Provider>
   );
