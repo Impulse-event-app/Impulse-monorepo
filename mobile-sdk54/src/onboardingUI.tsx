@@ -6,31 +6,52 @@
 // pager, so a web OAuth reload lands cleanly on /onboarding at step 0 instead
 // of trying to resume a scroll position mid-component.
 import React from 'react';
-import { ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { ScrollView, Text, useWindowDimensions, View, type LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fontDisplay, fontMono, fontUI, useApp } from './theme';
 
 /**
- * Live width of one pager page.
+ * How wide one pager page should be.
  *
- * Must be a hook, never a module-level `Dimensions.get('window').width`. Native
- * is orientation-locked so a frozen value happens to work there, but on mobile
- * web the viewport changes constantly — URL bar collapsing, rotation, and the
- * on-screen keyboard opening on the sign-in inputs. A stale width leaves the
- * paging ScrollView's pages the wrong size and every scrollTo() offset wrong,
- * which strands the user between two panels (and both pagers set
- * scrollEnabled={false}, so they can't swipe out of it).
+ * Prefer `usePagerWidth()` below, which *measures* the scroll container. This
+ * is only the pre-measurement fallback.
+ *
+ * Never a module-level `Dimensions.get('window').width`: native is
+ * orientation-locked so a frozen value happens to work there, but on web the
+ * window is not the same thing as the pager's laid-out width, and a mismatch
+ * makes every page narrower than its container — so the next page shows up
+ * alongside the current one instead of off-screen.
  */
 export function usePanelWidth(): number {
   return useWindowDimensions().width;
 }
 
-/** Full-width page: scrollable body + optional pinned footer. */
-export function Panel({ children, footer, top = 0 }: { children: React.ReactNode; footer?: React.ReactNode; top?: number }) {
+/**
+ * Measured width of the paging ScrollView, with the window width as a fallback
+ * for the first frame. Sizing pages from the container's own layout is what
+ * guarantees exactly one page is visible — no reliance on the window matching
+ * the element, which is where mobile web diverges from native.
+ *
+ * Returns [width, onLayout] — spread onLayout onto the paging ScrollView.
+ */
+export function usePagerWidth(): [number, (e: LayoutChangeEvent) => void] {
+  const fallback = useWindowDimensions().width;
+  const [measured, setMeasured] = React.useState(0);
+  const onLayout = React.useCallback((e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    // Guard the no-op case so layout passes can't loop.
+    setMeasured((prev) => (Math.abs(prev - w) < 0.5 ? prev : w));
+  }, []);
+  return [measured || fallback, onLayout];
+}
+
+/** Full-width page: scrollable body + optional pinned footer.
+ *  `width` comes from usePagerWidth() so the page matches its container exactly. */
+export function Panel({ children, footer, top = 0, width }: { children: React.ReactNode; footer?: React.ReactNode; top?: number; width?: number }) {
   const insets = useSafeAreaInsets();
-  const width = usePanelWidth();
+  const fallback = usePanelWidth();
   return (
-    <View style={{ width, flex: 1 }}>
+    <View style={{ width: width ?? fallback, flex: 1 }}>
       <ScrollView contentContainerStyle={{ flexGrow: 1, paddingTop: top }} showsVerticalScrollIndicator={false}>
         {children}
       </ScrollView>
