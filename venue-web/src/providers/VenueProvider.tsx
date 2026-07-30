@@ -29,11 +29,13 @@ const VenueContext = createContext<VenueContextValue | null>(null);
 // The chosen venue id, so a switch survives client navigation and reloads.
 const VENUE_KEY = "impulse_venue_id";
 
-function describe(err: unknown): string {
-  if (err instanceof ApiError) {
-    return `Couldn't load your venues (${err.status}): ${err.message}`;
-  }
-  return "Couldn't reach the server to load your venues.";
+/** Normalise anything React Query throws into an ApiError, so consumers get one
+ *  shape. A network failure has no HTTP status — status 0 is falsy, which is
+ *  what the consumers already branch on to print "Network error". */
+function asApiError(err: unknown): ApiError {
+  if (err instanceof ApiError) return err;
+  const message = err instanceof Error ? err.message : "Couldn't reach the server to load your venues.";
+  return new ApiError(0, message);
 }
 
 export function VenueProvider({ children }: { children: React.ReactNode }) {
@@ -89,7 +91,7 @@ export function VenueProvider({ children }: { children: React.ReactNode }) {
         venue,
         venues,
         loading: !!session && isPending,
-        error: queryError ? describe(queryError) : null,
+        error: queryError ? asApiError(queryError) : null,
         selectVenue,
         refetch,
         setVenue,
