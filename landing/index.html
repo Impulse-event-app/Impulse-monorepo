@@ -1202,13 +1202,12 @@
       WAITLIST — talks to the FastAPI backend (backend/routers/waitlist.py).
 
       API_BASE must point at the deployed API. There is no build step here, so
-      it's a literal: update it when the backend gets a public URL. Until then
-      this only works against a locally running backend, and the section fails
+      it's a literal: update it when the backend URL changes. The section fails
       soft — the counter hides and the form reports a friendly error rather than
       breaking the rest of the page.
     */
     (function () {
-      var API_BASE = 'http://localhost:8000';
+      var API_BASE = 'https://impulse-monorepo.onrender.com';
 
       var $ = function (id) { return document.getElementById(id); };
       var card = $('wl-card');
