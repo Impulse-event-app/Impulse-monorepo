@@ -52,17 +52,35 @@ def create_venue(
     return venue
 
 
+def _my_venues_query(db: Session, user: dict):
+    """Every active venue this user owns. Ordered so the choice of "first" is
+    stable — without it Postgres is free to reorder rows after any UPDATE."""
+    return (
+        db.query(Venue)
+        .filter(Venue.owner_id == user["sub"], Venue.is_active == True)
+        .order_by(Venue.created_at.asc(), Venue.name.asc(), Venue.id.asc())
+    )
+
+
+@router.get("/mine/all", response_model=List[VenueResponse])
+def list_my_venues(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Every venue the current user owns — powers the portal's venue switcher.
+    Returns [] rather than 404 so "no venues yet" is distinguishable from an
+    auth or server failure on the client."""
+    return _my_venues_query(db, user).all()
+
+
 @router.get("/mine", response_model=VenueResponse)
 def get_my_venue(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Return the active venue owned by the current user, or 404."""
-    venue = (
-        db.query(Venue)
-        .filter(Venue.owner_id == user["sub"], Venue.is_active == True)
-        .first()
-    )
+    """Return the first active venue owned by the current user, or 404.
+    Kept for compatibility — prefer /venues/mine/all."""
+    venue = _my_venues_query(db, user).first()
     if not venue:
         raise HTTPException(status_code=404, detail="No venue found for this user")
     return venue

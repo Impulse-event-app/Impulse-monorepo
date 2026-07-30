@@ -183,6 +183,9 @@ export const venueApi = {
     request<Venue>("POST", "/venues", body),
   mine: () =>
     request<Venue>("GET", "/venues/mine"),
+  /** Every venue the signed-in owner has. [] when they have none yet. */
+  mineAll: () =>
+    request<Venue[]>("GET", "/venues/mine/all"),
   get: (id: string) =>
     request<Venue>("GET", `/venues/${id}`),
   update: (id: string, body: VenueUpdate) =>

@@ -10,14 +10,27 @@ import { formatCurrency } from "@/lib/utils";
 import { FONT_DISPLAY, FONT_MONO, card, btnPrimary, btnGhost, eyebrow } from "@/lib/ui";
 
 export default function DashboardPage() {
-  const { venue, loading } = useVenue();
+  const { venue, venues, loading, error, refetch } = useVenue();
   const router = useRouter();
 
-  // If venue not configured yet, send to onboarding. Navigating during render
-  // updates the Router mid-render — it has to happen in an effect.
+  // Onboarding is only correct when they genuinely own nothing. If the load
+  // failed we show the error instead — bouncing to onboarding on a 401 is how
+  // an auth problem used to masquerade as "you have no venue".
   useEffect(() => {
-    if (!loading && !venue) router.replace("/dashboard/onboarding");
-  }, [loading, venue, router]);
+    if (!loading && !error && venues.length === 0) router.replace("/dashboard/onboarding");
+  }, [loading, error, venues.length, router]);
+
+  if (error) {
+    return (
+      <div style={{ display: "grid", placeItems: "center", height: "60vh", padding: 24 }}>
+        <div style={{ ...card, borderRadius: 16, padding: 32, maxWidth: 460, textAlign: "center" }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, marginBottom: 10 }}>Couldn&apos;t load your venues</div>
+          <p style={{ color: "var(--muted)", fontSize: 13.5, margin: "0 0 20px" }}>{error}</p>
+          <button onClick={refetch} style={{ ...btnPrimary, padding: "11px 20px", borderRadius: 11 }}>Try again</button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading || !venue) {
     return <div style={{ display: "grid", placeItems: "center", height: "60vh", color: "var(--faint)", fontSize: 14 }}>Loading…</div>;

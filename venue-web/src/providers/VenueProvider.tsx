@@ -4,77 +4,97 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useState,
 } from "react";
-import { venueApi, type Venue } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { ApiError, venueApi, type Venue } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 
 interface VenueContextValue {
+  /** The venue every dashboard screen is currently scoped to. */
   venue: Venue | null;
+  /** All venues this owner has — drives the sidebar switcher. */
+  venues: Venue[];
   loading: boolean;
+  /** Set when the venue list couldn't be loaded. Distinct from "owns none":
+   *  an owner with no venues gets venues=[] and error=null. */
+  error: string | null;
+  selectVenue: (id: string) => void;
   refetch: () => void;
   setVenue: (v: Venue) => void;
 }
 
 const VenueContext = createContext<VenueContextValue | null>(null);
 
-// We store the chosen venue id in sessionStorage so it survives client navigation.
+// The chosen venue id, so a switch survives client navigation and reloads.
 const VENUE_KEY = "impulse_venue_id";
+
+function describe(err: unknown): string {
+  if (err instanceof ApiError) {
+    return `Couldn't load your venues (${err.status}): ${err.message}`;
+  }
+  return "Couldn't reach the server to load your venues.";
+}
 
 export function VenueProvider({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
-  const [venue, setVenueState] = useState<Venue | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const fetchVenue = useCallback(
-    async (id: string) => {
-      try {
-        const v = await venueApi.get(id);
-        setVenueState(v);
-      } catch {
-        // stored id is stale, clear it
-        sessionStorage.removeItem(VENUE_KEY);
-        setVenueState(null);
-      } finally {
-        setLoading(false);
-      }
-    },
-    []
+  // Venue created during onboarding, adopted before the query refetches.
+  const [pending, setPending] = useState<Venue | null>(null);
+  // Read once on mount rather than every render. This provider only mounts
+  // client-side (RequireAuth gates it), so there's no hydration mismatch.
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : sessionStorage.getItem(VENUE_KEY)
   );
 
-  useEffect(() => {
-    if (!session) {
-      setLoading(false);
-      return;
-    }
-    const stored = sessionStorage.getItem(VENUE_KEY);
-    if (stored) {
-      fetchVenue(stored);
-    } else {
-      // No stored id — check if this user already owns a venue on the server.
-      venueApi.mine().then((v) => {
-        sessionStorage.setItem(VENUE_KEY, v.id);
-        setVenueState(v);
-      }).catch(() => {
-        // 404 = genuinely no venue yet → show onboarding
-      }).finally(() => {
-        setLoading(false);
-      });
-    }
-  }, [session, fetchVenue]);
+  const {
+    data,
+    isPending,
+    error: queryError,
+    refetch: refetchQuery,
+  } = useQuery<Venue[]>({
+    queryKey: ["my-venues", session?.user?.id],
+    queryFn: () => venueApi.mineAll(),
+    enabled: !!session,
+    // A 401 means the token is wrong, not that it's a bad moment — retrying
+    // just delays a real error the user needs to see.
+    retry: (count, err) => !(err instanceof ApiError && err.status < 500) && count < 2,
+  });
 
+  const venues = data ?? (pending ? [pending] : []);
+
+  // Honour the stored/selected venue only while it's still one of theirs —
+  // otherwise fall back to the first, so a deleted venue can't wedge the app.
+  const venue =
+    venues.find((v) => v.id === selectedId) ?? venues[0] ?? null;
+
+  const selectVenue = useCallback((id: string) => {
+    sessionStorage.setItem(VENUE_KEY, id);
+    setSelectedId(id);
+  }, []);
+
+  // Used by onboarding: adopt the just-created venue without a round trip.
   const setVenue = useCallback((v: Venue) => {
     sessionStorage.setItem(VENUE_KEY, v.id);
-    setVenueState(v);
+    setPending(v);
+    setSelectedId(v.id);
   }, []);
 
   const refetch = useCallback(() => {
-    if (venue) fetchVenue(venue.id);
-  }, [venue, fetchVenue]);
+    refetchQuery();
+  }, [refetchQuery]);
 
   return (
-    <VenueContext.Provider value={{ venue, loading, refetch, setVenue }}>
+    <VenueContext.Provider
+      value={{
+        venue,
+        venues,
+        loading: !!session && isPending,
+        error: queryError ? describe(queryError) : null,
+        selectVenue,
+        refetch,
+        setVenue,
+      }}
+    >
       {children}
     </VenueContext.Provider>
   );
