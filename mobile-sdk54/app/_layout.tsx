@@ -19,6 +19,7 @@ import {
   SpaceMono_400Regular,
   SpaceMono_700Bold,
 } from '@expo-google-fonts/space-mono';
+import { DesktopNotice } from '../src/DesktopNotice';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -46,6 +47,9 @@ export default function RootLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="(user)" />
       </Stack>
+      {/* Web-only; compiles to null on native. Above the Stack so it covers
+          every route, including the auth gate's blank frames. */}
+      <DesktopNotice />
     </SafeAreaProvider>
   );
 }
