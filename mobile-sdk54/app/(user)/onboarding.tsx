@@ -15,7 +15,7 @@ import { GlyphBell, GlyphPin, Search } from '../../src/icons';
 import { isOnboarded, markOnboarded, syncUserProfile } from '../../src/auth';
 import { requestLocationAccess, requestNotificationAccess, syncPushToken } from '../../src/permissions';
 import { supabase } from '../../src/supabase';
-import { Lede, Panel, SCREEN_W as W } from '../../src/onboardingUI';
+import { Lede, Panel, usePanelWidth } from '../../src/onboardingUI';
 import { useWallet, WalletPanel } from '../../src/wallet';
 
 const SUBURBS = ['Sydney CBD', 'Surry Hills', 'Newtown', 'Bondi', 'Marrickville', 'Enmore', 'Darlinghurst', 'Redfern', 'Chippendale', 'Glebe', 'Paddington', 'Manly'];
@@ -36,6 +36,7 @@ export default function Onboarding() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
+  const W = usePanelWidth();
   const [page, setPage] = useState(0);
   const [suburb, setSuburb] = useState<string | null>(null);
   const [acts, setActs] = useState<string[]>([]);
@@ -67,6 +68,14 @@ export default function Onboarding() {
     setPage(p);
   };
   const next = () => goTo(page + 1);
+
+  // Re-anchor on viewport change (mobile web: keyboard, URL bar, rotation).
+  // Pages resize with the window, so a stale scroll offset would leave the
+  // current step half off-screen — and scrollEnabled={false} means the user
+  // can't swipe back onto it.
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ x: page * W, animated: false });
+  }, [W, page]);
 
   // Ask the OS for location; if we can reverse-geocode a suburb, prefill the
   // home-base step so the user just confirms it.
