@@ -3,33 +3,20 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { bookingApi, venueApi, type Booking, type Deal, type DealPerformanceItem, type StatsResponse } from "@/lib/api";
-import { useVenue } from "@/providers/VenueProvider";
+import { bookingApi, venueApi, type ApiError, type Booking, type DealPerformanceItem, type Deal, type StatsResponse } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
+import { useVenue } from "@/providers/VenueProvider";
 import { formatCurrency } from "@/lib/utils";
 import { FONT_DISPLAY, FONT_MONO, card, btnPrimary, btnGhost, eyebrow } from "@/lib/ui";
 
 export default function DashboardPage() {
-  const { venue, venues, loading, error, refetch } = useVenue();
+  const { venue, loading } = useVenue();
   const router = useRouter();
 
-  // Onboarding is only correct when they genuinely own nothing. If the load
-  // failed we show the error instead — bouncing to onboarding on a 401 is how
-  // an auth problem used to masquerade as "you have no venue".
-  useEffect(() => {
-    if (!loading && !error && venues.length === 0) router.replace("/dashboard/onboarding");
-  }, [loading, error, venues.length, router]);
-
-  if (error) {
-    return (
-      <div style={{ display: "grid", placeItems: "center", height: "60vh", padding: 24 }}>
-        <div style={{ ...card, borderRadius: 16, padding: 32, maxWidth: 460, textAlign: "center" }}>
-          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, marginBottom: 10 }}>Couldn&apos;t load your venues</div>
-          <p style={{ color: "var(--muted)", fontSize: 13.5, margin: "0 0 20px" }}>{error}</p>
-          <button onClick={refetch} style={{ ...btnPrimary, padding: "11px 20px", borderRadius: 11 }}>Try again</button>
-        </div>
-      </div>
-    );
+  // If venue not configured yet, send to onboarding
+  if (!loading && !venue) {
+    router.replace("/dashboard/onboarding");
+    return null;
   }
 
   if (loading || !venue) {
@@ -37,6 +24,28 @@ export default function DashboardPage() {
   }
 
   return <DashboardContent venueId={venue.id} venueName={venue.name} />;
+}
+
+function VenueLoadError({ error, onRetry }: { error: ApiError; onRetry: () => void }) {
+  const auth = error.status === 401 || error.status === 403;
+  return (
+    <div style={{ display: "grid", placeItems: "center", minHeight: "70vh", padding: 24 }}>
+      <div style={{ ...card, borderRadius: 18, padding: 32, maxWidth: 460, textAlign: "center" }}>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 20, marginBottom: 8 }}>
+          Couldn&apos;t load your venue
+        </div>
+        <p style={{ color: "var(--muted)", fontSize: 14, lineHeight: 1.6, margin: "0 0 20px" }}>
+          {auth
+            ? "Your session couldn't be verified. Sign out and back in, then try again."
+            : "We couldn't reach the server. This is a connection issue, not a missing venue — your venue is safe."}
+          <span style={{ display: "block", marginTop: 8, fontFamily: FONT_MONO, fontSize: 11, color: "var(--faint)" }}>
+            {error.status ? `Error ${error.status}` : "Network error"} · {error.message}
+          </span>
+        </p>
+        <button onClick={onRetry} style={{ ...btnPrimary, padding: "12px 22px" }}>Try again</button>
+      </div>
+    </div>
+  );
 }
 
 function greeting(): string {
