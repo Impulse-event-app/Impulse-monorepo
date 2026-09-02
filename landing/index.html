@@ -184,6 +184,51 @@
     .btn:hover .arrow { transform: translateX(4px); }
     .arrow { transition: transform .2s ease; }
 
+    /* ---- Credibility strip ---- */
+    /* The "backed by" row: a label, a hairline, and the credential itself.
+       One entry today, so it is a plain flex row — laid out so more can be
+       dropped in beside it without touching the CSS. */
+    .creds {
+      display: flex; align-items: center; flex-wrap: wrap;
+      gap: 10px clamp(12px, 1.6vw, 18px);
+      margin-top: clamp(6px, 1.4vw, 14px);
+    }
+    .creds-label {
+      font-family: 'Space Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.28em; text-transform: uppercase;
+      color: var(--muted); white-space: nowrap;
+    }
+    /* Hairline between label and credential. It fills the leftover space on a
+       wide viewport and collapses to nothing once the row wraps on a phone. */
+    .creds-rule {
+      flex: 0 1 clamp(0px, 4vw, 44px); height: 1px; min-width: 0;
+      background: var(--hairline);
+    }
+    .creds-item {
+      display: inline-flex; align-items: center; gap: 9px;
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+    }
+    .creds-item svg {
+      width: 17px; height: 17px; flex: none; color: #FF5A4D;
+      fill: none; stroke: currentColor; stroke-width: 1.7;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+    /* Reads at logo weight — this is the row's one piece of real content. */
+    .creds-name { font-weight: 700; font-size: clamp(15px, 1.5vw, 17px); letter-spacing: -.01em; }
+    .creds-note {
+      font-family: 'Space Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+      padding: 4px 9px; border-radius: 100px;
+      border: 1px solid color-mix(in oklab, var(--accent) 40%, transparent);
+      color: #FF5A4D; white-space: nowrap;
+    }
+
+    /* Once the row wraps, the connector is a dash floating after the label —
+       drop it and let the line break do the separating. */
+    @media (max-width: 560px) {
+      .creds-rule { display: none; }
+    }
+
     /* ---- Category marquee ---- */
     .strip {
       overflow: hidden;
@@ -797,6 +842,21 @@
       <p class="tagline">Plans, on impulse.</p>
       <p class="lede">Last-minute things to do in Sydney, with the price already worked out.</p>
       <a class="btn" href="#waitlist">Join the waitlist <span class="arrow">→</span></a>
+
+      <div class="creds">
+        <span class="creds-label">Recognised at</span>
+        <span class="creds-rule" aria-hidden="true"></span>
+        <span class="creds-item">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/>
+            <path d="M7 5.5H4.75a2.25 2.25 0 0 0 0 4.5H5.6"/>
+            <path d="M17 5.5h2.25a2.25 2.25 0 0 1 0 4.5H16.4"/>
+            <path d="M12 14v4"/><path d="M8.5 20h7"/>
+          </svg>
+          <span class="creds-name">Pinch Payments Hackathon</span>
+          <span class="creds-note">Winners</span>
+        </span>
+      </div>
     </section>
 
     <section class="strip" aria-label="Categories">
