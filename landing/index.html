@@ -69,7 +69,7 @@
       padding: clamp(20px, 4vw, 40px);
       display: flex;
       flex-direction: column;
-      gap: clamp(28px, 4vw, 56px);
+      gap: clamp(24px, 3.2vw, 44px);
       min-height: 100vh;
     }
 
@@ -145,9 +145,15 @@
       100% { transform: scale(1); opacity: 0; }
     }
     .eyebrow {
-      font-family: 'Space Mono', ui-monospace, monospace;
-      font-size: 12px; letter-spacing: 0.32em; text-transform: uppercase;
+      align-self: flex-start;
+      display: inline-flex; align-items: center; gap: 10px;
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-weight: 600; font-size: 14px; letter-spacing: -.01em;
       color: #FF5A4D;
+    }
+    .eyebrow::before {
+      content: ''; width: 22px; height: 2px; flex: none;
+      background: currentColor; border-radius: 2px;
     }
     .wordmark {
       font-family: 'Archivo', ui-sans-serif, sans-serif;
@@ -184,49 +190,73 @@
     .btn:hover .arrow { transform: translateX(4px); }
     .arrow { transition: transform .2s ease; }
 
-    /* ---- Credibility strip ---- */
-    /* The "backed by" row: a label, a hairline, and the credential itself.
-       One entry today, so it is a plain flex row — laid out so more can be
-       dropped in beside it without touching the CSS. */
+    /* ---- Awards ---- */
+    /* Two accolades, shown flat: the event's own artwork over one quiet caption.
+       No panels, no pills — the marks are transparent PNGs, so they sit straight
+       on the page background and a card around them would only add chrome the
+       hero doesn't need. A single hairline does all the dividing. */
     .creds {
-      display: flex; align-items: center; flex-wrap: wrap;
-      gap: 10px clamp(12px, 1.6vw, 18px);
-      margin-top: clamp(6px, 1.4vw, 14px);
+      display: flex; flex-direction: column;
+      gap: clamp(16px, 2vw, 24px);
+      margin-top: clamp(10px, 2.2vw, 22px);
     }
+    .creds-head { display: flex; align-items: center; gap: clamp(12px, 1.6vw, 18px); }
     .creds-label {
-      font-family: 'Space Mono', ui-monospace, monospace;
-      font-size: 11px; letter-spacing: 0.28em; text-transform: uppercase;
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-size: 14px; font-weight: 500; letter-spacing: -.005em;
       color: var(--muted); white-space: nowrap;
     }
-    /* Hairline between label and credential. It fills the leftover space on a
-       wide viewport and collapses to nothing once the row wraps on a phone. */
-    .creds-rule {
-      flex: 0 1 clamp(0px, 4vw, 44px); height: 1px; min-width: 0;
-      background: var(--hairline);
+    /* Hairline running out from the label to the width of the awards below. */
+    .creds-rule { flex: 1 1 auto; height: 1px; min-width: 0; background: var(--hairline); }
+
+    .awards {
+      list-style: none; margin: 0; padding: 0;
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: clamp(26px, 4vw, 54px);
     }
-    .creds-item {
-      display: inline-flex; align-items: center; gap: 9px;
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
-    }
-    .creds-item svg {
-      width: 17px; height: 17px; flex: none; color: #FF5A4D;
-      fill: none; stroke: currentColor; stroke-width: 1.7;
-      stroke-linecap: round; stroke-linejoin: round;
-    }
-    /* Reads at logo weight — this is the row's one piece of real content. */
-    .creds-name { font-weight: 700; font-size: clamp(15px, 1.5vw, 17px); letter-spacing: -.01em; }
-    .creds-note {
-      font-family: 'Space Mono', ui-monospace, monospace;
-      font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
-      padding: 4px 9px; border-radius: 100px;
-      border: 1px solid color-mix(in oklab, var(--accent) 40%, transparent);
-      color: #FF5A4D; white-space: nowrap;
+    .creds-head, .awards { width: 100%; max-width: 760px; }
+
+    .award { display: flex; flex-direction: column; gap: clamp(12px, 1.6vw, 18px); }
+    /* The only division between the two — no border box, just the rule, set far
+       enough out that it reads as a column gutter rather than an edge. */
+    .award + .award {
+      padding-left: clamp(26px, 4vw, 54px);
+      border-left: 1px solid var(--hairline);
     }
 
-    /* Once the row wraps, the connector is a dash floating after the label —
-       drop it and let the line break do the separating. */
-    @media (max-width: 560px) {
-      .creds-rule { display: none; }
+    /* A stage of fixed height, top-aligned. The three-line wordmark and the
+       stack of two single-line logos then start on the same line, and their
+       captions — pushed down by the auto margin below — end on the same one. */
+    .award-art {
+      display: flex; flex-direction: column;
+      align-items: flex-start; gap: clamp(16px, 2vw, 24px);
+      min-height: clamp(100px, 11.5vw, 126px);
+    }
+    .award-art img { display: block; width: 100%; height: auto; }
+    .award-logo--pinch     { max-width: clamp(134px, 15vw, 164px); }
+    .award-logo--startmate { max-width: clamp(134px, 15vw, 164px); }
+    .award-logo--stripe    { max-width: clamp(154px, 17vw, 186px); }
+
+    /* Placement leads in coral, the event it was won at follows in grey. */
+    .award-meta {
+      margin: auto 0 0;
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-size: clamp(13px, 1.3vw, 14px); letter-spacing: -.01em;
+      line-height: 1.5; color: var(--muted);
+    }
+    .award-meta strong { display: block; font-weight: 600; color: var(--text); }
+    .award-rank { color: #FF5A4D; }
+
+    /* Two columns of logos get too narrow to read once the hero column does —
+       stack them, and turn the gutter rule into a divider between the rows. */
+    @media (max-width: 620px) {
+      .awards { grid-template-columns: 1fr; gap: clamp(22px, 6vw, 28px); }
+      .award-art { min-height: 0; }
+      .award + .award {
+        padding-left: 0; border-left: 0;
+        padding-top: clamp(22px, 6vw, 28px);
+        border-top: 1px solid var(--hairline);
+      }
     }
 
     /* ---- Category marquee ---- */
@@ -255,6 +285,65 @@
     }
     .sep { color: #FF5A4D; margin-left: clamp(20px, 2.6vw, 40px); }
 
+    /* ---- Venue pitch ---- */
+    /* The page's second audience. It sits after the waitlist because a venue
+       owner will scroll looking for it, while a punter won't — and it's flat
+       against the page rather than a panel, so the waitlist card above stays
+       the one surface competing for a click. */
+    .venues { border-top: 1px solid var(--hairline); padding-top: clamp(30px, 4vw, 52px); }
+    .venues-grid {
+      display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 360px);
+      gap: clamp(28px, 4vw, 56px); align-items: start;
+    }
+    .venues-copy { display: flex; flex-direction: column; align-items: flex-start; }
+    .venues-title {
+      font-family: 'Archivo', ui-sans-serif, sans-serif;
+      font-weight: 900; font-size: clamp(28px, 4vw, 46px);
+      line-height: 1; letter-spacing: -.035em;
+      margin: 14px 0 0; max-width: 17ch;
+    }
+    .venues-lede {
+      font-size: clamp(15px, 1.5vw, 18px); line-height: 1.5;
+      color: var(--muted); margin: 16px 0 0; max-width: 52ch;
+    }
+    /* Outlined, not filled — "Join the waitlist" stays the page's one solid
+       button so the two audiences' CTAs don't compete at equal weight. */
+    .btn--ghost {
+      background: none; color: #FF5A4D; box-shadow: none;
+      border: 1px solid color-mix(in oklab, var(--accent) 45%, transparent);
+      margin-top: clamp(20px, 2.4vw, 28px);
+    }
+    .btn--ghost:hover {
+      box-shadow: none; background: color-mix(in oklab, var(--accent) 10%, transparent);
+      border-color: var(--accent);
+    }
+
+    .venues-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+    /* Hairline-separated rows rather than boxes — same flat treatment as the
+       awards row up in the hero. */
+    .venues-points li {
+      padding: 14px 0; border-top: 1px solid var(--hairline);
+      font-size: 14px; line-height: 1.5; color: var(--muted);
+    }
+    .venues-points li:first-child { border-top: 0; padding-top: 0; }
+    .venues-points strong {
+      display: block; font-weight: 600; font-size: 15px;
+      color: var(--text); letter-spacing: -.01em; margin-bottom: 2px;
+    }
+
+    @media (max-width: 720px) {
+      .venues-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ---- Header nav ---- */
+    /* One link, for the audience that has to go looking for its own section. */
+    .header-link {
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-size: 15px; font-weight: 500; color: var(--muted);
+      transition: color .15s ease;
+    }
+    .header-link:hover { color: var(--text); }
+
     /* ---- Footer ---- */
     .footer {
       margin-top: auto;
@@ -264,18 +353,12 @@
       border-top: 1px solid var(--hairline);
     }
     .footer-note {
-      font-family: 'Space Mono', ui-monospace, monospace;
-      font-size: 12px; letter-spacing: 0.14em; color: var(--muted);
-    }
-    .footer-nav { display: flex; gap: 24px; }
-    .footer-nav a {
       font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
-      font-size: 14px; color: var(--muted); transition: color .15s ease;
+      font-size: 14px; letter-spacing: -.005em; color: var(--muted);
     }
-    .footer-nav a:hover { color: var(--text); }
 
     /* ---- Scroll demo: sticky phone, stepped copy ---- */
-    .demo-head { margin-bottom: clamp(28px, 4vw, 52px); }
+    .demo-head { margin-bottom: clamp(24px, 3vw, 40px); }
     .demo-title {
       font-family: 'Archivo', ui-sans-serif, sans-serif;
       font-weight: 900; font-size: clamp(30px, 5vw, 60px);
@@ -283,8 +366,8 @@
       margin: 12px 0 0; max-width: 15ch;
     }
     .demo-grid {
-      display: grid; grid-template-columns: 1fr auto;
-      gap: clamp(30px, 6vw, 90px); align-items: start;
+      display: grid; grid-template-columns: minmax(0, 1fr) auto;
+      gap: clamp(30px, 4.5vw, 64px); align-items: start;
     }
     /* Explicit placement, so the phone can come FIRST in the DOM (where mobile
        needs it) while still rendering on the right at desktop widths. */
@@ -293,14 +376,14 @@
 
     /* Steps column */
     .demo-step {
-      min-height: 74vh; display: flex; flex-direction: column; justify-content: center;
+      min-height: 62vh; display: flex; flex-direction: column; justify-content: center;
       opacity: .32; transition: opacity .35s ease;
     }
     .demo-step.is-on { opacity: 1; }
     .demo-step-n {
       display: inline-flex; align-items: center; gap: 10px;
-      font-family: 'Space Mono', ui-monospace, monospace;
-      font-size: 12px; letter-spacing: .22em; text-transform: uppercase;
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-weight: 600; font-size: 14px; letter-spacing: -.01em;
       color: var(--accent); margin-bottom: 16px;
     }
     .demo-step-n::before {
@@ -311,11 +394,11 @@
     .demo-step h3 {
       font-family: 'Archivo', ui-sans-serif, sans-serif;
       font-weight: 800; font-size: clamp(24px, 3.2vw, 38px);
-      line-height: 1.04; letter-spacing: -.025em; margin: 0; max-width: 16ch;
+      line-height: 1.04; letter-spacing: -.025em; margin: 0; max-width: 18ch;
     }
     .demo-step p {
       font-size: clamp(15px, 1.5vw, 18px); line-height: 1.5;
-      color: var(--muted); margin: 14px 0 0; max-width: 40ch;
+      color: var(--muted); margin: 14px 0 0; max-width: 46ch;
     }
 
     /* Phone column */
@@ -361,8 +444,8 @@
 
     /* App primitives — mirrors of the real RN components */
     .app-eyebrow {
-      font-family: 'Space Mono', ui-monospace, monospace;
-      font-size: 9.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--app-faint);
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-weight: 500; font-size: 11px; letter-spacing: -.005em; color: var(--app-faint);
     }
     .app-h1 {
       font-family: 'Archivo', ui-sans-serif, sans-serif; font-weight: 700;
@@ -383,8 +466,8 @@
       display: grid; place-items: center; position: relative;
     }
     .app-photo span {
-      font-family: 'Space Mono', ui-monospace, monospace;
-      font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--app-faint);
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-weight: 500; font-size: 10.5px; letter-spacing: -.005em; color: var(--app-faint);
     }
     /* `slice` so the artwork crops rather than distorts across the different
        photo heights (128px hero, 106px card, 48px strip). */
@@ -398,12 +481,15 @@
     .app-pill b {
       background: rgba(244,241,234,.92); color: #0F0E0D;
       font-size: 10px; font-weight: 600; padding: 4px 9px; border-radius: 999px;
+      /* The pill is absolutely positioned, so a wrap here pushes the label into
+         the countdown beside it rather than reflowing the row. */
+      white-space: nowrap;
     }
     .app-pill i {
       display: inline-flex; align-items: center; gap: 4px; font-style: normal;
       background: var(--app-accent); color: var(--app-accent-ink);
       font-family: 'Space Mono', ui-monospace, monospace; font-weight: 700;
-      font-size: 9.5px; padding: 4px 8px; border-radius: 6px;
+      font-size: 9.5px; padding: 4px 8px; border-radius: 6px; white-space: nowrap;
     }
     .app-body { padding: 11px 13px 13px; }
     .app-venue {
@@ -446,8 +532,8 @@
     }
     .app-av.done { background: var(--app-accent); color: var(--app-accent-ink); }
     .app-tag {
-      font-family: 'Space Mono', ui-monospace, monospace; font-size: 9.5px;
-      letter-spacing: .08em; text-transform: uppercase; color: var(--app-faint);
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif; font-size: 11px;
+      font-weight: 500; letter-spacing: -.005em; color: var(--app-faint);
     }
     .app-tag.on { color: var(--app-accent); }
     .app-code {
@@ -506,6 +592,9 @@
       .app-av { width: 26px; height: 26px; font-size: 11px; }
       .app-chips { margin: 10px 0 9px; }
       .app-chip { font-size: 10px; padding: 5px 9px; }
+      /* Both pills sit in one absolutely-positioned row over the artwork, so at
+         the narrower mobile phone they have to shrink or they collide. */
+      .app-pill b, .app-pill i { font-size: 9px; padding: 3px 7px; flex: none; }
       .app-body { padding: 9px 11px 11px; }
       .app-venue { font-size: 14.5px; }
       .app-now { font-size: 18px; }
@@ -543,8 +632,8 @@
 
     .wl-counter {
       display: inline-flex; align-items: center; gap: 10px;
-      font-family: 'Space Mono', ui-monospace, monospace;
-      font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-weight: 500; font-size: 13.5px; letter-spacing: -.005em;
       color: var(--muted);
       border: 1px solid var(--hairline); border-radius: 100px;
       padding: 8px 16px; margin: 0 0 clamp(18px, 2vw, 26px);
@@ -589,8 +678,8 @@
     }
     .wl-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
     .wl-label {
-      font-family: 'Space Mono', ui-monospace, monospace;
-      font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-weight: 500; font-size: 13.5px; letter-spacing: -.005em;
       color: var(--muted);
     }
     .wl-input, .wl-select select {
@@ -711,8 +800,8 @@
     .wl-share-btn:hover { border-color: var(--muted); }
     .wl-share-btn.is-primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
     .wl-referrals {
-      font-family: 'Space Mono', ui-monospace, monospace;
-      font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-size: 14px; letter-spacing: -.005em;
       color: var(--muted); margin: clamp(18px, 2vw, 24px) 0 0;
     }
     .wl-referrals b { color: var(--text); }
@@ -830,6 +919,7 @@
         <span class="mark"><svg viewBox="0 0 200 200" aria-hidden="true"><use href="#pulsemark"/></svg></span>
         <span class="brand-name">impulse</span>
       </div>
+      <a class="header-link" href="#venues">For venues</a>
     </header>
 
     <section class="hero">
@@ -837,25 +927,42 @@
         <div class="radar-static"></div>
         <span></span><span></span><span></span>
       </div>
-      <span class="eyebrow">Sydney</span>
       <h1 class="wordmark">Impulse</h1>
       <p class="tagline">Plans, on impulse.</p>
       <p class="lede">Last-minute things to do in Sydney, with the price already worked out.</p>
       <a class="btn" href="#waitlist">Join the waitlist <span class="arrow">→</span></a>
 
       <div class="creds">
-        <span class="creds-label">Recognised at</span>
-        <span class="creds-rule" aria-hidden="true"></span>
-        <span class="creds-item">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/>
-            <path d="M7 5.5H4.75a2.25 2.25 0 0 0 0 4.5H5.6"/>
-            <path d="M17 5.5h2.25a2.25 2.25 0 0 1 0 4.5H16.4"/>
-            <path d="M12 14v4"/><path d="M8.5 20h7"/>
-          </svg>
-          <span class="creds-name">Pinch Payments Hackathon</span>
-          <span class="creds-note">Winners</span>
-        </span>
+        <div class="creds-head">
+          <span class="creds-label">Recognised at</span>
+          <span class="creds-rule" aria-hidden="true"></span>
+        </div>
+
+        <ul class="awards">
+          <li class="award">
+            <div class="award-art">
+              <img class="award-logo--pinch" src="data:image/png;base64,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"
+                   width="420" height="314" alt="Pinch Me, I Want 50K!" decoding="async">
+            </div>
+            <p class="award-meta">
+              <strong><span class="award-rank">2nd place</span> &middot; National hackathon</strong>
+              Pinch Payments &amp; The Founders Union
+            </p>
+          </li>
+
+          <li class="award">
+            <div class="award-art">
+              <img class="award-logo--startmate" src="data:image/png;base64,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"
+                   width="320" height="55" alt="Startmate" decoding="async">
+              <img class="award-logo--stripe" src="data:image/png;base64,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"
+                   width="360" height="42" alt="Stripe Startups" decoding="async">
+            </div>
+            <p class="award-meta">
+              <strong><span class="award-rank">Winner</span> &middot; Wildcard Award</strong>
+              Stripe Startups Build Day
+            </p>
+          </li>
+        </ul>
       </div>
     </section>
 
@@ -1103,12 +1210,12 @@
             <div class="wl-chips" role="group" aria-labelledby="wl-activity-label"
                  aria-describedby="wl-activity-error" id="wl-activities">
               <label class="wl-chip"><input type="checkbox" value="Bowling"><span>Bowling</span></label>
-              <label class="wl-chip"><input type="checkbox" value="Escape Room"><span>Escape Room</span></label>
+              <label class="wl-chip"><input type="checkbox" value="Escape Room"><span>Escape room</span></label>
               <label class="wl-chip"><input type="checkbox" value="Karaoke"><span>Karaoke</span></label>
-              <label class="wl-chip"><input type="checkbox" value="Mini Golf"><span>Mini Golf</span></label>
+              <label class="wl-chip"><input type="checkbox" value="Mini Golf"><span>Mini golf</span></label>
               <label class="wl-chip"><input type="checkbox" value="Go-karting"><span>Go-karting</span></label>
               <label class="wl-chip"><input type="checkbox" value="Comedy"><span>Comedy</span></label>
-              <label class="wl-chip"><input type="checkbox" value="Live Music"><span>Live Music</span></label>
+              <label class="wl-chip"><input type="checkbox" value="Live Music"><span>Live music</span></label>
               <label class="wl-chip"><input type="checkbox" value="Something else" id="wl-other-toggle"><span>Something else</span></label>
             </div>
             <p class="wl-error" id="wl-activity-error" role="alert"></p>
@@ -1169,12 +1276,33 @@
       </div>
     </section>
 
+    <section class="venues" id="venues" aria-labelledby="venues-title">
+      <div class="venues-grid">
+        <div class="venues-copy">
+          <span class="eyebrow">For venues</span>
+          <h2 class="venues-title" id="venues-title">Got quiet hours? Let’s fill them.</h2>
+          <p class="venues-lede">
+            We’re running free three-month pilots with Sydney venues. You list the
+            slots you’d rather not have sitting empty, at a price you set, and we
+            bring you people who are deciding what to do tonight. Email us and
+            we’ll set up a chat.
+          </p>
+          <a class="btn btn--ghost"
+             href="mailto:rahul@impulseapp.au?subject=Impulse%20pilot%20enquiry">
+            Email us <span class="arrow">→</span>
+          </a>
+        </div>
+
+        <ul class="venues-points">
+          <li><strong>Three months, free</strong>No cost to you for the length of the pilot.</li>
+          <li><strong>You set the price</strong>Your slots, your discount — nothing goes live that you haven’t set.</li>
+          <li><strong>Settled at the venue</strong>Guests pay a small deposit to hold the spot; the rest is paid to you on the night.</li>
+        </ul>
+      </div>
+    </section>
+
     <footer class="footer">
       <span class="footer-note">impulse · made in sydney</span>
-      <nav class="footer-nav">
-        <a href="#terms">Terms</a>
-        <a href="#privacy">Privacy</a>
-      </nav>
     </footer>
 
   </div>

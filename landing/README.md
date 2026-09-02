@@ -41,9 +41,12 @@ It's plain static files, so anything works:
 
 ## Notes
 
+- **Venue enquiries**: the `For venues` section (`#venues`) links to a `mailto:` for
+  `rahul@impulseapp.au`. The address is deliberately not shown as visible text — the
+  button just reads "Email us" — but it is still in the `href`, so it is readable in the
+  page source. Assemble it in JS on click if you want it hidden from scrapers too.
+
 - **Theme**: defaults to dark (matches the design); the "Lights on/off" toggle flips it and
   remembers the choice in `localStorage`.
 - **Fonts**: Archivo / Space Grotesk / Space Mono via Google Fonts.
 - **Motion**: the marquee and pulse dot respect `prefers-reduced-motion`.
-- The footer `Terms` / `Privacy` links are placeholders (`#terms` / `#privacy`) — point them
-  at real pages before launch.
