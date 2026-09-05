@@ -635,3 +635,18 @@ class WaitlistStatsResponse(BaseModel):
     other_activities: Dict[str, int]
     by_area: Dict[str, int]
     top_referrers: List[WaitlistTopReferrer]
+
+
+# ── Venue enquiry (landing page "For venues" form) ────────────────────────────
+# Not persisted — the email is the record — so this only has to be enough for a
+# human to act on and tight enough that a bot cannot post an essay.
+
+class VenueEnquiryCreate(BaseModel):
+    venue: str = Field(min_length=1, max_length=120)
+    name: str = Field(min_length=1, max_length=80)
+    email: str = Field(min_length=3, max_length=254, pattern=EMAIL_PATTERN)
+    phone: Optional[str] = Field(default=None, max_length=40)
+    message: Optional[str] = Field(default=None, max_length=2000)
+    # Honeypot. No human sees this field; naive bots fill every input they find,
+    # so anything here means the submission is not a person.
+    website: Optional[str] = Field(default=None, max_length=200)

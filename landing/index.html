@@ -6,7 +6,7 @@
 
   <title>Impulse</title>
   <meta name="description" content="Last-minute things to do in Sydney, with the price already worked out. Join the waitlist for early access.">
-  <meta name="theme-color" content="#0F0E0D">
+  <meta name="theme-color" content="#0A0A0A">
   <!-- Dark only: no theme switching, so tell the UA to render form controls dark. -->
   <meta name="color-scheme" content="dark">
 
@@ -19,21 +19,32 @@
   <!-- PulseMark favicon: coral concentric rings + centre dot on warm near-black -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230F0E0D'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23FF5A4D' stroke-opacity='.3' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='6.5' fill='none' stroke='%23FF5A4D' stroke-opacity='.6' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23FF5A4D'/%3E%3C/svg%3E">
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-
   <style>
-    /* ---- Palette (dark only) ---- */
+    /* ---- Palette — brand guidelines v2.0, dark ground ----
+       Red is a signal, not decoration: primary actions, live states, the mark.
+       On dark the accent steps up one to Red Raised. The warm cream/coral
+       system this replaces is retired, along with every tinted background fill. */
     :root {
       color-scheme: dark;
-      --accent: #FF5A4D;
-      --accent-ink: #1A0B08;
-      --bg: #0F0E0D;
-      --surface: #1A1817;
-      --text: #F4F1EA;
-      --muted: rgba(244, 241, 234, 0.60);
-      --hairline: rgba(244, 241, 234, 0.12);
+      --accent: #E8202C;          /* Red Raised — the on-dark accent */
+      --accent-flat: #C80815;     /* Impulse Red — on light grounds */
+      --accent-deep: #A50611;     /* hover / pressed only */
+      --accent-ink: #FFFFFF;      /* text on a red fill */
+      --bg: #0A0A0A;              /* Ink */
+      --surface: #161617;         /* Surface Dark */
+      --text: #F5F5F7;            /* Paper */
+      --muted: #98989D;           /* Secondary on dark */
+      --hairline: rgba(245, 245, 247, 0.13);
+      /* One typeface, and only one. */
+      --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      /* Motion: clarifies where something came from, never announces itself. */
+      --ease: cubic-bezier(.32, .72, 0, 1);
+      /* The bloom behind the phone. Its own scale rather than the flat accent,
+         so the light has somewhere to fall off to — but every hue is still one
+         of the brand's reds, so no colour on the page comes from outside it. */
+      --g-rose: #FF8A80;      /* Red Raised, lightened */
+      --g-lilac: #E8202C;     /* Red Raised */
+      --g-cool: #7A0410;      /* Red Deep */
     }
 
     * { box-sizing: border-box; }
@@ -54,13 +65,13 @@
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+      font-family: var(--sans);
       min-height: 100vh;
       -webkit-font-smoothing: antialiased;
       transition: background .3s ease, color .3s ease;
     }
     a { color: inherit; text-decoration: none; }
-    ::selection { background: #FF5A4D; color: #1A0B08; }
+    ::selection { background: var(--accent); color: #FFFFFF; }
 
     .wrap {
       width: 100%;
@@ -74,8 +85,19 @@
     }
 
     /* ---- Header ---- */
-    .header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-    .brand { display: flex; align-items: center; gap: 11px; }
+    .header {
+      display: grid; grid-template-columns: 1fr auto 1fr;
+      align-items: center; gap: 16px;
+    }
+    .brand { display: flex; align-items: center; gap: 11px; justify-self: start; }
+    .header-nav { display: flex; align-items: center; gap: clamp(18px, 2.4vw, 36px); }
+    .header .btn { justify-self: end; margin-top: 0; }
+    /* Below the demo breakpoint the centre track has nowhere to go — the links
+       are all reachable from the sections themselves, so they drop. */
+    @media (max-width: 900px) {
+      .header { grid-template-columns: 1fr auto; }
+      .header-nav { display: none; }
+    }
 
     /* ---- PulseMark ---- */
     /* Static. The mark's own concentric circles are the rings — they're true
@@ -89,106 +111,280 @@
     .mark svg { width: 100%; height: 100%; display: block; }
 
     .brand-name {
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
-      font-weight: 700; font-size: 20px; letter-spacing: -.02em;
+      font-weight: 600; font-size: 20px; letter-spacing: -.028em;
       color: var(--text);
     }
     /* ---- Hero ---- */
     .hero {
       position: relative;
-      /* Own stacking context, so the radar's z-index:-1 stays behind the hero's
-         own content instead of sliding behind the page background. */
-      isolation: isolate;
       display: flex; flex-direction: column;
-      gap: clamp(16px, 2.4vw, 26px);
+      gap: clamp(14px, 1.8vw, 22px);
       padding-top: clamp(8px, 2vw, 24px);
     }
+    /* Centrally panned above the demo breakpoint: the copy stacks up the middle
+       and the phone rises into the lower half of the viewport in front of it. */
+    @media (min-width: 901px) {
+      .hero {
+        min-height: 100vh;
+        align-items: center; text-align: center;
+        justify-content: flex-start;
+        gap: clamp(8px, 1.2vw, 14px);
+        padding-top: clamp(12px, 2.6vh, 30px);
+      }
+      .hero .eyebrow { align-self: center; }
+    }
+    /* The awards read as their own band now that they sit below the stage. */
+    /* The hero centres its type and the awards inherit that, which left the
+       short caption line floating indented above the long one — under a logo
+       that is hard left, because the art sets its own alignment. They set
+       theirs too; the right-hand award opts back out below. */
+    .hero .creds { text-align: left; }
+    /* ---- Awards, in the hero ----
+       The cropped phone leaves the two lower corners of the hero empty; the
+       awards take them. Quiet enough to read as provenance rather than as a
+       second headline, and the phone rises in front of them, which is what
+       gives that band its depth. */
+    @media (min-width: 1181px) {
+      .hero .creds {
+        position: absolute; left: 0; right: 0;
+        bottom: clamp(20px, 4vh, 52px);
+        gap: 0; z-index: 1; pointer-events: none;
+      }
+      .hero .creds-head { display: none; }
+      .hero .awards {
+        display: flex; justify-content: space-between; align-items: flex-end;
+        gap: 0; max-width: none;
+      }
+      .hero .award { width: clamp(150px, 15vw, 208px); gap: 12px; }
+      /* The gutter rule sat mid-hero, straight through the phone. */
+      .hero .award + .award { padding-left: 0; border-left: 0; text-align: right; align-items: flex-end; }
+      .hero .award + .award .award-art { align-items: flex-end; }
+      .hero .award-art { min-height: 0; gap: 10px; }
+      .hero .award-logo--pinch     { max-width: 104px; }
+      .hero .award-logo--startmate { max-width: 96px; }
+      .hero .award-logo--stripe    { max-width: 112px; }
+      .hero .award-meta { font-size: 11.5px; line-height: 1.45; opacity: .62; }
+      .hero .award-meta strong { font-size: 11.5px; }
+    }
+    /* Below that the phone is gone or the hero is too narrow to flank, so the
+       awards simply follow the copy in flow. */
+    @media (max-width: 1180px) {
+      .hero .creds { margin-top: clamp(28px, 5vw, 48px); }
+    }
 
-    /* ---- Hero radar ---- */
-    /* The PulseMark blown up to room scale: fixed concentric rings with pulses
-       radiating out through them. Decorative and deliberately faint — it sits
-       under the wordmark and must never compete with it. */
-    .radar {
-      position: absolute; z-index: -1;
-      top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: min(112vw, 1020px); aspect-ratio: 1;
-      pointer-events: none;
-    }
-    .radar-static {
-      position: absolute; inset: 0; border-radius: 50%;
-      /* Percentage stops, not pixels — ring density then stays constant
-         instead of bunching up as the circle shrinks on small screens. */
-      background: repeating-radial-gradient(circle,
-        transparent 0 6.2%,
-        color-mix(in oklab, var(--accent) 30%, transparent) 6.2% 6.35%);
-      /* Fade the grid out before the edge so it reads as a glow, not a disc. */
-      -webkit-mask-image: radial-gradient(circle, #000 28%, transparent 68%);
-      mask-image: radial-gradient(circle, #000 28%, transparent 68%);
-      opacity: .45;
-    }
-    .radar span {
-      position: absolute; inset: 0; border-radius: 50%;
-      border: 1.5px solid var(--accent);
-      opacity: 0;
-      animation: radar-pulse 9s cubic-bezier(.22, .61, .36, 1) infinite;
-    }
-    .radar span:nth-child(2) { animation-delay: 3s; }
-    .radar span:nth-child(3) { animation-delay: 6s; }
-    /* Soft core so the centre doesn't read as an empty hole. */
-    .radar::after {
-      content: ''; position: absolute; inset: 0;
-      background: radial-gradient(circle, color-mix(in oklab, var(--accent) 13%, transparent) 0%, transparent 46%);
-    }
-    @keyframes radar-pulse {
-      0%   { transform: scale(.06); opacity: 0; }
-      12%  { opacity: .32; }
-      100% { transform: scale(1); opacity: 0; }
-    }
     .eyebrow {
       align-self: flex-start;
-      display: inline-flex; align-items: center; gap: 10px;
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
-      font-weight: 600; font-size: 14px; letter-spacing: -.01em;
-      color: #FF5A4D;
-    }
-    .eyebrow::before {
-      content: ''; width: 22px; height: 2px; flex: none;
-      background: currentColor; border-radius: 2px;
-    }
-    .wordmark {
-      font-family: 'Archivo', ui-sans-serif, sans-serif;
-      font-weight: 900;
-      font-size: clamp(72px, 17vw, 220px);
-      line-height: 0.82; letter-spacing: -0.055em;
-      margin: 0; color: var(--text);
-    }
-    .tagline {
-      font-family: 'Archivo', ui-sans-serif, sans-serif;
-      font-weight: 800;
-      font-size: clamp(24px, 3.4vw, 44px);
-      line-height: 1; letter-spacing: -0.02em;
-      margin: 0; color: #FF5A4D;
-    }
-    .lede {
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
-      font-size: clamp(16px, 1.6vw, 20px);
-      line-height: 1.4; margin: 0; max-width: 42ch;
+      display: inline-block;
+      font-size: 13px; letter-spacing: -.004em;
       color: var(--muted);
     }
+    /* The mark is the word, set correctly: semibold, sentence case,
+       tracked to −0.033em. No display face, no extra weight. */
+    /* The hero says one thing. The name is in the menubar, and the supporting
+       line and the call to action are on the phone's own screen — the way the
+       reference does it. */
+    /* Paper, flat. It used to be a red gradient clipped to the text, which
+       meant a background-clip dance and a @supports fallback for the browsers
+       that don't do it — none of which a solid colour needs. The red is left to
+       do its one job on the page: the mark, the buttons, the live states. */
+    .hero-display {
+      font-weight: 600;
+      font-size: clamp(38px, 6.2vw, 86px);
+      line-height: .98; letter-spacing: -0.042em;
+      margin: 0; max-width: 13ch; text-wrap: balance;
+      color: var(--text);
+    }
+    /* Off at every width: the phone's own splash screen carries the supporting
+       line and the call to action, portrait included. They come back only when
+       the stage is dropped for reduced motion — see the .is-static block. */
+    .hero .hero-sub, .hero .hero-cta { display: none; }
+    .hero .hero-sub {
+      margin: 0; max-width: 46ch;
+      font-size: 17px; line-height: 1.45; letter-spacing: -.011em;
+      color: var(--muted);
+    }
+
+    /* ---- The stage ----
+       Hero and demo share one scroll range and one phone. --s docks the phone
+       from the hero into the demo column (0 -> 1); --p then banks it through the
+       four steps. Both are written by the STAGE script, one number per frame. */
+    @property --s { syntax: '<number>'; inherits: true; initial-value: 0; }
+    .stage { --s: 0; --p: 0; position: relative; }
+
+    /* The pin takes no space at all: a zero-height sticky box that rides the top
+       of the viewport for the stage's whole scroll range. It must NOT be given a
+       height plus a negative margin — margins are part of the sticky constraint
+       rectangle, so that keeps it stuck a whole viewport past the stage and the
+       phone ends up floating over the sections below. */
+    .stage-pin {
+      /* Stuck so that the phone's own top lands mid-viewport. Offsetting the pin
+         rather than the phone matters: the phone sits AT the pin, so the moment
+         the pin releases at the stage's bottom the phone leaves with the content
+         instead of trailing half a viewport behind it. */
+      position: sticky; top: calc(50vh - 310px); height: 0; z-index: 3;
+      pointer-events: none;
+      /* Where the phone sits in the hero, relative to its docked resting place.
+         Declared here so the bloom can read them too and travel with it. */
+      --hero-y: 120px;        /* all replaced by layout() on load and resize */
+      --hero-scale: .8;
+      --dock-x: 300px;
+      /* Where the phone rests once docked. Wide screens park it at full size
+         beside the copy, so these are inert there; portrait it parks small and
+         high with the copy underneath, which is what they exist for. */
+      --dock-y: 0px;
+      --dock-scale: 1;
+      /* How far the frame lies back in the hero. It stands up as the phone
+         docks, so the screens are read flat on. 1400px of perspective is the
+         reference's 700 scaled to our frame — perspective is absolute px, so
+         it has to follow the frame's height or the foreshortening changes. */
+      --tilt: 50deg;
+      --persp: 1400px;
+    }
+
+    /* The bloom: a soft ground of accent behind the phone so it reads as lit
+       rather than pasted onto a flat black page. It takes the dock's travel but
+       none of its rotation or scale, so it stays a circle, and it thins out as
+       the phone docks — loudest in the hero, almost gone by the demo. */
+    .stage-glow {
+      position: absolute; left: 50%; top: 50%;
+      width: clamp(520px, 62vw, 900px); aspect-ratio: 1;
+      transform:
+        translate(-50%, -50%)
+        translate3d(
+          calc(var(--s) * var(--dock-x)),
+          calc((1 - var(--s)) * var(--hero-y) + var(--s) * var(--dock-y)),
+          0);
+      background:
+        radial-gradient(circle closest-side,
+          color-mix(in oklab, var(--g-rose) 30%, transparent) 0%,
+          color-mix(in oklab, var(--g-rose) 9%, transparent) 40%,
+          transparent 100%) -6% -4% / 76% 76% no-repeat,
+        radial-gradient(circle closest-side,
+          color-mix(in oklab, var(--g-lilac) 26%, transparent) 0%,
+          color-mix(in oklab, var(--g-cool) 8%, transparent) 42%,
+          transparent 100%) 106% 100% / 80% 80% no-repeat;
+      opacity: calc((1 - var(--s) * .55) * var(--out, 1));
+      will-change: transform, opacity;
+    }
+
+    /* Sonar: rings leaving the phone, on the same travel as the bloom so it
+       stays concentric with it. Hero only — it fades out as the phone docks,
+       where the steps are doing the talking. */
+    .stage-sonar {
+      position: absolute; left: 50%; top: 50%;
+      width: clamp(420px, 46vw, 700px); aspect-ratio: 1;
+      transform:
+        translate(-50%, -50%)
+        translate3d(
+          calc(var(--s) * var(--dock-x)),
+          calc((1 - var(--s)) * var(--hero-y) + var(--s) * var(--dock-y)),
+          0);
+      opacity: calc((1 - var(--s)) * var(--out, 1));
+    }
+    .stage-sonar span {
+      position: absolute; inset: 0; border-radius: 50%;
+      border: 1px solid color-mix(in oklab, var(--g-rose) 45%, transparent);
+      opacity: 0;
+      animation: sonar 7s cubic-bezier(.22, .61, .36, 1) infinite;
+    }
+    .stage-sonar span:nth-child(2) { animation-delay: 2.33s; }
+    .stage-sonar span:nth-child(3) { animation-delay: 4.66s; }
+    @keyframes sonar {
+      0%   { transform: scale(.16); opacity: 0; }
+      12%  { opacity: .3; }
+      100% { transform: scale(1); opacity: 0; }
+    }
+
+    .stage-pin .phone {
+      position: absolute; left: 50%; top: 0;
+      margin-left: -150px;                       /* half the 300px frame */
+      transform:
+        translate3d(
+          calc(var(--s) * var(--dock-x)),
+          calc((1 - var(--s)) * var(--hero-y) + var(--s) * var(--dock-y)),
+          0)
+        scale(calc(var(--s) * var(--dock-scale) + (1 - var(--s)) * var(--hero-scale)))
+        translate3d(0, calc((1 - var(--out, 1)) * -70px), 0)
+        /* Innermost, so the tilt happens in the frame's own space and every
+           transform above it stays a plain screen-space move. That keeps the
+           dock maths linear — layout() can place a projected edge by solving
+           for --hero-y once instead of iterating. */
+        perspective(var(--persp))
+        rotateX(calc((1 - var(--s)) * var(--tilt)));
+      opacity: var(--out, 1);
+      will-change: transform, opacity;
+    }
+
+    /* Splash panel — the app's opening screen, drawn rather than captured so it
+       stays crisp at the hero's scale and follows the page's own tokens.
+       Three parts, like the reference: a colour-block graphic across the top
+       half, then the lockup breaking it from a single line of display type. */
+    .phone-reel .scr--splash {
+      display: flex; flex-direction: column;
+      padding: 0; background: var(--surface);
+    }
+    .splash-foot {
+      flex: 1 1 auto; min-height: 0;
+      display: flex; flex-direction: column; justify-content: flex-start;
+      /* Top clears the island, which now floats over the screen rather than
+         sitting in a strip above it. */
+      padding: 40px 20px 30px;
+    }
+    /* The mark, with rings leaving it and fading out. It takes ALL the slack
+       above the copy, which pushes the lockup and its button down onto the
+       bottom of the screen — the reference's splash fills its screen top to
+       bottom, and once the frame is tilted the whole of it is in view, so a
+       screen with its content bunched in the top half reads as half empty. */
+    .splash-pulse {
+      flex: 1 1 auto; min-height: 0;
+      position: relative; display: grid; place-items: center;
+    }
+    .splash-pulse i {
+      display: block; width: 60px; height: 60px; border-radius: 50%;
+      background: var(--accent); position: relative; z-index: 1;
+    }
+    .splash-pulse span {
+      position: absolute; width: 60px; height: 60px; border-radius: 50%;
+      border: 1px solid color-mix(in oklab, var(--accent) 55%, transparent);
+      opacity: 0;
+      animation: splash-pulse 4.2s cubic-bezier(.22, .61, .36, 1) infinite;
+    }
+    .splash-pulse span:nth-child(2) { animation-delay: 1.4s; }
+    .splash-pulse span:nth-child(3) { animation-delay: 2.8s; }
+    @keyframes splash-pulse {
+      0%   { transform: scale(1); opacity: 0; }
+      14%  { opacity: .5; }
+      100% { transform: scale(4.2); opacity: 0; }
+    }
+
+    .splash-line {
+      margin: 16px 0 0; font-size: 29px; font-weight: 600;
+      line-height: 1.04; letter-spacing: -.032em; color: var(--text);
+    }
+    .splash-sub {
+      margin: 10px 0 0; font-size: 13px; line-height: 1.45;
+      letter-spacing: -.008em; color: var(--muted);
+    }
+    .splash-btn {
+      margin-top: 16px; display: flex; align-items: center; justify-content: center;
+      height: 46px; border-radius: 23px;
+      background: var(--accent); color: var(--accent-ink);
+      font-size: 15.5px; font-weight: 500; letter-spacing: -.01em;
+    }
+
 
     /* ---- Hero CTA ---- */
     .btn {
       display: inline-flex; align-items: center; gap: 10px; align-self: flex-start;
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
-      font-weight: 700; font-size: 16px;
-      padding: 14px 24px; border-radius: 100px; margin-top: 6px;
+      font-weight: 500; font-size: 16px; letter-spacing: -.01em;
+      height: 44px; padding: 0 22px; border-radius: 22px; margin-top: 6px;
       background: var(--accent); color: var(--accent-ink);
-      box-shadow: 0 16px 40px -16px rgba(255, 90, 77, 0.55);
-      transition: transform .2s ease, box-shadow .2s ease;
+      transition: background .15s var(--ease);
     }
-    .btn:hover { transform: translateY(-2px); box-shadow: 0 20px 46px -16px rgba(255, 90, 77, 0.62); }
-    .btn:hover .arrow { transform: translateX(4px); }
-    .arrow { transition: transform .2s ease; }
+    .btn:hover { background: var(--accent-deep); }
+    .btn--sm { height: 38px; padding: 0 18px; border-radius: 19px; font-size: 15px; }
+    .btn:hover .arrow { transform: translateX(3px); }
+    .arrow { transition: transform .15s var(--ease); }
 
     /* ---- Awards ---- */
     /* Two accolades, shown flat: the event's own artwork over one quiet caption.
@@ -202,7 +398,6 @@
     }
     .creds-head { display: flex; align-items: center; gap: clamp(12px, 1.6vw, 18px); }
     .creds-label {
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
       font-size: 14px; font-weight: 500; letter-spacing: -.005em;
       color: var(--muted); white-space: nowrap;
     }
@@ -240,12 +435,11 @@
     /* Placement leads in coral, the event it was won at follows in grey. */
     .award-meta {
       margin: auto 0 0;
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
       font-size: clamp(13px, 1.3vw, 14px); letter-spacing: -.01em;
       line-height: 1.5; color: var(--muted);
     }
     .award-meta strong { display: block; font-weight: 600; color: var(--text); }
-    .award-rank { color: #FF5A4D; }
+    .award-rank { color: var(--accent); }
 
     /* Two columns of logos get too narrow to read once the hero column does —
        stack them, and turn the gutter rule into a divider between the rows. */
@@ -278,12 +472,89 @@
       padding-right: clamp(20px, 2.6vw, 40px);
     }
     .chip {
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
       font-weight: 600; font-size: clamp(16px, 1.8vw, 22px);
       color: var(--text); white-space: nowrap;
       display: inline-flex; align-items: center; gap: clamp(20px, 2.6vw, 40px);
     }
-    .sep { color: #FF5A4D; margin-left: clamp(20px, 2.6vw, 40px); }
+    .sep { color: var(--muted); margin-left: clamp(20px, 2.6vw, 40px); }
+
+    /* ---- Venue enquiry dialog ----
+       A real <dialog>, so the top layer, the backdrop, focus trapping and
+       Escape are the browser's rather than ours. The fields reuse the
+       waitlist's .wl-* classes; only the shell is new. */
+    .vx {
+      margin: auto;                       /* centred in the top layer */
+      width: min(560px, calc(100vw - 28px));
+      max-width: none;
+      padding: 0; border: 0; background: none; color: var(--text);
+      overflow: visible;
+    }
+    .vx::backdrop { background: rgba(0, 0, 0, .74); }
+    .vx-panel {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--hairline);
+      border-radius: 22px;
+      padding: clamp(22px, 3vw, 34px);
+      box-shadow: 0 40px 90px -40px rgba(0, 0, 0, .9);
+      /* A five-field form on a short phone has to scroll somewhere. */
+      max-height: calc(100dvh - 32px);
+      overflow-y: auto;
+    }
+    /* The form is the grid, not the panel — the panel holds the form and the
+       confirmation, and only one of those is ever on screen. */
+    .vx-panel > form { display: grid; gap: clamp(14px, 1.8vw, 18px); }
+    .vx-panel textarea.wl-input {
+      /* A textarea does not inherit the page's face on its own. */
+      font-family: inherit;
+      min-height: 0; line-height: 1.45; resize: vertical;
+    }
+    /* The waitlist lets its button shrink to its label above 640px, because it
+       sits in a wide two-column form. This one is in a 490px modal, where a
+       full-width button is the only thing that reads as the end of the form. */
+    .vx-panel .wl-btn { width: 100%; justify-self: stretch; }
+    .vx-title {
+      font-weight: 900; font-size: clamp(24px, 3vw, 32px);
+      line-height: 1.04; letter-spacing: -.03em;
+      margin: 6px 44px 0 0;              /* clear of the close button */
+    }
+    .vx-sub {
+      font-size: 15px; line-height: 1.45; color: var(--muted);
+      margin: 0; max-width: 44ch;
+    }
+    .vx-close {
+      position: absolute; top: 14px; right: 14px;
+      width: 38px; height: 38px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 22px; line-height: 1;
+      color: var(--muted); background: none;
+      border: 1px solid var(--hairline); cursor: pointer;
+      transition: color .15s ease, border-color .15s ease;
+    }
+    .vx-close:hover { color: var(--text); border-color: var(--muted); }
+    /* The honeypot. Off-screen rather than display:none — a bot that filters on
+       computed style skips the latter, and a real user never tabs to it. */
+    .vx-trap {
+      position: absolute; left: -9999px; top: 0;
+      width: 1px; height: 1px; overflow: hidden;
+    }
+    /* A short phone cannot hold the whole form; tighten it rather than make the
+       venue scroll further than it has to. Font size stays at 16px — anything
+       smaller and iOS Safari zooms the viewport on focus. */
+    @media (max-height: 760px) {
+      .vx-panel { padding: 20px; }
+      .vx-panel > form { gap: 12px; }
+      .vx-title { font-size: 23px; margin-top: 2px; }
+      .vx-sub { font-size: 14px; }
+      .vx-panel .wl-input { min-height: 46px; padding: 12px 14px; }
+    }
+
+    .vx-done { display: grid; gap: 12px; justify-items: start; }
+    .vx-done h3 {
+      font-weight: 900; font-size: clamp(22px, 2.6vw, 28px);
+      letter-spacing: -.028em; margin: 0;
+    }
+    .vx-done p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--muted); }
 
     /* ---- Venue pitch ---- */
     /* The page's second audience. It sits after the waitlist because a venue
@@ -297,10 +568,9 @@
     }
     .venues-copy { display: flex; flex-direction: column; align-items: flex-start; }
     .venues-title {
-      font-family: 'Archivo', ui-sans-serif, sans-serif;
-      font-weight: 900; font-size: clamp(28px, 4vw, 46px);
-      line-height: 1; letter-spacing: -.035em;
-      margin: 14px 0 0; max-width: 17ch;
+      font-weight: 600; font-size: clamp(28px, 3.6vw, 44px);
+      line-height: 1.08; letter-spacing: -.028em;
+      margin: 12px 0 0; max-width: 18ch;
     }
     .venues-lede {
       font-size: clamp(15px, 1.5vw, 18px); line-height: 1.5;
@@ -309,14 +579,11 @@
     /* Outlined, not filled — "Join the waitlist" stays the page's one solid
        button so the two audiences' CTAs don't compete at equal weight. */
     .btn--ghost {
-      background: none; color: #FF5A4D; box-shadow: none;
-      border: 1px solid color-mix(in oklab, var(--accent) 45%, transparent);
+      background: none; color: var(--accent);
+      border: 1px solid var(--hairline);
       margin-top: clamp(20px, 2.4vw, 28px);
     }
-    .btn--ghost:hover {
-      box-shadow: none; background: color-mix(in oklab, var(--accent) 10%, transparent);
-      border-color: var(--accent);
-    }
+    .btn--ghost:hover { background: none; border-color: var(--accent); }
 
     .venues-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
     /* Hairline-separated rows rather than boxes — same flat treatment as the
@@ -338,7 +605,6 @@
     /* ---- Header nav ---- */
     /* One link, for the audience that has to go looking for its own section. */
     .header-link {
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
       font-size: 15px; font-weight: 500; color: var(--muted);
       transition: color .15s ease;
     }
@@ -353,266 +619,242 @@
       border-top: 1px solid var(--hairline);
     }
     .footer-note {
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
       font-size: 14px; letter-spacing: -.005em; color: var(--muted);
     }
 
     /* ---- Scroll demo: sticky phone, stepped copy ---- */
     .demo-head { margin-bottom: clamp(24px, 3vw, 40px); }
     .demo-title {
-      font-family: 'Archivo', ui-sans-serif, sans-serif;
-      font-weight: 900; font-size: clamp(30px, 5vw, 60px);
-      line-height: .98; letter-spacing: -.035em;
-      margin: 12px 0 0; max-width: 15ch;
+      font-weight: 600; font-size: clamp(30px, 4.4vw, 52px);
+      line-height: 1.06; letter-spacing: -.03em;
+      margin: 10px 0 0; max-width: 16ch;
     }
-    .demo-grid {
-      display: grid; grid-template-columns: minmax(0, 1fr) auto;
-      gap: clamp(30px, 4.5vw, 64px); align-items: start;
-    }
-    /* Explicit placement, so the phone can come FIRST in the DOM (where mobile
-       needs it) while still rendering on the right at desktop widths. */
-    .demo-steps     { grid-column: 1; grid-row: 1; }
-    .demo-phone-col { grid-column: 2; grid-row: 1; }
+    /* One column. The phone is pinned over the page, not laid out beside the
+       copy, so the steps just need to stay clear of where it flies. */
+    .demo-grid { display: block; }
+    .demo-steps { padding-bottom: 30vh; }
+    .demo-step { max-width: 46ch; }
+    /* Phone swings left on these, so the copy takes the other side. */
+    .demo-step:nth-child(even) { margin-left: auto; }
 
     /* Steps column */
     .demo-step {
-      min-height: 62vh; display: flex; flex-direction: column; justify-content: center;
-      opacity: .32; transition: opacity .35s ease;
+      min-height: 82vh; display: flex; flex-direction: column; justify-content: center;
+      opacity: 0; transition: opacity .25s var(--ease);
     }
     .demo-step.is-on { opacity: 1; }
-    .demo-step-n {
-      display: inline-flex; align-items: center; gap: 10px;
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
-      font-weight: 600; font-size: 14px; letter-spacing: -.01em;
-      color: var(--accent); margin-bottom: 16px;
-    }
-    .demo-step-n::before {
-      content: ''; width: 26px; height: 2px; background: var(--accent);
-      transform: scaleX(.25); transform-origin: left; transition: transform .35s ease;
-    }
-    .demo-step.is-on .demo-step-n::before { transform: scaleX(1); }
     .demo-step h3 {
-      font-family: 'Archivo', ui-sans-serif, sans-serif;
-      font-weight: 800; font-size: clamp(24px, 3.2vw, 38px);
-      line-height: 1.04; letter-spacing: -.025em; margin: 0; max-width: 18ch;
+      font-weight: 600; font-size: clamp(24px, 3vw, 34px);
+      line-height: 1.12; letter-spacing: -.024em; margin: 0; max-width: 20ch;
     }
     .demo-step p {
-      font-size: clamp(15px, 1.5vw, 18px); line-height: 1.5;
-      color: var(--muted); margin: 14px 0 0; max-width: 46ch;
+      font-size: clamp(15px, 1.5vw, 17px); line-height: 1.5; letter-spacing: -.011em;
+      color: var(--muted); margin: 14px 0 0; max-width: 48ch;
     }
 
-    /* Phone column */
-    .demo-phone-col { position: sticky; top: calc(50vh - 310px); justify-self: center; }
+    /* ---- The phone ----
+       A device rather than a rounded rectangle. The rim is a metal gradient
+       lit from the top left and picked out again on the opposite corner —
+       two highlights are what stop a black frame reading as a black hole —
+       the buttons break the left and right edges, and the whole thing sits on
+       a drop shadow. Every part is a percentage of the 300x620 frame, so one
+       scale() carries the lot to any size without a second set of numbers. */
     .phone {
-      /* App tokens — the real values from mobile-sdk54/src/theme.tsx, so the
-         screen is the app's palette, not an approximation of it. */
-      --app-bg: #0F0E0D; --app-surface: #1A1817; --app-surface2: #232120;
-      --app-text: #F4F1EA; --app-muted: rgba(244,241,234,.60); --app-faint: rgba(244,241,234,.38);
-      --app-line: rgba(244,241,234,.10); --app-ph: #211E1C;
-      --app-accent: #FF5A4D; --app-accent-ink: #1A0B08; --app-accent-soft: rgba(255,90,77,.17);
+      position: relative;
       width: 300px; height: 620px; flex-shrink: 0;
-      background: #080706; border-radius: 46px; padding: 11px;
-      border: 1px solid rgba(244,241,234,.14);
-      box-shadow: 0 40px 90px -30px rgba(0,0,0,.75), 0 0 0 1px rgba(0,0,0,.5) inset;
+      border-radius: 48px; padding: 11px;
+      /* The rim, and only the rim. A conic sweep rather than one flat ring, so
+         the metal brightens and dulls around the perimeter the way a chamfer
+         actually does — that variation is the whole difference between silver
+         and grey. The reference's own edge runs a mid grey with specular hits
+         near white; these are those, opened up a little for a darker page. */
+      background: conic-gradient(from 216deg,
+        #676a70   0deg, #b7bac1  30deg, #7b7e85  72deg, #3f4147 106deg,
+        #9a9da4 148deg, #cccfd6 184deg, #72757c 218deg, #3a3c42 258deg,
+        #a7aab1 298deg, #808389 332deg, #676a70 360deg);
+      box-shadow:
+        0 44px 90px -34px rgba(0, 0, 0, .95),
+        0 10px 26px -14px rgba(0, 0, 0, .7);
+    }
+    /* The black the screen sits in. In the reference the metal is only the
+       outer third of the frame's edge — 16px of a 44px bezel — and the rest is
+       this. Without it the silver reads as a fat chrome border. */
+    .phone::before {
+      content: ''; position: absolute; inset: 4px;
+      border-radius: 44px; background: #0A0A0C;
     }
     .phone-screen {
       position: relative; width: 100%; height: 100%; overflow: hidden;
-      border-radius: 36px; background: var(--app-bg); color: var(--app-text);
+      border-radius: 37px; background: #101012;
+      /* The step down from rim to glass: a lit hairline, then a dark one. */
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, .07),
+        0 0 0 2px rgba(0, 0, 0, .8);
     }
+    /* Left: action button, then the volume pair. Right: the side button.
+       Positioned in percent so the frame's own scale carries them. */
+    .phone-btn {
+      position: absolute; width: 3px; z-index: 4;
+      pointer-events: none;
+    }
+    /* Same metal as the rim, lit on the face that points away from the frame. */
+    .phone-btn--l {
+      left: -2px; border-radius: 2px 0 0 2px;
+      background: linear-gradient(to left, #4c4e54 0%, #9a9da4 55%, #d4d7dd 100%);
+    }
+    .phone-btn--r {
+      right: -2px; border-radius: 0 2px 2px 0;
+      background: linear-gradient(to right, #4c4e54 0%, #9a9da4 55%, #d4d7dd 100%);
+    }
+    .phone-btn--action { top: 16.8%; height: 4.8%; }
+    .phone-btn--vol-up { top: 24.5%; height: 9%; }
+    .phone-btn--vol-dn { top: 35.5%; height: 9%; }
+    .phone-btn--power  { top: 28.4%; height: 14.8%; }
+
     .phone-island {
-      position: absolute; top: 9px; left: 50%; transform: translateX(-50%);
-      width: 86px; height: 24px; border-radius: 999px; background: #080706; z-index: 5;
+      position: absolute; top: 2.1%; left: 50%; transform: translateX(-50%);
+      width: 29.3%; height: 4.2%; border-radius: 999px;
+      background: #000; z-index: 5;
     }
-    .phone-status {
-      position: absolute; top: 14px; left: 0; right: 0; z-index: 4;
-      display: flex; justify-content: space-between; padding: 0 22px;
-      font-family: 'Space Mono', ui-monospace, monospace; font-size: 11px;
-      color: var(--app-text);
+    /* The camera, off to one side of the pill the way it actually sits. */
+    .phone-island::after {
+      content: ''; position: absolute; right: 8%; top: 50%;
+      height: 30%; aspect-ratio: 1; border-radius: 50%;
+      transform: translateY(-50%);
+      background: radial-gradient(circle at 34% 28%, #1b2530 0%, #05070a 74%);
+      box-shadow: inset 0 0 0 1px rgba(110, 138, 175, .16);
     }
 
-    /* Screens stack; the active one fades up. */
+    /* Edge to edge, island included — the captures run under it the way an
+       app's own content does, rather than starting below a black band that
+       cut the top off every photo. It also removes the one place a neighbouring
+       panel could show: the reel is now exactly the screen, so a panel one step
+       away sits fully outside it and the screen's own overflow clips it. */
+    /* A flex line of full-size panels. Direction is the only thing that
+       changes between breakpoints — a column on the wide stage, a row on
+       phones, where the reference slides its screens sideways. `flex: 0 0 100%`
+       resolves against whichever axis is the main one, so a panel is exactly
+       one screen either way and --reel stays a plain screen count. */
+    .phone-reel {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: stretch;
+      transform: translate3d(0, calc(var(--reel, 0) * -100%), 0);
+      will-change: transform;
+    }
+    /* The captures are 390x746 — a shorter screen than this frame's 278x598,
+       so filling it edge to edge would crop 17px off either side and eat the
+       app's own margins. Fit the WIDTH instead and hang the capture off the
+       bottom, then fill the band that leaves at the top with the capture's own
+       first few rows, stretched: `contain` letterboxes, and an element's
+       background paints through the letterbox. On the list screens those rows
+       are flat app background; on the ones that open with a photo the photo
+       simply carries on up under the island, which is what it does on a phone. */
     .scr {
-      position: absolute; inset: 0; padding: 46px 14px 14px;
-      /* Column so a screen can pin its CTA / tab bar to the bottom edge with
-         margin-top:auto, the way the real screens do. */
-      display: flex; flex-direction: column;
-      opacity: 0; transform: translateY(14px);
-      transition: opacity .45s ease, transform .45s ease;
-      pointer-events: none; overflow: hidden;
+      flex: 0 0 100%;
+      display: block; width: 100%; height: 100%;
+      object-fit: contain; object-position: center bottom;
+      background-image: var(--shot);
+      background-repeat: no-repeat;
+      background-position: center top;
+      /* 3000% leaves only the capture's top two or three rows showing in that
+         band. Any looser and the deal screen drags the top edge of its red
+         countdown pill up the screen as a streak. */
+      background-size: 100% 3000%;
+      pointer-events: none;
     }
-    .scr.is-on { opacity: 1; transform: none; }
 
-    /* App primitives — mirrors of the real RN components */
-    .app-eyebrow {
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
-      font-weight: 500; font-size: 11px; letter-spacing: -.005em; color: var(--app-faint);
-    }
-    .app-h1 {
-      font-family: 'Archivo', ui-sans-serif, sans-serif; font-weight: 700;
-      font-size: 25px; letter-spacing: -.03em; margin: 3px 0 0; color: var(--app-text);
-    }
-    .app-chips { display: flex; gap: 6px; margin: 13px 0 12px; }
-    .app-chip {
-      font-size: 11px; font-weight: 500; padding: 6px 11px; border-radius: 999px;
-      background: rgba(244,241,234,.07); color: var(--app-muted); white-space: nowrap;
-    }
-    .app-chip.on { background: var(--app-text); color: var(--app-bg); font-weight: 600; }
-    .app-card {
-      background: var(--app-surface); border-radius: 19px; overflow: hidden;
-      box-shadow: 0 10px 22px -12px rgba(0,0,0,.6);
-    }
-    .app-photo {
-      height: 106px; background: var(--app-ph);
-      display: grid; place-items: center; position: relative;
-    }
-    .app-photo span {
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
-      font-weight: 500; font-size: 10.5px; letter-spacing: -.005em; color: var(--app-faint);
-    }
-    /* `slice` so the artwork crops rather than distorts across the different
-       photo heights (128px hero, 106px card, 48px strip). */
-    .app-art { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-    /* Thin artwork band on the huddle winner card — the tallest screen, so this
-       shrinks at mobile size to keep the share row clear of the bottom edge. */
-    .app-strip { height: 48px; }
-    .app-pill {
-      position: absolute; top: 9px; left: 9px; display: flex; gap: 5px;
-    }
-    .app-pill b {
-      background: rgba(244,241,234,.92); color: #0F0E0D;
-      font-size: 10px; font-weight: 600; padding: 4px 9px; border-radius: 999px;
-      /* The pill is absolutely positioned, so a wrap here pushes the label into
-         the countdown beside it rather than reflowing the row. */
-      white-space: nowrap;
-    }
-    .app-pill i {
-      display: inline-flex; align-items: center; gap: 4px; font-style: normal;
-      background: var(--app-accent); color: var(--app-accent-ink);
-      font-family: 'Space Mono', ui-monospace, monospace; font-weight: 700;
-      font-size: 9.5px; padding: 4px 8px; border-radius: 6px; white-space: nowrap;
-    }
-    .app-body { padding: 11px 13px 13px; }
-    .app-venue {
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif; font-weight: 600;
-      font-size: 16px; letter-spacing: -.03em; color: var(--app-text);
-    }
-    .app-meta { font-size: 11px; color: var(--app-muted); margin-top: 2px; }
-    .app-price { display: flex; align-items: baseline; gap: 7px; margin-top: 9px; }
-    .app-now {
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif; font-weight: 700;
-      font-size: 21px; letter-spacing: -.03em; color: var(--app-text);
-    }
-    .app-now small { font-size: 10px; font-weight: 500; color: var(--app-muted); }
-    .app-was { font-size: 11.5px; color: var(--app-faint); text-decoration: line-through; }
-    .app-off {
-      font-family: 'Space Mono', ui-monospace, monospace; font-weight: 700; font-size: 10px;
-      color: var(--app-accent); background: var(--app-accent-soft);
-      padding: 2px 6px; border-radius: 5px;
-    }
-    .app-when {
-      display: flex; align-items: center; gap: 6px;
-      font-size: 11px; color: var(--app-faint); margin-top: 9px;
-    }
-    .app-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--app-accent); flex: none; }
-    .app-cta {
-      display: block; text-align: center; background: var(--app-accent); color: var(--app-accent-ink);
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif; font-weight: 700; font-size: 14px;
-      padding: 14px; border-radius: 14px; margin-top: 14px;
-    }
-    .app-row {
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 0; border-bottom: 1px solid var(--app-line);
-    }
-    .app-row:last-child { border-bottom: none; }
-    .app-av {
-      width: 32px; height: 32px; border-radius: 50%; flex: none;
-      background: var(--app-surface2); color: var(--app-muted);
-      display: grid; place-items: center;
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif; font-weight: 700; font-size: 13px;
-    }
-    .app-av.done { background: var(--app-accent); color: var(--app-accent-ink); }
-    .app-tag {
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif; font-size: 11px;
-      font-weight: 500; letter-spacing: -.005em; color: var(--app-faint);
-    }
-    .app-tag.on { color: var(--app-accent); }
-    .app-code {
-      font-family: 'Space Mono', ui-monospace, monospace; font-weight: 700;
-      font-size: 38px; letter-spacing: .14em; color: var(--app-accent);
-      text-align: center; white-space: nowrap;
-      /* Trailing letter-spacing would shift it off-centre. */
-      text-indent: .14em;
-    }
-    /* Bottom tab bar — only the feed sits inside the app's (tabs) group; the
-       claim, huddle and code screens are pushed over it in the real app. */
-    .app-tabs {
-      margin-top: auto; display: flex; justify-content: space-around;
-      padding: 11px 4px 3px; border-top: 1px solid var(--app-line);
-    }
-    .app-tab {
-      display: flex; flex-direction: column; align-items: center; gap: 4px;
-      font-size: 9.5px; color: var(--app-faint);
-    }
-    .app-tab i { width: 15px; height: 15px; border-radius: 4px; background: currentColor; opacity: .5; font-style: normal; }
-    .app-tab.on { color: var(--app-accent); }
-    .app-tab.on i { opacity: 1; }
-    /* The code screen has little content — centre it rather than stranding a
-       gap between the code and the totals. */
-    .scr[data-screen="code"] { justify-content: center; }
-    .app-foot { margin-top: 22px; }
 
+    /* ---- Phones: the same stage, stood up portrait ----
+       The reference keeps its phone on small screens rather than dropping it:
+       the phone pins near the top of the viewport, the step's copy sits pinned
+       underneath and cross-fades, and the screens slide SIDEWAYS instead of up.
+       The same two numbers drive all of it — only the geometry changes, and
+       layout() writes the portrait dock from JS. */
     @media (max-width: 900px) {
-      /* Fewer, slightly heavier rings — at phone scale 0.15% of the radius is
-         sub-pixel and the fine grid turns to mush. */
-      .radar-static {
-        background: repeating-radial-gradient(circle,
-          transparent 0 8%,
-          color-mix(in oklab, var(--accent) 34%, transparent) 8% 8.34%);
+      /* Sideways. One --reel step is a screen WIDTH of travel here. */
+      .phone-reel {
+        flex-direction: row;
+        transform: translate3d(calc(var(--reel, 0) * -100%), 0, 0);
       }
-      /* Drop out of grid entirely: a sticky grid item is confined to its own
-         row, so it would unpin as soon as the steps row began. In normal flow
-         the phone's containing block is the whole section and it stays put. */
-      /* No sticky on phones. The pinned column is dropped entirely and each
-         step carries its own phone inline (cloned in JS), so the section is a
-         plain vertical scroll: screen, copy, screen, copy. */
-      .demo-grid { display: block; }
-      .demo-phone-col { display: none; position: static; }
-      .step-phone { display: flex; justify-content: center; margin-bottom: 20px; }
-      .phone { width: 214px; height: 440px; border-radius: 34px; padding: 8px; }
-      .phone-screen { border-radius: 26px; }
-      .phone-island { width: 62px; height: 18px; top: 7px; }
-      .phone-status { font-size: 9px; top: 10px; padding: 0 15px; }
-      .scr { padding: 34px 10px 10px; }
-      .app-h1 { font-size: 19px; }
-      .app-photo { height: 76px; }
-      .app-code { font-size: 27px; }
-      /* The huddle screen is the tallest — tighten its rows so the share row
-         at the bottom isn't clipped by the shorter mobile phone. */
-      .app-row { padding: 6px 0; gap: 8px; }
-      .app-av { width: 26px; height: 26px; font-size: 11px; }
-      .app-chips { margin: 10px 0 9px; }
-      .app-chip { font-size: 10px; padding: 5px 9px; }
-      /* Both pills sit in one absolutely-positioned row over the artwork, so at
-         the narrower mobile phone they have to shrink or they collide. */
-      .app-pill b, .app-pill i { font-size: 9px; padding: 3px 7px; flex: none; }
-      .app-body { padding: 9px 11px 11px; }
-      .app-venue { font-size: 14.5px; }
-      .app-now { font-size: 18px; }
-      .app-cta { padding: 12px; font-size: 13px; }
-      .app-strip { height: 32px; }
-      /* Steps become plain stacked blocks — no viewport-height maths, nothing
-         pinned, every step fully legible as it passes. */
-      .demo-step {
-        min-height: 0; display: block;
+
+      /* The hero is one line of type with the phone rising into frame under
+         it, centred, the way the reference sets it portrait. */
+      .hero { align-items: center; text-align: center; }
+      /* The global clamp bottoms out at its 38px floor down here, which left
+         the headline small under a phone that had gone large. The phone is the
+         one that gave ground — this takes the type back up so the hero reads
+         as a line of display with a device under it, the way the reference's
+         does, rather than as two things of roughly equal weight. */
+      .hero-display { font-size: clamp(40px, 12vw, 58px); max-width: 15ch; }
+
+      /* The section's own heading has nowhere to sit that the pinned phone
+         does not already occupy — the four step titles carry it instead. */
+      .demo-head { display: none; }
+
+      /* Scroll length for the four steps. The grid pins for all of it. */
+      .demo { min-height: 380vh; }
+      .demo-grid {
+        position: sticky; top: 0;
+        height: 100vh; height: 100svh;
+      }
+      /* Anchored to the BOTTOM of the pinned box: the copy then grows upward,
+         away from the phone, however many lines a step runs to. Its own height
+         is zero — every step inside it is absolute — so this is just a line to
+         hang them from. */
+      .demo-steps {
+        position: absolute; left: 0; right: 0; bottom: clamp(26px, 8vh, 72px);
+        padding: 0; margin: 0;
+      }
+      /* Opacity and the small sideways drift are written by the stage script
+         off the same number as the reel, so the copy changes exactly in step
+         with the screen behind it rather than on a timer of its own. */
+      .demo-step, .demo-step:nth-child(even) {
+        position: absolute; left: 0; right: 0; bottom: 0;
+        min-height: 0; display: block; margin: 0; max-width: none;
+        padding: 0 6px; text-align: center;
+        opacity: 0; transition: none;
+        will-change: opacity, transform;
+      }
+      .demo-step.is-on { opacity: 1; }
+      .demo-step h3 {
+        font-size: clamp(23px, 6.4vw, 30px); max-width: none; margin: 0 auto;
+      }
+      .demo-step p { font-size: 14.5px; max-width: 34ch; margin: 12px auto 0; }
+
+      /* Out of the hero's corners and into a band of its own: portrait there
+         are no empty corners, and the phone flies straight through where they
+         would be. Moved in the DOM by the stage script. */
+      .wrap > .creds {
+        border-top: 1px solid var(--hairline);
+        padding-top: clamp(22px, 6vw, 34px);
+      }
+
+      /* ---- Reduced motion: no stage at all ----
+         The pinned phone is dropped and each step carries its own screen inline
+         (cloned in JS), so the section is a plain vertical scroll: screen,
+         copy, screen, copy — and the hero needs its own words back. */
+      .stage.is-static .stage-pin { display: none; }
+      .stage.is-static .hero { align-items: flex-start; text-align: left; }
+      .stage.is-static .hero .hero-sub { display: block; }
+      .stage.is-static .hero .hero-cta { display: inline-flex; }
+      .stage.is-static .demo-head { display: block; }
+      .stage.is-static .demo { min-height: 0; }
+      .stage.is-static .demo-grid { position: static; height: auto; }
+      .stage.is-static .demo-steps { position: static; bottom: auto; }
+      .stage.is-static .demo-step {
+        position: static; text-align: left;
         opacity: 1; transition: none;
         padding: 0 0 clamp(44px, 10vw, 72px);
-        margin-left: 0;
       }
-      .demo-step:last-child { padding-bottom: 0; }
-      .demo-step-n::before { transform: scaleX(1); }
-      .demo-steps { margin-top: 0; }
-      .demo-step h3 { font-size: clamp(21px, 6vw, 27px); }
-      .demo-step p { font-size: 14.5px; }
+      .stage.is-static .demo-step:last-child { padding-bottom: 0; }
+      .stage.is-static .demo-step h3 { margin: 0; }
+      .stage.is-static .demo-step p { margin: 14px 0 0; }
+      .step-phone { display: flex; justify-content: center; margin-bottom: 20px; }
+      /* Every part of the frame is a percentage of it, so the clones only
+         need the frame's own size — the rim, buttons and island follow. */
+      .step-phone .phone { width: 214px; height: 440px; border-radius: 36px; padding: 8px; }
+      .step-phone .phone::before { inset: 3px; border-radius: 33px; }
+      .step-phone .phone-screen { border-radius: 28px; }
     }
 
     /* ---- Waitlist ---- */
@@ -632,7 +874,6 @@
 
     .wl-counter {
       display: inline-flex; align-items: center; gap: 10px;
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
       font-weight: 500; font-size: 13.5px; letter-spacing: -.005em;
       color: var(--muted);
       border: 1px solid var(--hairline); border-radius: 100px;
@@ -645,14 +886,12 @@
     .wl-counter b { color: var(--text); font-weight: 700; }
 
     .wl-head {
-      font-family: 'Archivo', ui-sans-serif, sans-serif;
       font-weight: 900;
       font-size: clamp(30px, 4.4vw, 52px);
       line-height: 0.98; letter-spacing: -0.03em;
       margin: 10px 0 0; color: var(--text); max-width: 18ch;
     }
     .wl-sub {
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
       font-size: clamp(15px, 1.4vw, 18px);
       line-height: 1.45; color: var(--muted);
       margin: 14px 0 0; max-width: 52ch;
@@ -660,7 +899,6 @@
 
     .wl-invite {
       display: flex; align-items: center; gap: 10px;
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
       font-size: 14px; color: var(--muted);
       background: color-mix(in oklab, var(--accent) 10%, transparent);
       border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
@@ -678,13 +916,11 @@
     }
     .wl-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
     .wl-label {
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
       font-weight: 500; font-size: 13.5px; letter-spacing: -.005em;
       color: var(--muted);
     }
     .wl-input, .wl-select select {
       width: 100%;
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
       /* 16px keeps iOS Safari from zooming the viewport on focus. */
       font-size: 16px; font-weight: 500;
       color: var(--text); background: var(--bg);
@@ -726,7 +962,6 @@
     }
     .wl-chip span {
       display: inline-flex; align-items: center;
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
       font-weight: 600; font-size: 15px;
       color: var(--text); background: var(--bg);
       border: 1px solid var(--hairline); border-radius: 100px;
@@ -743,7 +978,6 @@
     .wl-other { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
 
     .wl-error {
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
       font-size: 13px; color: var(--accent); margin: 0;
     }
     .wl-error:empty { display: none; }
@@ -751,7 +985,6 @@
     .wl-btn {
       width: 100%;
       display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
       font-weight: 700; font-size: 16px;
       background: var(--accent); color: var(--accent-ink);
       border: none; border-radius: 100px;
@@ -765,13 +998,11 @@
     .wl-confirm { margin-top: clamp(24px, 3vw, 34px); }
     .wl-confirm { animation: wl-pop .26s ease-out both; }
     .wl-position {
-      font-family: 'Archivo', ui-sans-serif, sans-serif;
       font-weight: 900; font-size: clamp(34px, 5vw, 56px);
       line-height: 1; letter-spacing: -0.03em;
       color: var(--accent); margin: 0;
     }
     .wl-confirm-sub {
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
       font-size: clamp(15px, 1.4vw, 17px); line-height: 1.45;
       color: var(--muted); margin: 12px 0 0; max-width: 46ch;
     }
@@ -783,14 +1014,12 @@
     }
     .wl-link {
       flex: 1 1 200px; min-width: 0;
-      font-family: 'Space Mono', ui-monospace, monospace;
       font-size: 13px; color: var(--text);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .wl-shares { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
     .wl-share-btn {
       display: inline-flex; align-items: center; gap: 8px;
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
       font-weight: 600; font-size: 14px;
       color: var(--text); background: transparent;
       border: 1px solid var(--hairline); border-radius: 100px;
@@ -800,7 +1029,6 @@
     .wl-share-btn:hover { border-color: var(--muted); }
     .wl-share-btn.is-primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
     .wl-referrals {
-      font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
       font-size: 14px; letter-spacing: -.005em;
       color: var(--muted); margin: clamp(18px, 2vw, 24px) 0 0;
     }
@@ -824,12 +1052,18 @@
       html { scroll-behavior: auto; }
       .marquee { animation: none; }
       /* Radar keeps its fixed rings; only the outward pulses stop. */
-      .radar span { animation: none; opacity: 0; }
       .btn, .arrow, body { transition: none; }
       .btn:hover { transform: none; }
-      /* Scroll demo: every step legible at once, no fading or sliding. */
+      .stage-sonar { display: none; }
+      .splash-pulse span { animation: none; opacity: .28; }
+      .splash-pulse span:nth-child(1) { transform: scale(2); }
+      .splash-pulse span:nth-child(2) { transform: scale(3.2); }
+      .splash-pulse span:nth-child(3) { transform: scale(4.4); }
+      /* Scroll demo: every step legible at once, no fading or sliding. The JS
+         driver never attaches, so --p and --reel keep their initial 0 — this just
+         makes sure the phone sits square rather than at the arc's starting tilt. */
       .demo-step { opacity: 1; transition: none; }
-      .demo-step-n::before { transform: scaleX(1); transition: none; }
+      .stage-pin .phone { transform: none; }
       .scr { transition: none; }
       /* Waitlist: no entrance or celebration motion — the card is simply there. */
       .wl-card { opacity: 1; transform: none; transition: none; }
@@ -841,96 +1075,92 @@
 </head>
 <body>
 
-  <!--
-    Category artwork for the demo phone. Original line work, not photography —
-    the app itself shows a category placeholder until a venue uploads a real
-    photo via venue-web, so this stands in for that. Drawn with the app's own
-    CSS variables, so it follows the light/dark toggle like everything else.
-    To swap in real photos later, replace the <svg class="app-art"> in a screen
-    with <img class="app-art" src="..." alt="">.
-  -->
+  <!-- The Impulse mark, defined once and referenced wherever it appears. -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
     <defs>
       <!-- The Impulse PulseMark. Same geometry as mobile-sdk54/assets/pulsemark.svg
            and venue-web's <PulseMark/> — concentric rings around a solid dot. -->
+      <!-- Red end to end with a white mark on top — the one place colour fills
+           the frame. The falloff is drawn in stroke width, never opacity: each
+           ring is thinner than the one inside it. Radius is 22.5% of the size. -->
       <g id="pulsemark">
-        <rect width="200" height="200" rx="52" fill="#0F0E0D"/>
-        <circle cx="100" cy="100" r="82" fill="none" stroke="#FF5A4D" stroke-opacity=".22" stroke-width="4"/>
-        <circle cx="100" cy="100" r="60" fill="none" stroke="#FF5A4D" stroke-opacity=".45" stroke-width="4.8"/>
-        <circle cx="100" cy="100" r="34" fill="#FF5A4D"/>
+        <rect width="200" height="200" rx="45" fill="#C80815"/>
+        <circle cx="100" cy="100" r="67.2" fill="none" stroke="#FFFFFF" stroke-width="5.1"/>
+        <circle cx="100" cy="100" r="38.3" fill="none" stroke="#FFFFFF" stroke-width="8.6"/>
+        <circle cx="100" cy="100" r="13.3" fill="#FFFFFF"/>
       </g>
 
-      <path id="pin" d="M5 .8c1.85 0 3.1 1.6 3.1 3.3 0 1.15-.55 1.95-1.05 2.6-.45.6-.65 1.2-.5 2.05l1.55 10.7c.2 1.45-1.35 2.4-3.1 2.4s-3.3-.95-3.1-2.4L3.45 8.75c.15-.85-.05-1.45-.5-2.05C2.45 6.05 1.9 5.25 1.9 4.1 1.9 2.4 3.15.8 5 .8Z"/>
-      <linearGradient id="floorFade" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="var(--app-bg)" stop-opacity="0"/>
-        <stop offset="1" stop-color="var(--app-bg)" stop-opacity=".5"/>
-      </linearGradient>
-
-      <!-- Every motif is centred on y=84 and kept inside roughly y=34–134, the
-           band that survives the tightest crop (a 32px strip shows only the
-           middle ~40% of the viewBox). Nothing rectangular in the background,
-           since straight edges make the crop obvious. -->
-      <g id="art-bowling">
-        <rect width="300" height="168" fill="var(--app-ph)"/>
-        <circle cx="150" cy="84" r="74" fill="var(--app-accent)" opacity=".09"/>
-        <g fill="var(--app-accent)">
-          <use href="#pin" transform="translate(112 40) scale(2.1)"/>
-          <use href="#pin" transform="translate(139 33) scale(2.1)"/>
-          <use href="#pin" transform="translate(166 40) scale(2.1)"/>
-        </g>
-        <circle cx="68" cy="108" r="23" fill="var(--app-accent)" opacity=".85"/>
-        <g fill="var(--app-ph)">
-          <circle cx="61" cy="101" r="3.4"/><circle cx="75" cy="100" r="3.4"/><circle cx="69" cy="111" r="3.4"/>
-        </g>
-      </g>
-
-      <g id="art-escape">
-        <rect width="300" height="168" fill="var(--app-ph)"/>
-        <g fill="none" stroke="var(--app-accent)" stroke-width="2.5">
-          <circle cx="150" cy="84" r="68" opacity=".12"/>
-          <circle cx="150" cy="84" r="49" opacity=".22"/>
-        </g>
-        <circle cx="150" cy="70" r="23" fill="var(--app-accent)"/>
-        <path d="M143 86h14l6 34h-26Z" fill="var(--app-accent)"/>
-      </g>
-
-      <g id="art-karaoke">
-        <rect width="300" height="168" fill="var(--app-ph)"/>
-        <g fill="none" stroke="var(--app-accent)" stroke-width="3" stroke-linecap="round">
-          <path d="M100 54a38 38 0 0 0 0 60" opacity=".38"/>
-          <path d="M200 54a38 38 0 0 1 0 60" opacity=".38"/>
-          <path d="M78 40a62 62 0 0 0 0 88" opacity=".16"/>
-          <path d="M222 40a62 62 0 0 1 0 88" opacity=".16"/>
-        </g>
-        <rect x="131" y="34" width="38" height="68" rx="19" fill="var(--app-accent)"/>
-        <g stroke="var(--app-ph)" stroke-width="2.4" opacity=".45">
-          <path d="M137 52h26M137 63h26M137 74h26M137 85h26"/>
-        </g>
-        <path d="M127 99a23 23 0 0 0 46 0" fill="none" stroke="var(--app-accent)" stroke-width="4.5"/>
-        <rect x="146" y="117" width="8" height="21" rx="4" fill="var(--app-accent)"/>
-      </g>
     </defs>
   </svg>
 
   <div class="wrap">
 
     <header class="header">
-      <div class="brand">
+      <a class="brand" href="#">
         <span class="mark"><svg viewBox="0 0 200 200" aria-hidden="true"><use href="#pulsemark"/></svg></span>
-        <span class="brand-name">impulse</span>
-      </div>
-      <a class="header-link" href="#venues">For venues</a>
+        <span class="brand-name">Impulse</span>
+      </a>
+
+      <nav class="header-nav" aria-label="Sections">
+        <a class="header-link" href="#how-it-works">How it works</a>
+        <a class="header-link" href="#waitlist">Early access</a>
+        <a class="header-link" href="#venues">For venues</a>
+      </nav>
+
+      <a class="btn btn--sm" href="#waitlist">Join the waitlist</a>
     </header>
 
-    <section class="hero">
-      <div class="radar" aria-hidden="true">
-        <div class="radar-static"></div>
-        <span></span><span></span><span></span>
+    <div class="stage">
+
+    <!--
+      ONE phone for the whole page. It is pinned inside `.stage` (hero + demo) and
+      flown by two numbers: --s docks it from the hero into the demo column, --p
+      banks it through the four steps. The reel below is five panels — the splash
+      the hero shows, then the four real screens — so the screen keeps scrolling
+      through the handover instead of cutting.
+    -->
+    <div class="stage-pin" aria-hidden="true">
+      <div class="stage-glow"></div>
+      <div class="stage-sonar"><span></span><span></span><span></span></div>
+      <div class="phone">
+        <span class="phone-btn phone-btn--l phone-btn--action"></span>
+        <span class="phone-btn phone-btn--l phone-btn--vol-up"></span>
+        <span class="phone-btn phone-btn--l phone-btn--vol-dn"></span>
+        <span class="phone-btn phone-btn--r phone-btn--power"></span>
+        <div class="phone-island"></div>
+        <div class="phone-screen">
+          <div class="phone-reel">
+
+            <div class="scr scr--splash">
+              <div class="splash-foot">
+                <div class="splash-pulse" aria-hidden="true">
+                  <span></span><span></span><span></span>
+                  <i></i>
+                </div>
+                <p class="splash-line">Last-minute<br>plans</p>
+                <p class="splash-sub">Sydney, whenever you’re free, with the price already worked out.</p>
+                <span class="splash-btn">Get started</span>
+              </div>
+            </div>
+
+            <img class="scr" src="assets/app/feed.png" style="--shot:url(assets/app/feed.png)"   width="390" height="746" alt="" decoding="async">
+            <img class="scr" src="assets/app/deal.png" style="--shot:url(assets/app/deal.png)"   width="390" height="746" alt="" decoding="async" loading="lazy">
+            <img class="scr" src="assets/app/huddle.png" style="--shot:url(assets/app/huddle.png)" width="390" height="746" alt="" decoding="async" loading="lazy">
+            <img class="scr" src="assets/app/claim.png" style="--shot:url(assets/app/claim.png)"  width="390" height="746" alt="" decoding="async" loading="lazy">
+
+          </div>
+        </div>
       </div>
-      <h1 class="wordmark">Impulse</h1>
-      <p class="tagline">Plans, on impulse.</p>
-      <p class="lede">Last-minute things to do in Sydney, with the price already worked out.</p>
-      <a class="btn" href="#waitlist">Join the waitlist <span class="arrow">→</span></a>
+    </div>
+
+    <section class="hero">
+      <h1 class="hero-display">Plans, decided in a minute.</h1>
+
+      <!-- Small screens only. Above 900px the phone carries both of these on its
+           own splash screen, the way the reference does; below it the phone is
+           hidden, so without these the hero would be a headline and nothing else. -->
+      <p class="hero-sub">Whenever you’re free, Sydney venues cut the price on the hours they would rather not sit empty. You see what is on, what it costs and when it ends.</p>
+      <a class="btn hero-cta" href="#waitlist">Join the waitlist</a>
 
       <div class="creds">
         <div class="creds-head">
@@ -966,6 +1196,43 @@
       </div>
     </section>
 
+    <section class="demo" id="how-it-works" aria-labelledby="demo-title">
+      <div class="demo-head">
+        <span class="eyebrow">How it works</span>
+        <h2 class="demo-title" id="demo-title">Find it, claim it, show up.</h2>
+      </div>
+
+      <div class="demo-grid">
+
+        <div class="demo-steps">
+
+          <article class="demo-step is-on" data-screen="feed">
+            <h3>See what’s on right now</h3>
+            <p>An afternoon, a weeknight, a slow Sunday — venues cut the price on the hours they would rather not sit empty. Everything on the feed is live now, with the distance and the closing time on the card.</p>
+          </article>
+
+          <article class="demo-step" data-screen="deal">
+            <h3>The price is already worked out</h3>
+            <p>You see what a slot costs before you tap. No vouchers, no codes to apply, no minimum spend.</p>
+          </article>
+
+          <article class="demo-step" data-screen="huddle">
+            <h3>Decide as a group</h3>
+            <p>Send one link. Everyone ranks their top three. The winner becomes a single booking, split between you.</p>
+          </article>
+
+          <article class="demo-step" data-screen="claim">
+            <h3>A deposit holds it</h3>
+            <p>You pay part of the total to claim the slot. The rest is charged when your code is scanned at the venue.</p>
+          </article>
+
+        </div>
+
+      </div>
+    </section>
+
+    </div><!-- /.stage -->
+
     <section class="strip" aria-label="Categories">
       <div class="marquee">
         <div class="marquee-group">
@@ -993,179 +1260,6 @@
       </div>
     </section>
 
-    <section class="demo" id="how-it-works" aria-labelledby="demo-title">
-      <div class="demo-head">
-        <span class="eyebrow">How it works</span>
-        <h2 class="demo-title" id="demo-title">Find it, claim it, show up.</h2>
-      </div>
-
-      <div class="demo-grid">
-        <div class="demo-phone-col">
-          <!-- Decorative: the copy beside it already says everything this shows. -->
-          <div class="phone" role="img" aria-label="The Impulse app, showing each step of booking a last-minute night out">
-            <div class="phone-island" aria-hidden="true"></div>
-            <div class="phone-screen">
-              <div class="phone-status" aria-hidden="true"><span>7:42</span><span>▂▄▆ ⌁</span></div>
-
-              <!-- 01 · home feed -->
-              <div class="scr is-on" data-screen="feed">
-                <span class="app-eyebrow">Sydney · tonight</span>
-                <h4 class="app-h1">On now</h4>
-                <div class="app-chips">
-                  <span class="app-chip on">All</span>
-                  <span class="app-chip">Bowling</span>
-                  <span class="app-chip">Karaoke</span>
-                  <span class="app-chip">Pool</span>
-                </div>
-                <div class="app-card">
-                  <div class="app-photo">
-                    <svg class="app-art" viewBox="0 0 300 168" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-bowling"/></svg>
-                    <div class="app-pill"><b>Bowling</b></div>
-                  </div>
-                  <div class="app-body">
-                    <div class="app-venue">Pins &amp; Needles</div>
-                    <div class="app-meta">Moore Park · 1.2 km · ★ 4.6</div>
-                    <div class="app-price">
-                      <span class="app-now">$18<small>/lane</small></span>
-                      <span class="app-was">$24</span>
-                      <span class="app-off">−25%</span>
-                    </div>
-                    <div class="app-when"><span class="app-dot"></span> On now · ends 9:00pm</div>
-                  </div>
-                </div>
-                <div class="app-card" style="margin-top:11px">
-                  <div class="app-photo" style="height:70px">
-                    <svg class="app-art" viewBox="0 0 300 168" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-escape"/></svg>
-                    <div class="app-pill"><b>Escape rooms</b><i>ends in 2:08</i></div>
-                  </div>
-                </div>
-                <div class="app-tabs">
-                  <span class="app-tab on"><i></i>Tonight</span>
-                  <span class="app-tab"><i></i>Map</span>
-                  <span class="app-tab"><i></i>Plans</span>
-                  <span class="app-tab"><i></i>You</span>
-                </div>
-              </div>
-
-              <!-- 02 · claim -->
-              <div class="scr" data-screen="claim">
-                <div class="app-card">
-                  <div class="app-photo" style="height:128px">
-                    <svg class="app-art" viewBox="0 0 300 168" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-escape"/></svg>
-                    <div class="app-pill"><b>Escape rooms</b></div>
-                  </div>
-                  <div class="app-body">
-                    <div class="app-venue">The Lockup</div>
-                    <div class="app-meta">Newtown · 3.4 km · ★ 4.8</div>
-                    <div class="app-price">
-                      <span class="app-now">$28<small>pp</small></span>
-                      <span class="app-was">$39</span>
-                      <span class="app-off">−28%</span>
-                    </div>
-                  </div>
-                </div>
-                <div style="margin-top:13px">
-                  <span class="app-eyebrow">What you get</span>
-                  <p style="font-size:12px;line-height:1.45;color:var(--app-muted);margin:5px 0 0">
-                    A 60-minute room for your group, held the moment you claim it.
-                  </p>
-                </div>
-                <div style="margin-top:13px;padding:11px 12px;border-radius:12px;background:var(--app-accent-soft)">
-                  <div style="font-size:12px;font-weight:600;color:var(--app-text)">Pay $5.60 now</div>
-                  <div style="font-size:11px;color:var(--app-muted);margin-top:2px">$22.40 at the venue</div>
-                </div>
-                <span class="app-cta" style="margin-top:auto">Claim this spot</span>
-              </div>
-
-              <!-- 03 · huddle -->
-              <div class="scr" data-screen="huddle">
-                <span class="app-eyebrow">Your huddle</span>
-                <h4 class="app-h1">Everyone’s voted</h4>
-                <div style="margin-top:13px">
-                  <div class="app-row"><span class="app-av done">R</span><span style="flex:1;font-size:13px;font-weight:600">Rahul</span><span class="app-tag on">Voted</span></div>
-                  <div class="app-row"><span class="app-av done">M</span><span style="flex:1;font-size:13px;font-weight:600">Mei</span><span class="app-tag on">Voted</span></div>
-                  <div class="app-row"><span class="app-av done">J</span><span style="flex:1;font-size:13px;font-weight:600">Jonas</span><span class="app-tag on">Voted</span></div>
-                  <div class="app-row"><span class="app-av done">A</span><span style="flex:1;font-size:13px;font-weight:600">Ada</span><span class="app-tag on">Voted</span></div>
-                </div>
-                <div class="app-card" style="margin-top:13px">
-                  <div class="app-photo app-strip">
-                    <svg class="app-art" viewBox="0 0 300 168" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-karaoke"/></svg>
-                  </div>
-                  <div class="app-body">
-                    <span class="app-eyebrow">The group picked</span>
-                    <div class="app-venue" style="margin-top:4px">Echo Room</div>
-                    <div class="app-meta">Karaoke · CBD · 8:30pm</div>
-                    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:10px;padding-top:10px;border-top:1px solid var(--app-line)">
-                      <span style="font-size:11.5px;color:var(--app-muted)">Your share</span>
-                      <span class="app-now" style="font-size:18px">$14.50</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 04 · code -->
-              <div class="scr" data-screen="code">
-                <div style="text-align:center;margin-top:16px">
-                  <span class="app-eyebrow">Show this at the door</span>
-                </div>
-                <div class="app-card" style="margin-top:14px;padding:22px 14px">
-                  <div class="app-code">482916</div>
-                  <div style="text-align:center;margin-top:14px">
-                    <div class="app-venue" style="font-size:15px">Echo Room</div>
-                    <div class="app-meta">Karaoke · CBD · 8:30pm · 4 people</div>
-                  </div>
-                </div>
-                <div style="margin-top:13px;padding:11px 12px;border-radius:12px;background:var(--app-surface)">
-                  <div style="display:flex;align-items:center;gap:7px">
-                    <span class="app-dot"></span>
-                    <span style="font-size:11.5px;color:var(--app-muted)">Balance charged when it’s scanned</span>
-                  </div>
-                </div>
-                <div class="app-foot" style="padding-top:12px;border-top:1px solid var(--app-line)">
-                  <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--app-faint)">
-                    <span>Paid on booking</span><span style="color:var(--app-text);font-weight:600">$11.60</span>
-                  </div>
-                  <div style="margin-top:6px;display:flex;justify-content:space-between;font-size:11.5px;color:var(--app-faint)">
-                    <span>Due tonight</span><span style="color:var(--app-text);font-weight:600">$46.40</span>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </div>
-
-        <div class="demo-steps">
-
-          <article class="demo-step is-on" data-screen="feed">
-            <span class="demo-step-n">Step 01</span>
-            <h3>See what’s on near you</h3>
-            <p>Venues drop their quiet slots at a discount. Everything you see is live, nearby, and bookable right now — no vouchers, no minimum spend.</p>
-          </article>
-
-          <article class="demo-step" data-screen="claim">
-            <span class="demo-step-n">Step 02</span>
-            <h3>Claim it in two taps</h3>
-            <p>A small deposit holds your spot the second you claim it. The rest is settled at the venue when you turn up.</p>
-          </article>
-
-          <article class="demo-step" data-screen="huddle">
-            <span class="demo-step-n">Step 03</span>
-            <h3>Can’t agree? Start a huddle</h3>
-            <p>Send one link. Everyone ranks their picks, the group decides, and the cost splits itself evenly — no chasing anyone for cash.</p>
-          </article>
-
-          <article class="demo-step" data-screen="code">
-            <span class="demo-step-n">Step 04</span>
-            <h3>Show your code at the door</h3>
-            <p>Staff type in your six digits, your balance is charged, and you’re in. That’s the whole night sorted.</p>
-          </article>
-
-        </div>
-
-      </div>
-    </section>
-
     <section class="waitlist" id="waitlist" aria-labelledby="wl-head">
       <div class="wl-card" id="wl-card">
 
@@ -1177,10 +1271,10 @@
           <span id="wl-counter-text"></span>
         </p>
 
-        <h2 class="wl-head" id="wl-head">Be first to see deals before they fill</h2>
+        <h2 class="wl-head" id="wl-head">See the prices before they go public.</h2>
         <p class="wl-sub">
-          Waitlist members get early access to deals before they go public.
-          Top referrers become Founding Members with permanent priority access.
+          We open Sydney one suburb at a time. Tell us where you are and what you
+          do, and you go on the list for that area.
         </p>
 
         <!-- Invite banner — only shown when ?ref= resolves to a real entry. -->
@@ -1206,7 +1300,7 @@
           </div>
 
           <div class="wl-field wl-field-wide">
-            <span class="wl-label" id="wl-activity-label">What activities do you love doing?</span>
+            <span class="wl-label" id="wl-activity-label">What do you go out for?</span>
             <div class="wl-chips" role="group" aria-labelledby="wl-activity-label"
                  aria-describedby="wl-activity-error" id="wl-activities">
               <label class="wl-chip"><input type="checkbox" value="Bowling"><span>Bowling</span></label>
@@ -1222,7 +1316,7 @@
 
             <!-- Revealed only when "Something else" is ticked. -->
             <div class="wl-other" id="wl-other-wrap" hidden>
-              <label class="wl-label" for="wl-other">What else are you into?</label>
+              <label class="wl-label" for="wl-other">What else?</label>
               <input class="wl-input" id="wl-other" type="text" maxlength="80"
                      placeholder="Axe throwing, trivia, rock climbing…"
                      aria-describedby="wl-other-error">
@@ -1280,123 +1374,395 @@
       <div class="venues-grid">
         <div class="venues-copy">
           <span class="eyebrow">For venues</span>
-          <h2 class="venues-title" id="venues-title">Got quiet hours? Let’s fill them.</h2>
+          <h2 class="venues-title" id="venues-title">Fill your quiet hours. On your terms.</h2>
           <p class="venues-lede">
-            We’re running free three-month pilots with Sydney venues. You list the
-            slots you’d rather not have sitting empty, at a price you set, and we
-            bring you people who are deciding what to do tonight. Email us and
-            we’ll set up a chat.
+            You choose the discount, the window and how many spots. We bring you
+            people deciding what to do with a free hour. Pilots run three months,
+            free, with no lock-in and no new hardware.
           </p>
-          <a class="btn btn--ghost"
-             href="mailto:rahul@impulseapp.au?subject=Impulse%20pilot%20enquiry">
-            Email us <span class="arrow">→</span>
+          <!-- Stays a real mailto: link. The script upgrades it into the
+               dialog below; without JS, or without <dialog>, it still works. -->
+          <a class="btn btn--ghost" id="vx-open"
+             href="mailto:rahul@impulseapp.au,manoj@impulseapp.au?subject=Impulse%20pilot%20enquiry">
+            Talk to us <span class="arrow">→</span>
           </a>
         </div>
 
         <ul class="venues-points">
           <li><strong>Three months, free</strong>No cost to you for the length of the pilot.</li>
-          <li><strong>You set the price</strong>Your slots, your discount — nothing goes live that you haven’t set.</li>
-          <li><strong>Settled at the venue</strong>Guests pay a small deposit to hold the spot; the rest is paid to you on the night.</li>
+          <li><strong>You set the price</strong>Nothing goes live that you have not set.</li>
+          <li><strong>Settled at the venue</strong>Guests pay a deposit to hold the spot. The rest is paid to you on the night.</li>
         </ul>
       </div>
     </section>
 
     <footer class="footer">
-      <span class="footer-note">impulse · made in sydney</span>
+      <span class="footer-note">Impulse · Made in Sydney</span>
     </footer>
 
   </div>
 
   <script>
     /*
-      SCROLL DEMO — a sticky phone whose screen follows the step you're reading.
+      THE STAGE — one phone, flown from the hero into "how it works".
 
-      Driven by IntersectionObserver against a thin band across the middle of the
-      viewport, not a scroll listener: the callback only fires when a step enters
-      or leaves that band, so there's no per-frame work and nothing to throttle.
+      Two numbers, both written once per frame from a single rAF-throttled
+      scroll listener, with every transform a CSS calc() off them:
+
+        --s  0 -> 1  docks the phone: it starts large and low in the hero and
+                     ends parked where the steps are read. It reaches 1 before
+                     the demo section arrives, which is where --p starts.
+        --p  0 -> 1  runs the four steps, banking the phone and driving the reel.
+
+      The reel is five panels — splash, then the four captured screens — and its
+      position is `ease(s) + step travel`, so the screen keeps scrolling through
+      the handover rather than cutting from one state to another.
+
+      One stage, two geometries. Landscape the phone parks full size and swings
+      between the sides of the copy, and the reel runs vertically. Portrait it
+      parks small and high with the copy pinned underneath, and the reel runs
+      SIDEWAYS — the CSS picks the axis, layout() writes the dock, and frame()
+      only has to choose where --p comes from.
     */
     (function () {
+      var stage = document.querySelector('.stage');
+      var demo = document.querySelector('.demo');
+      var grid = document.querySelector('.demo-grid');
       var steps = document.querySelectorAll('.demo-step');
-      var screens = document.querySelectorAll('.scr');
-      if (!steps.length || !screens.length) return;
+      var pin = document.querySelector('.stage-pin');
+      var phoneEl = pin && pin.querySelector('.phone');
+      if (!stage || !demo || !grid || !steps.length || !phoneEl) return;
 
-      var frame = document.querySelector('.demo-phone-col .phone');
+      var reel = phoneEl.querySelector('.phone-reel');
+      var screens = phoneEl.querySelectorAll('.scr');
+      if (!reel || !screens.length) return;
+
+      var display = document.querySelector('.hero-display');
+      var heroEl = document.querySelector('.hero');
+      var creds = document.querySelector('.creds');
+      var credsHome = creds ? creds.parentNode : null;
+
       var small = window.matchMedia('(max-width: 900px)');
+      var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+      var isSmall = small.matches;
 
-      // ---- Mobile: unroll the pinned sequence into a plain list ----
+      function each(list, fn) { Array.prototype.forEach.call(list, fn); }
+
+      // ---- Reduced motion, portrait: unroll the stage into a plain list ----
       // Each step gets its own phone showing only that step's screen. Nothing
-      // sticks, nothing swaps, so the section is an ordinary vertical scroll.
+      // sticks, nothing swaps. The splash is the hero's alone, so clones drop it.
       function buildInline() {
         if (document.querySelector('.step-phone')) return;
-        steps.forEach(function (step) {
-          var clone = frame.cloneNode(true);
-          clone.removeAttribute('role');
-          clone.removeAttribute('aria-label');
+        each(steps, function (step, n) {
+          var clone = phoneEl.cloneNode(true);
           clone.setAttribute('aria-hidden', 'true');   // the step copy says it all
-          Array.prototype.forEach.call(clone.querySelectorAll('.scr'), function (s) {
-            if (s.dataset.screen === step.dataset.screen) s.classList.add('is-on');
-            else s.parentNode.removeChild(s);
+          // cloneNode copies inline styles, so a landscape -> portrait resize
+          // would otherwise hand each clone the reel's current offset and show
+          // the one screen it kept half way off the edge.
+          clone.querySelector('.phone-reel').style.removeProperty('--reel');
+          // Keep only this step's screen: the reel is then one panel long and
+          // sits at --reel 0, so nothing has to move.
+          each(clone.querySelectorAll('.scr'), function (sc, k) {
+            if (k !== n + 1) sc.parentNode.removeChild(sc);
           });
           var wrap = document.createElement('div');
           wrap.className = 'step-phone';
           wrap.appendChild(clone);
           step.insertBefore(wrap, step.firstChild);
-          step.classList.add('is-on');
         });
       }
 
       function teardownInline() {
-        Array.prototype.forEach.call(document.querySelectorAll('.step-phone'), function (el) {
+        each(document.querySelectorAll('.step-phone'), function (el) {
           el.parentNode.removeChild(el);
         });
       }
 
-      function sync() {
-        if (small.matches) buildInline();
-        else teardownInline();
+      // The awards fill the hero's empty lower corners on a wide screen.
+      // Portrait there are no corners — the phone flies through where they
+      // would be — so they become their own band under the whole stage.
+      function placeCreds(below) {
+        if (!creds) return;
+        if (below) {
+          if (creds.parentNode !== stage.parentNode) {
+            stage.parentNode.insertBefore(creds, stage.nextSibling);
+          }
+        } else if (creds.parentNode !== credsHome) {
+          credsHome.appendChild(creds);
+        }
       }
-      sync();
-      if (small.addEventListener) small.addEventListener('change', sync);
 
-      // Everything below drives the desktop sticky phone only.
-      if (small.matches) return;
-
-      // Reduced motion: leave every step legible and the phone on screen one.
-      // The section still reads top to bottom, it just doesn't animate.
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        steps.forEach(function (s) { s.classList.add('is-on'); });
+      // ---- Reduced motion: leave every step legible and nothing flying ----
+      if (reduce.matches) {
+        stage.classList.add('is-static');
+        each(steps, function (st) { st.classList.add('is-on'); });
+        stage.style.setProperty('--s', 1);
+        reel.style.setProperty('--reel', 1);
+        var staticSync = function () {
+          placeCreds(false);
+          heroEl.style.removeProperty('min-height');
+          if (small.matches) buildInline(); else teardownInline();
+        };
+        staticSync();
+        if (small.addEventListener) small.addEventListener('change', staticSync);
         return;
       }
 
-      function show(name) {
-        steps.forEach(function (s) { s.classList.toggle('is-on', s.dataset.screen === name); });
-        screens.forEach(function (s) { s.classList.toggle('is-on', s.dataset.screen === name); });
+      // ---- Place the hero phone ----
+      // It runs off the bottom of the fold, the way the reference does, so only
+      // the top edge has to be placed: just under the headline, at any height.
+      // Dark air between the two is what makes the phone read as rising into
+      // frame rather than being stacked under the type.
+      function gap() { return Math.max(36, Math.round(window.innerHeight * .14)); }
+
+      // ---- The tilt, solved rather than measured ----
+      // In the hero the frame lies back --tilt degrees about its own centre
+      // under --persp of perspective, so nothing is where its untransformed
+      // box says it is: the top edge foreshortens toward the middle and the
+      // bottom edge swings out toward the viewer and grows. These four numbers
+      // are the projection, and every placement below is written in them.
+      var TILT = 50, PERSP = 1400, HALF = 310;   // half the 620px frame
+      var SIN = Math.sin(TILT * Math.PI / 180), COS = Math.cos(TILT * Math.PI / 180);
+
+      // Where a point `v` px from the frame's centre lands, down positive.
+      // Above the centre it shrinks toward it, below the centre it magnifies.
+      function proj(v) { return v * COS / (1 - v * SIN / PERSP); }
+
+      var TOP_EDGE = -proj(-HALF);          // projected top edge, above centre
+      var FULL_H = TOP_EDGE + proj(HALF);   // projected height of the frame
+
+      // The splash screen's button, in the frame's own units: 11 of bezel, then
+      // the screen less the foot's bottom padding, less the button itself.
+      var BEZEL = 11, BTN_H = 46, FOOT_PAD = 30;
+      var BTN_BOTTOM = BEZEL + (620 - BEZEL * 2) - FOOT_PAD;
+      var BTN_TOP = BTN_BOTTOM - BTN_H;
+      // Projected, measured down from the frame's projected top edge: where the
+      // fold has to fall for the button to be just out of sight.
+      var BUTTON = TOP_EDGE + proj(BTN_TOP - HALF);
+      // Widest point is the bottom edge — but portrait that edge is below the
+      // fold, so what actually has to fit the screen is the width at the fold,
+      // which is where the frame is cut.
+      var WIDEST = 300 / (1 - HALF * SIN / PERSP);
+      var FOLD_W = 300 / (1 - (BTN_TOP - HALF) * SIN / PERSP);
+
+      // Puts the phone's top edge at `wantTop` (viewport coords, page at rest).
+      // The pin declares --hero-y / --hero-scale itself and its own declaration
+      // beats anything inherited from .stage, so this has to write there.
+      function place(scale, wantTop) {
+        pin.style.setProperty('--hero-scale', scale);
+        pin.style.setProperty('--hero-y', (wantTop - window.innerHeight / 2 + TOP_EDGE * scale) + 'px');
       }
 
-      if (!('IntersectionObserver' in window)) { steps.forEach(function (s) { s.classList.add('is-on'); }); return; }
+      function layout() {
+        if (!display) return;
+        var vh = window.innerHeight, vw = window.innerWidth;
+        isSmall = small.matches;
 
-      var io = new IntersectionObserver(function (entries) {
-        entries.forEach(function (e) {
-          if (e.isIntersecting) show(e.target.dataset.screen);
+        // `min-height: 100vh` makes the hero a viewport TALL, but it starts below
+        // the header — so it ended a header's worth past the fold, taking anything
+        // pinned to its bottom with it. Size it to what is actually left.
+        heroEl.style.minHeight = '';
+        var heroTop = heroEl.getBoundingClientRect().top + window.scrollY;
+        heroEl.style.minHeight = Math.max(420, vh - heroTop) + 'px';
+
+        // Where the phone rests once docked.
+        if (isSmall) {
+          // Portrait: centred, parked in the top half, copy pinned underneath.
+          // The frame is 300x620 whatever the screen — only this scale changes,
+          // so the reel's percentage maths never has to know about breakpoints.
+          var k = Math.min(vh * .50 / 620, vw * .60 / 300);
+          pin.style.top = (vh * .5 - 310) + 'px';
+          pin.style.setProperty('--dock-scale', k);
+          // scale() is about the frame's centre, so a docked frame's top sits at
+          // 50vh - 310k. This is the correction that lands it at 15vh instead —
+          // low enough to sit IN the band above the copy rather than pinned to
+          // the top of it with all the air left underneath.
+          pin.style.setProperty('--dock-y', (vh * .15 - vh * .5 + 310 * k) + 'px');
+          pin.style.setProperty('--dock-x', '0px');
+        } else {
+          pin.style.removeProperty('top');
+          pin.style.setProperty('--dock-scale', 1);
+          pin.style.setProperty('--dock-y', '0px');
+        }
+
+        // ---- Where the frame sits ----
+        // One rule at both breakpoints: the fold cuts just above the splash's
+        // button, so it arrives on scroll rather than sitting there at rest.
+        // The button is at the very bottom of the screen, so that crop is what
+        // decides how low the frame goes — there is no HIGHER position that
+        // still hides it, only lower ones.
+        var widthScale = isSmall
+          // Capped, because this breakpoint also catches tablets held upright:
+          // 84% of an 820px viewport is a 700px "phone", which stops reading as
+          // a device and starts reading as a wall.
+          ? Math.min(vw * .84 / FOLD_W, 1.5)
+          : Math.min(vw * .30 / FOLD_W, 1.8);
+        // Measured at the fold, since that is the widest part of the frame that
+        // anyone actually sees — the bottom edge is wider still, but it is below
+        // the fold and so it never has to fit.
+        var floor = display.getBoundingClientRect().bottom + window.scrollY
+                  + (isSmall ? 24 : gap());
+        var top = Math.max(floor, vh - BUTTON * widthScale);
+        // Solved, not clamped. Whatever room is left under the headline, this is
+        // the scale that puts the button's top edge exactly on the fold: where
+        // the frame sits at its full width this comes back as widthScale, and
+        // where the headline pushed it down it comes back smaller, so the width
+        // is never the thing that gives way.
+        var scale = Math.max(.55, (vh - top) / BUTTON);
+        place(scale, top);
+
+        // Kept as a guard. Nothing rotates now, so the measured top should match
+        // the maths exactly — but it settles the edge if that ever changes back.
+        if (window.scrollY < 4) {
+          var err = phoneEl.getBoundingClientRect().top - top;
+          if (Math.abs(err) > 1) place(scale, top - err);
+        }
+      }
+
+      // Which side the phone parks on for each step. The copy takes the other.
+      // Portrait it stays centred and this is unused.
+      var SIDES = [270, -270, 270, -270];
+
+      var LAST = screens.length - 2;          // reel travel across the steps
+      var HOLD_IN = .34, HOLD_OUT = .74;      // dwell either side of each slide
+
+      function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+      // smootherstep — zero first AND second derivative at both ends, so the
+      // reel eases out of a hold and into the next one without a visible kick.
+      function ease(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+
+      var lastStep = -1, ticking = false;
+
+      function frame() {
+        ticking = false;
+
+        var vh = window.innerHeight;
+        var mid = vh / 2;
+
+        // Dock: finished before the demo section arrives, not when the first
+        // step centres. Tied to the step, the phone was still at hero size —
+        // cropped and full width — as the section heading scrolled up, and sat
+        // on top of it. It is parked and small by the time the steps show.
+        var demoTop = demo.getBoundingClientRect().top + window.scrollY;
+        var dockEnd = Math.max(1, demoTop - vh * (isSmall ? .16 : .3));
+        var sEased = ease(clamp01(window.scrollY / dockEnd));
+        stage.style.setProperty('--s', sEased);
+
+        // Steps.
+        var p;
+        if (isSmall) {
+          // Portrait every step is stacked on the same spot inside the pinned
+          // copy block, so they have no travel of their own to measure — the
+          // pinned section's own scroll range is the progress.
+          p = clamp01((window.scrollY - demoTop) / Math.max(1, demo.offsetHeight - grid.offsetHeight));
+        } else {
+          var first = steps[0].getBoundingClientRect();
+          var last = steps[steps.length - 1].getBoundingClientRect();
+          var from = first.top + first.height / 2;
+          var span = (last.top + last.height / 2) - from;
+          p = span > 0 ? clamp01((mid - from) / span) : 0;
+        }
+        stage.style.setProperty('--p', p);
+
+        // Exit: 1 while the stage still has half a viewport to run, easing to 0
+        // as it ends. Without this the phone simply unpins and hangs over the
+        // next section for its own height in scroll.
+        var out = clamp01((stage.getBoundingClientRect().bottom - mid) / (vh * .55));
+        stage.style.setProperty('--out', ease(out));
+
+        // Reel: the splash slides away as the phone docks, then each screen
+        // holds while its copy is read before sliding to the next. Which way it
+        // slides is the CSS's business, not this function's.
+        var u = p * LAST;
+        var i = Math.min(Math.floor(u), LAST - 1);
+        var t = ease(clamp01((u - i - HOLD_IN) / (HOLD_OUT - HOLD_IN)));
+        reel.style.setProperty('--reel', sEased + i + t);
+
+        // Swing between this step's side and the next, on the same t as the reel.
+        if (!isSmall) {
+          var a = SIDES[i], b = SIDES[Math.min(i + 1, SIDES.length - 1)];
+          pin.style.setProperty('--dock-x', (a + (b - a) * t) + 'px');
+        }
+
+        // Copy: derived from the same numbers as the reel, so the highlighted
+        // step and the visible screen can never disagree.
+        var active = t < .5 ? i : i + 1;
+        if (active !== lastStep) {
+          lastStep = active;
+          each(steps, function (st, n) { st.classList.toggle('is-on', n === active); });
+        }
+
+        // Portrait the steps are stacked on one spot, so `is-on` alone would
+        // cut between them on a CSS timer while the screen was still sliding.
+        // Cross-fade them on the reel's own t instead, with a little sideways
+        // drift so the copy leaves the way the screen behind it does.
+        if (isSmall) {
+          // Staggered rather than a straight cross-fade: a plain 1-t / t pair
+          // leaves both lines at half opacity and both still readable through
+          // the middle of the slide, which is a mess with copy this long. These
+          // overlap by a tenth instead, so one line is nearly gone before the
+          // next arrives.
+          var goingOut = clamp01((.55 - t) / .5);
+          var comingIn = clamp01((t - .45) / .5);
+          each(steps, function (st, n) {
+            var o = n === i ? goingOut : n === i + 1 ? comingIn : 0;
+            var x = n === i ? -t * 22 : n === i + 1 ? (1 - t) * 22 : 0;
+            st.style.opacity = o;
+            st.style.transform = 'translate3d(' + x + 'px, 0, 0)';
+          });
+        }
+      }
+
+      function onScroll() {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(frame);
+      }
+
+      function sync() {
+        isSmall = small.matches;
+        teardownInline();
+        placeCreds(isSmall);
+        // frame() writes these portrait; landscape the class does the work and
+        // a leftover inline opacity would pin a step on or off for good.
+        each(steps, function (st) {
+          st.style.removeProperty('opacity');
+          st.style.removeProperty('transform');
         });
-      }, { rootMargin: '-48% 0px -48% 0px', threshold: 0 });
+        lastStep = -1;
+        layout();
+        frame();
+      }
 
-      steps.forEach(function (s) { io.observe(s); });
+      var lastW = window.innerWidth, lastH = window.innerHeight;
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', function () {
+        var w = window.innerWidth, h = window.innerHeight;
+        // Mobile browsers fire resize as the URL bar collapses. Re-laying the
+        // stage out on that alone makes the pinned phone jump mid-scroll, so
+        // only a real change counts.
+        if (w === lastW && Math.abs(h - lastH) < 120) return;
+        lastW = w; lastH = h;
+        sync();
+      }, { passive: true });
+      if (small.addEventListener) small.addEventListener('change', sync);
+      sync();
     })();
   </script>
 
   <script>
     /*
-      WAITLIST — talks to the FastAPI backend (backend/routers/waitlist.py).
+      The two forms on this page — the waitlist and the venue enquiry — both
+      talk to the FastAPI backend (backend/routers/{waitlist,contact}.py).
 
       API_BASE must point at the deployed API. There is no build step here, so
-      it's a literal: update it when the backend URL changes. The section fails
-      soft — the counter hides and the form reports a friendly error rather than
-      breaking the rest of the page.
+      it's a literal: update it when the backend URL changes. Both sections fail
+      soft — they report a friendly error rather than breaking the rest of the
+      page, and the venue form falls back to the mailto: it was before.
     */
-    (function () {
-      var API_BASE = 'https://impulse-monorepo.onrender.com';
+    var API_BASE = 'https://impulse-monorepo.onrender.com';
 
+    (function () {
       var $ = function (id) { return document.getElementById(id); };
       var card = $('wl-card');
       var form = $('wl-form');
@@ -1647,5 +2013,199 @@
       });
     })();
   </script>
+  <!--
+    Venue enquiry. A dialog rather than a bare mailto: — a venue can ask from
+    the page itself, and the details arrive in one shape instead of whatever
+    their mail client sent. Posts to /api/contact/venue, which emails Rahul and
+    Manoj; if that fails the form hands back the mailto: rather than pretending.
+  -->
+  <dialog class="vx" id="vx" aria-labelledby="vx-title">
+    <div class="vx-panel">
+      <button class="vx-close" id="vx-close" type="button" aria-label="Close">&times;</button>
+
+      <form id="vx-form" novalidate>
+        <span class="eyebrow">For venues</span>
+        <h2 class="vx-title" id="vx-title">Tell us about your venue</h2>
+        <p class="vx-sub">Three months free, no lock-in, no new hardware. We answer every one of these ourselves.</p>
+
+        <div class="wl-field">
+          <label class="wl-label" for="vx-venue">Venue</label>
+          <input class="wl-input" id="vx-venue" name="venue" type="text" maxlength="120"
+                 autocomplete="organization" placeholder="The name people search for"
+                 required aria-describedby="vx-venue-error">
+          <p class="wl-error" id="vx-venue-error" role="alert"></p>
+        </div>
+
+        <div class="wl-field">
+          <label class="wl-label" for="vx-name">Your name</label>
+          <input class="wl-input" id="vx-name" name="name" type="text" maxlength="80"
+                 autocomplete="name" placeholder="Who we're speaking to"
+                 required aria-describedby="vx-name-error">
+          <p class="wl-error" id="vx-name-error" role="alert"></p>
+        </div>
+
+        <div class="wl-field">
+          <label class="wl-label" for="vx-email">Email</label>
+          <input class="wl-input" id="vx-email" name="email" type="email" maxlength="254"
+                 autocomplete="email" placeholder="you@venue.com.au"
+                 required aria-describedby="vx-email-error">
+          <p class="wl-error" id="vx-email-error" role="alert"></p>
+        </div>
+
+        <div class="wl-field">
+          <label class="wl-label" for="vx-phone">Phone <span style="opacity:.6">(optional)</span></label>
+          <input class="wl-input" id="vx-phone" name="phone" type="tel" maxlength="40"
+                 autocomplete="tel" placeholder="Quicker than email, usually">
+        </div>
+
+        <div class="wl-field">
+          <label class="wl-label" for="vx-message">Which hours are quiet? <span style="opacity:.6">(optional)</span></label>
+          <textarea class="wl-input" id="vx-message" name="message" rows="3" maxlength="2000"
+                    placeholder="Weekday afternoons, early evenings, whatever you would rather not sit empty."></textarea>
+        </div>
+
+        <div class="vx-trap" aria-hidden="true">
+          <label>Leave this empty
+            <input id="vx-website" name="website" type="text" tabindex="-1" autocomplete="off">
+          </label>
+        </div>
+
+        <button class="wl-btn" id="vx-submit" type="submit">Send enquiry</button>
+        <p class="wl-error" id="vx-form-error" role="alert" style="margin-top:10px"></p>
+      </form>
+
+      <div class="vx-done" id="vx-done" hidden>
+        <h3>Thanks — that's with us.</h3>
+        <p>We read these ourselves and come back within a couple of days, usually sooner.</p>
+        <button class="btn btn--ghost" id="vx-done-close" type="button" style="margin-top:4px">Close</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script>
+    /*
+      VENUE ENQUIRY — the "Talk to us" dialog (backend/routers/contact.py).
+
+      The trigger is a real mailto: link in the markup and this upgrades it.
+      Anything that stops the upgrade — no JS, no <dialog>, an old browser —
+      leaves the link doing what it always did, so a venue is never stranded.
+      A failed send does the same: the error hands the mailto: back rather than
+      claiming an enquiry landed that never did.
+    */
+    (function () {
+      var $ = function (id) { return document.getElementById(id); };
+      var opener = $('vx-open');
+      var dlg = $('vx');
+      var form = $('vx-form');
+      var done = $('vx-done');
+      if (!opener || !dlg || !form || !done) return;
+      // No <dialog> support: leave the mailto: alone.
+      if (typeof dlg.showModal !== 'function') return;
+
+      var MAILTO = opener.getAttribute('href');
+      var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      var submitBtn = $('vx-submit');
+
+      function setError(field, message) {
+        var box = $('vx-' + field + '-error');
+        if (box) box.textContent = message || '';
+        var input = $('vx-' + field);
+        if (input) {
+          if (message) input.setAttribute('aria-invalid', 'true');
+          else input.removeAttribute('aria-invalid');
+        }
+      }
+
+      function validate(values) {
+        var ok = true;
+        setError('venue', ''); setError('name', ''); setError('email', '');
+        $('vx-form-error').textContent = '';
+        if (!values.venue) { setError('venue', 'Which venue?'); ok = false; }
+        if (!values.name) { setError('name', 'And your name?'); ok = false; }
+        if (!EMAIL_RE.test(values.email)) {
+          setError('email', 'That email address does not look right.');
+          ok = false;
+        }
+        return ok;
+      }
+
+      // ---- Open and close ----
+      opener.addEventListener('click', function (e) {
+        e.preventDefault();
+        // Reopening after a send starts a fresh one — a group with several
+        // sites would otherwise be stuck looking at the thank-you for the
+        // first venue it asked about.
+        if (!done.hidden) {
+          done.hidden = true;
+          form.hidden = false;
+          form.reset();
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Send enquiry';
+          $('vx-form-error').textContent = '';
+        }
+        dlg.showModal();
+        // Let it paint before moving focus, or Safari scrolls the page under it.
+        requestAnimationFrame(function () { $('vx-venue').focus(); });
+      });
+
+      function close() { dlg.close(); }
+      $('vx-close').addEventListener('click', close);
+      $('vx-done-close').addEventListener('click', close);
+      // The dialog element fills the top layer, so a click that lands on IT
+      // rather than on the panel inside it is a click on the backdrop.
+      dlg.addEventListener('click', function (e) { if (e.target === dlg) close(); });
+
+      // ---- Submit ----
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        var values = {
+          venue: $('vx-venue').value.trim(),
+          name: $('vx-name').value.trim(),
+          email: $('vx-email').value.trim(),
+          phone: $('vx-phone').value.trim() || null,
+          message: $('vx-message').value.trim() || null,
+          website: $('vx-website').value.trim() || null
+        };
+
+        if (!validate(values)) {
+          var firstBad = form.querySelector('[aria-invalid="true"]');
+          if (firstBad) firstBad.focus();
+          return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Sending…';
+
+        function failed(message) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Send enquiry';
+          $('vx-form-error').innerHTML = message +
+            ' <a href="' + MAILTO + '" style="text-decoration:underline">Email us instead</a>.';
+        }
+
+        fetch(API_BASE + '/api/contact/venue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values)
+        })
+          .then(function (res) {
+            if (res.status === 202) {
+              form.hidden = true;
+              done.hidden = false;
+              $('vx-done-close').focus();
+              return;
+            }
+            if (res.status === 429) {
+              failed("That's a few in a row — give it an hour.");
+              return;
+            }
+            failed("We couldn't send that just now.");
+          })
+          .catch(function () { failed("Couldn't reach the server."); });
+      });
+    })();
+  </script>
+
 </body>
 </html>

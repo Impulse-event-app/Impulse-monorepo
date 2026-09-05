@@ -7,7 +7,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import SessionLocal
-from routers import bookings, deals, huddles, interactions, users, venues, waitlist, webhooks
+from routers import (
+    bookings, contact, deals, huddles, interactions, users, venues, waitlist, webhooks,
+)
 
 logger = logging.getLogger("impulse.main")
 
@@ -66,6 +68,7 @@ app.include_router(interactions.router, prefix="/interactions", tags=["interacti
 app.include_router(webhooks.router,     prefix="/webhooks",     tags=["webhooks"])
 app.include_router(huddles.router,      prefix="/huddles",      tags=["huddles"])
 app.include_router(waitlist.router,     prefix="/api/waitlist", tags=["waitlist"])
+app.include_router(contact.router,      prefix="/api/contact",  tags=["contact"])
 
 
 @app.get("/health")
