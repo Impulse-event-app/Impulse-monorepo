@@ -1485,6 +1485,7 @@
       var lineEl = document.getElementById('iq-line');
       var card = document.getElementById('iq-card');
       var cardEl = card, stepsEl = section.querySelector('.iq-steps');
+      var pinEl = section.querySelector('.iq-pin');
       if (!stage || !cv) return;
       var ctx = cv.getContext('2d');
 
@@ -1553,21 +1554,39 @@
       // from the elements themselves rather than guessed at as percentages,
       // since the copy's height depends on which step is lit and on how the
       // headings wrap. FLOOR_Y is where the field has to stop.
-      var floorY = 0, cardAnchor = null;
-      function size() {
+      var floorY = 0, cardAnchor = null, measured = false, needsMeasure = true;
+
+      /* Offset of an element's box from the top-left of the pinned box, walked
+         through offsetParent. This is a LAYOUT measurement rather than a
+         viewport one, which matters twice over: transforms do not move it — the
+         card carries a translate driven by --card, so its client rect breathes
+         by 10px as the section resolves and the leader's endpoint would chase
+         it — and it does not change as the section scrolls, so it can be
+         measured once per layout instead of once per frame. */
+      function offsetIn(el) {
+        var x = 0, y = 0, n = el;
+        while (n && n !== pinEl) { x += n.offsetLeft; y += n.offsetTop; n = n.offsetParent; }
+        return n === pinEl ? { x: x, y: y } : null;
+      }
+
+      /* Every layout read the frame needs, taken together and cached. Called on
+         resize and whenever the pinned box changes shape — never from draw() on
+         a scroll, which is what turned each frame into a style-write followed by
+         a forced synchronous layout. */
+      function measure() {
         var box = cv.getBoundingClientRect();
-        if (!box.width || !box.height) return false;
+        if (!box.width || !box.height) { measured = false; return false; }
         dpr = Math.min(2, window.devicePixelRatio || 1);
         var w = Math.round(box.width), hh = Math.round(box.height);
-        if (w !== W || hh !== H) {
+        if (w !== W || hh !== H || cv.width !== Math.round(w * dpr)) {
           W = w; H = hh;
           cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
         }
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
         // Everything the field may use: under the nav, above the copy.
-        var stepsBox = stepsEl ? stepsEl.getBoundingClientRect() : null;
-        floorY = stepsBox ? Math.max(H * .5, stepsBox.top - box.top - 16) : H * .78;
+        var stepsAt = stepsEl ? offsetIn(stepsEl) : null;
+        floorY = stepsAt ? Math.max(H * .5, stepsAt.y - 16) : H * .78;
         var top = 46;
         cx0 = W / 2;
         cy0 = top + (floorY - top) * .54;
@@ -1578,9 +1597,10 @@
         // there is no corner to point at, so there is no leader.
         cardAnchor = null;
         if (cardEl) {
-          var cb = cardEl.getBoundingClientRect();
-          if (cb.top < box.bottom) cardAnchor = { x: cb.left - box.left - 14, y: cb.bottom - box.top };
+          var ca = offsetIn(cardEl);
+          if (ca && ca.y < H) cardAnchor = { x: ca.x - 14, y: ca.y + cardEl.offsetHeight };
         }
+        measured = true; needsMeasure = false;
         return true;
       }
 
@@ -1613,7 +1633,8 @@
       /* ---- the frame ---------------------------------------------------- */
       var t0 = performance.now();
       function draw(p, now) {
-        if (!size()) return;
+        if (needsMeasure && !measure()) return;
+        if (!measured) return;
         lastDraw = now;
         ctx.clearRect(0, 0, W, H);
         var tt = (now - t0) / 1000;
@@ -1799,22 +1820,38 @@
         ctx.fillRect(0, fadeTop, W, H - fadeTop);
         ctx.globalCompositeOperation = 'source-over';
 
-        /* ---- the copy and the rail ---- */
+        /* ---- the copy and the rail ----
+           Written only when the value actually changes. Every write here dirties
+           style on the pinned box, and the next frame opens by reading layout
+           out of it — so an unconditional write per frame is a forced
+           synchronous layout per frame, on the scroll path, behind a 1,300-point
+           canvas. The step index changes four times in the whole section and the
+           two custom properties change by less than a thousandth most frames. */
         var at = p < .17 ? 0 : p < .42 ? 1 : p < .74 ? 2 : 3;
-        for (var s2 = 0; s2 < steps.length; s2++) {
-          steps[s2].classList.toggle('is-on', s2 === at);
-          // A step that has been passed leaves to the left, so the phone's
-          // sideways swap has a direction rather than a flicker.
-          steps[s2].classList.toggle('is-past', s2 < at);
+        if (at !== lastAt) {
+          lastAt = at;
+          for (var s2 = 0; s2 < steps.length; s2++) {
+            steps[s2].classList.toggle('is-on', s2 === at);
+            // A step that has been passed leaves to the left, so the phone's
+            // sideways swap has a direction rather than a flicker.
+            steps[s2].classList.toggle('is-past', s2 < at);
+          }
+          for (var m2 = 0; m2 < marks.length; m2++) marks[m2].classList.toggle('is-at', m2 === at);
+          for (var d2 = 0; d2 < dots.length; d2++) {
+            dots[d2].classList.toggle('is-at', d2 === at);
+            dots[d2].classList.toggle('is-past', d2 < at);
+          }
         }
-        for (var m2 = 0; m2 < marks.length; m2++) marks[m2].classList.toggle('is-at', m2 === at);
-        for (var d2 = 0; d2 < dots.length; d2++) {
-          dots[d2].classList.toggle('is-at', d2 === at);
-          dots[d2].classList.toggle('is-past', d2 < at);
+        if (lineEl) {
+          var pv = p.toFixed(4);
+          if (pv !== lastP) { lastP = pv; lineEl.style.setProperty('--p', pv); }
         }
-        if (lineEl) lineEl.style.setProperty('--p', p.toFixed(4));
-        if (card) card.style.setProperty('--card', ramp(p, .78, .90).toFixed(3));
+        if (card) {
+          var cv2 = ramp(p, .78, .90).toFixed(3);
+          if (cv2 !== lastCard) { lastCard = cv2; card.style.setProperty('--card', cv2); }
+        }
       }
+      var lastAt = -1, lastP = '', lastCard = '';
 
       /* ---- the driver ---------------------------------------------------- */
       var mqReduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -1831,12 +1868,18 @@
       }
 
       var lastDraw = -1e9;
+      /* ONE paint per frame, and the scroll position is read at frame time.
+         Previously every scroll event painted synchronously AND a rAF loop
+         painted on top of it — a trackpad fires several scroll events per
+         frame, so the field was fully redrawn two or three times for every one
+         the screen could show, each redraw reading layout back out of a box the
+         previous one had just dirtied. That is what made the pinned section
+         judder: the work per frame overran the frame, so the sticky box fell
+         behind the scroll and caught up in jumps. */
       function tick(now) {
         if (!running) return;
-        // Skip if a scroll already painted this frame.
-        if (now - lastDraw > 6) draw(p, now);
-        // The field only animates on its own while there is drift left in it;
-        // once the lattice has formed, scroll is the only thing that moves it.
+        p = progress();
+        draw(p, now);
         if (visible && !isStatic()) requestAnimationFrame(tick);
         else running = false;
       }
@@ -1845,18 +1888,16 @@
         running = true; requestAnimationFrame(tick);
       }
 
-      // Scroll paints SYNCHRONOUSLY when the rAF loop is not already running.
-      // Contexts that throttle rAF — a background tab, a capture harness, a
-      // print pass — would otherwise leave the canvas blank at its default
-      // 300x150, and the whole section with it.
       function onScroll() {
         if (isStatic()) { staticFrame(); return; }
-        p = progress();
-        // Always paint, even with the idle loop nominally running: where rAF is
-        // throttled the loop never comes back, and deferring to it froze the
-        // field on whatever frame it last managed.
-        draw(p, performance.now());
+        // The rAF loop owns painting. The fallback is for contexts that throttle
+        // rAF — a background tab, a capture harness, a print pass — where the
+        // loop never comes back and the field would freeze on a stale frame, or
+        // stay blank at the canvas's default 300x150.
+        var now = performance.now();
+        if (!running || now - lastDraw > 250) { p = progress(); draw(p, now); }
       }
+      function onResize() { needsMeasure = true; onScroll(); }
 
       function staticFrame() {
         // The finished field, once, with every step open — safe only because
@@ -1865,6 +1906,11 @@
         draw(1, t0);
         for (var s3 = 0; s3 < steps.length; s3++) { steps[s3].classList.add('is-on'); steps[s3].classList.remove('is-past'); }
         if (card) card.style.removeProperty('--card');
+        // Every step is lit and --card is gone, which is not a state the
+        // change-guards below would ever write. Forget what was last written so
+        // that toggling reduced motion back off rebuilds the single-lit state
+        // rather than leaving all four standing open over the field.
+        lastAt = -1; lastCard = '';
       }
 
       if ('IntersectionObserver' in window) {
@@ -1875,11 +1921,17 @@
       } else { visible = true; }
 
       window.addEventListener('scroll', onScroll, { passive: true });
-      window.addEventListener('resize', onScroll, { passive: true });
+      window.addEventListener('resize', onResize, { passive: true });
       if (mqReduce.addEventListener) {
-        mqReduce.addEventListener('change', onScroll);
-        mqSmall.addEventListener('change', onScroll);
+        mqReduce.addEventListener('change', onResize);
+        mqSmall.addEventListener('change', onResize);
       }
+      // The pinned box changes shape without a resize event — a phone's URL bar
+      // collapsing against 100svh, a webfont landing and rewrapping the steps.
+      // That is the only thing the frame needs re-measured, so watch for it
+      // rather than re-reading layout on every frame in case it happened.
+      if (pinEl && 'ResizeObserver' in window) new ResizeObserver(function () { onResize(); }).observe(pinEl);
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(onResize);
       // One synchronous frame before anything is scheduled, so the field is on
       // screen even where rAF never fires.
       if (isStatic()) { staticFrame(); } else { onScroll(); start(); }
