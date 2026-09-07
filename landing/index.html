@@ -6,9 +6,9 @@
 
   <title>Impulse</title>
   <meta name="description" content="Last-minute things to do in Sydney, with the price already worked out. Join the waitlist for early access.">
-  <meta name="theme-color" content="#0A0A0A">
-  <!-- Dark only: no theme switching, so tell the UA to render form controls dark. -->
-  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#EBEBEB">
+  <!-- Light only: paper ground, so tell the UA to render form controls light. -->
+  <meta name="color-scheme" content="light">
 
   <!-- Social sharing -->
   <meta property="og:type" content="website">
@@ -16,1067 +16,673 @@
   <meta property="og:description" content="Last-minute things to do in Sydney, with the price already worked out. Join the waitlist for early access.">
   <meta name="twitter:card" content="summary_large_image">
 
-  <!-- PulseMark favicon: coral concentric rings + centre dot on warm near-black -->
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230F0E0D'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23FF5A4D' stroke-opacity='.3' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='6.5' fill='none' stroke='%23FF5A4D' stroke-opacity='.6' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23FF5A4D'/%3E%3C/svg%3E">
+  <!-- The mark, at 32px: white rings on an Impulse Red tile. -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23C80815'/%3E%3Ccircle cx='16' cy='16' r='10.8' fill='none' stroke='%23fff' stroke-width='.8'/%3E%3Ccircle cx='16' cy='16' r='6.1' fill='none' stroke='%23fff' stroke-width='1.4'/%3E%3Ccircle cx='16' cy='16' r='2.1' fill='%23fff'/%3E%3C/svg%3E">
 
   <style>
-    /* ---- Palette — brand guidelines v2.0, dark ground ----
-       Red is a signal, not decoration: primary actions, live states, the mark.
-       On dark the accent steps up one to Red Raised. The warm cream/coral
-       system this replaces is retired, along with every tinted background fill. */
-    :root {
-      color-scheme: dark;
-      --accent: #E8202C;          /* Red Raised — the on-dark accent */
-      --accent-flat: #C80815;     /* Impulse Red — on light grounds */
-      --accent-deep: #A50611;     /* hover / pressed only */
-      --accent-ink: #FFFFFF;      /* text on a red fill */
-      --bg: #0A0A0A;              /* Ink */
-      --surface: #161617;         /* Surface Dark */
-      --text: #F5F5F7;            /* Paper */
-      --muted: #98989D;           /* Secondary on dark */
-      --hairline: rgba(245, 245, 247, 0.13);
-      /* One typeface, and only one. */
-      --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
-      /* Motion: clarifies where something came from, never announces itself. */
-      --ease: cubic-bezier(.32, .72, 0, 1);
-      /* The bloom behind the phone. Its own scale rather than the flat accent,
-         so the light has somewhere to fall off to — but every hue is still one
-         of the brand's reds, so no colour on the page comes from outside it. */
-      --g-rose: #FF8A80;      /* Red Raised, lightened */
-      --g-lilac: #E8202C;     /* Red Raised */
-      --g-cool: #7A0410;      /* Red Deep */
+    /* ---- Palette — brand guidelines v2.0, paper ground ----
+       Paper and ink carry the page; red is a signal, and it appears at full
+       strength in exactly two places: the mark, and the one band where the page
+       asks for something. Two full-bleed bands break the
+       paper — red for the waitlist, ink for venues — and nothing else has a
+       surface, a shadow or a fill of its own. */
+    :root{
+      color-scheme:light;
+      --paper:#EBEBEB;            /* Paper — the ground */
+      --ink:#0A0A0A;              /* Ink */
+      --red:#C80815;              /* Impulse Red — on light grounds */
+      --red-deep:#A50611;         /* hover / pressed only */
+      --red-raised:#E8202C;       /* the on-dark accent, ink band only */
+      /* Re-tuned for this ground: Apple's own secondary grey (#6E6E73) is set
+         against their lighter #F5F5F7 and only reaches 4.25:1 on our darker
+         paper. Same cool-grey character, one step down, 5.17:1. */
+      --muted:#5F5F63;            /* secondary on paper */
+      --muted-dark:#98989D;       /* secondary on ink */
+      --hairline:rgba(10,10,10,.14);
+      --hairline-on-dark:rgba(245,245,247,.16);
+      --hairline-on-red:rgba(255,255,255,.58);
+      /* One typeface, one weight range: 400, 500, 600. Nothing heavier —
+         a 900 headline is the only thing on a page that can shout. */
+      --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+      --ease:cubic-bezier(.32,.72,0,1);
+      /* Two radii and a pill, everywhere. */
+      --r-in:12px;--r-panel:20px;
+      /* The page's gutter, as a token — .wrap's padding, named so a section
+         that has to break out of it can put it back exactly. */
+      --pad:clamp(18px,2.2vw,28px)
     }
+    *{box-sizing:border-box}
+    /* The [hidden] attribute has to beat our own display rules: the UA
+       stylesheet loses to any class rule that sets display. */
+    [hidden]{display:none!important}
+    html,body{margin:0;padding:0;overflow-x:hidden}
+    /* overflow-x:hidden makes body a scroll container, which silently breaks
+       position:sticky on the nav and the phone. clip does not. */
+    @supports (overflow-x:clip){html,body{overflow-x:clip}}
+    html{scroll-behavior:smooth;scroll-padding-top:74px}
+    body{background:var(--paper);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+    a{color:inherit;text-decoration:none}
+    a:hover{color:var(--red)}
+    ::selection{background:var(--red);color:#fff}
 
-    * { box-sizing: border-box; }
-    /* The [hidden] attribute has to beat our own display rules. The UA
-       stylesheet's `[hidden] { display: none }` loses to any class rule that
-       sets display (flex/grid/inline-flex), which silently breaks every
-       JS-toggled element below. */
-    [hidden] { display: none !important; }
-    html, body { margin: 0; padding: 0; overflow-x: hidden; }
-    /* `overflow-x: hidden` forces overflow-y to `auto`, which makes body a
-       scroll container and silently breaks `position: sticky` on the demo
-       phone. `clip` does the same clipping without creating one. The `hidden`
-       above stays as the fallback for anything that lacks clip support. */
-    @supports (overflow-x: clip) {
-      html, body { overflow-x: clip; }
-    }
-    html { scroll-behavior: smooth; }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--sans);
-      min-height: 100vh;
-      -webkit-font-smoothing: antialiased;
-      transition: background .3s ease, color .3s ease;
-    }
-    a { color: inherit; text-decoration: none; }
-    ::selection { background: var(--accent); color: #FFFFFF; }
+    .wrap{width:100%;max-width:1680px;margin:0 auto;padding:var(--pad);display:flex;flex-direction:column;gap:clamp(24px,3.2vw,44px)}
+    .wrap--foot{padding-top:0;padding-bottom:clamp(28px,4vw,48px)}
 
-    .wrap {
-      width: 100%;
-      max-width: 1180px;
-      margin: 0 auto;
-      padding: clamp(20px, 4vw, 40px);
-      display: flex;
-      flex-direction: column;
-      gap: clamp(24px, 3.2vw, 44px);
-      min-height: 100vh;
-    }
+    /* ---- Nav ----
+       Stuck to the top with no rule under it, and no surface of its own while
+       the radar is running — see .is-solid, which the stage driver adds once the
+       stage has passed and the bar starts crossing the coloured bands. The one
+       piece of chrome on the page, and the only place the name is set. */
+    .nav{position:sticky;top:0;z-index:20;background:none;transition:background .2s linear}
+    .nav.is-solid{background:rgba(235,235,235,.78);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px)}
+    @media (prefers-reduced-motion:reduce){.nav{transition:none}}
+    .header{max-width:1680px;margin:0 auto;padding:0 var(--pad);height:54px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px}
+    .brand{display:flex;align-items:center;gap:9px;justify-self:start}
+    .brand:hover{color:var(--ink)}
+    .brand-name{font-weight:600;font-size:17px;letter-spacing:-.024em;color:var(--ink)}
+    .header-nav{display:flex;align-items:center;gap:clamp(18px,2.4vw,34px)}
+    .header-link{font-size:14px;font-weight:400;color:var(--muted);transition:color .15s ease}
+    .header-link:hover{color:var(--ink)}
+    /* .btn is align-self:flex-start by default so it never stretches in the
+       column layouts it usually sits in — but the header is a grid, where that
+       resolves to the start of the 54px row and puts the button a few pixels
+       above the brand and the links. */
+    .header .btn{justify-self:end;align-self:center;margin-top:0}
+    /* Below the demo breakpoint the centre track has nowhere to go — every
+       link is reachable from the sections themselves, so they drop. */
+    @media (max-width:900px){.header{grid-template-columns:1fr auto}.header-nav{display:none}}
 
-    /* ---- Header ---- */
-    .header {
-      display: grid; grid-template-columns: 1fr auto 1fr;
-      align-items: center; gap: 16px;
-    }
-    .brand { display: flex; align-items: center; gap: 11px; justify-self: start; }
-    .header-nav { display: flex; align-items: center; gap: clamp(18px, 2.4vw, 36px); }
-    .header .btn { justify-self: end; margin-top: 0; }
-    /* Below the demo breakpoint the centre track has nowhere to go — the links
-       are all reachable from the sections themselves, so they drop. */
-    @media (max-width: 900px) {
-      .header { grid-template-columns: 1fr auto; }
-      .header-nav { display: none; }
-    }
+    /* ---- The mark ---- */
+    .mark{flex:none;width:var(--mark-size,26px);height:var(--mark-size,26px)}
+    .mark svg{width:100%;height:100%;display:block}
 
-    /* ---- PulseMark ---- */
-    /* Static. The mark's own concentric circles are the rings — they're true
-       circles, so there are no corners to soften. The expanding square outlines
-       that used to sit on top of this were a separate CSS treatment; they read
-       as a box rather than a ring and are gone. */
-    .mark {
-      flex: none;
-      width: var(--mark-size, 36px); height: var(--mark-size, 36px);
-    }
-    .mark svg { width: 100%; height: 100%; display: block; }
+    /* ---- The page radar ----
+       What the phone's splash screen used to do, moved out to the page: rings
+       centred on where the phone stands in the fold, sweeping outward past it.
+       Hairlines on the paper, not light — nothing glows on this ground. It sits
+       behind the phone and under the copy, so the phone stands IN the radar
+       rather than on top of a decoration. */
+    /* Same origin as the phone (pin's left:50%, plus the frame's own 310px
+       half-height) and the same transform, so the rings ride the frame through
+       both the hero and the dock. First child of the pin, so it paints under
+       the phone. */
+    .radar{position:absolute;left:50%;top:310px;width:0;height:0;pointer-events:none;
+      transform:translate3d(0,var(--exit,0px),0) translate3d(calc(var(--s) * var(--dock-x)),calc((1 - var(--s)) * var(--hero-y) + var(--s) * var(--dock-y)),0)
+        scale(calc(var(--s) * var(--dock-scale) + (1 - var(--s)) * var(--hero-scale)));
+      /* The rings alone still leave early: the phone holds to the end of its
+         section, but the radar would otherwise be drawn over the next one. */
+      opacity:var(--out,1)}
+    .radar i,.radar span{position:absolute;left:50%;top:50%;width:var(--d);height:var(--d);margin:calc(var(--d) / -2) 0 0 calc(var(--d) / -2);border-radius:50%;display:block}
+    /* Standing rings, so the radar reads in a frozen frame too. */
+    .radar i{border:1px solid var(--hairline)}
+    .radar i:nth-of-type(1){--d:340px}
+    .radar i:nth-of-type(2){--d:640px}
+    .radar i:nth-of-type(3){--d:980px}
+    /* The sweep: three red rings on one long, staggered cycle. */
+    .radar span{--d:170px;border:1px solid var(--red);opacity:0;animation:radar 9s cubic-bezier(.22,.61,.36,1) infinite}
+    .radar span:nth-of-type(2){animation-delay:3s}
+    .radar span:nth-of-type(3){animation-delay:6s}
+    @keyframes radar{0%{transform:scale(1);opacity:0}12%{opacity:.32}100%{transform:scale(6.2);opacity:0}}
 
-    .brand-name {
-      font-weight: 600; font-size: 20px; letter-spacing: -.028em;
-      color: var(--text);
-    }
     /* ---- Hero ---- */
-    .hero {
-      position: relative;
-      display: flex; flex-direction: column;
-      gap: clamp(14px, 1.8vw, 22px);
-      padding-top: clamp(8px, 2vw, 24px);
-    }
+    .hero{position:relative;display:flex;flex-direction:column;gap:clamp(14px,1.8vw,22px);padding-top:clamp(8px,2vw,24px)}
     /* Centrally panned above the demo breakpoint: the copy stacks up the middle
        and the phone rises into the lower half of the viewport in front of it. */
-    @media (min-width: 901px) {
-      .hero {
-        min-height: 100vh;
-        align-items: center; text-align: center;
-        justify-content: flex-start;
-        gap: clamp(8px, 1.2vw, 14px);
-        padding-top: clamp(12px, 2.6vh, 30px);
-      }
-      .hero .eyebrow { align-self: center; }
+    @media (min-width:901px){
+      .hero{min-height:100vh;align-items:center;text-align:center;justify-content:flex-start;gap:clamp(8px,1.2vw,14px);padding-top:clamp(12px,2.6vh,30px)}
     }
-    /* The awards read as their own band now that they sit below the stage. */
-    /* The hero centres its type and the awards inherit that, which left the
-       short caption line floating indented above the long one — under a logo
-       that is hard left, because the art sets its own alignment. They set
-       theirs too; the right-hand award opts back out below. */
-    .hero .creds { text-align: left; }
-    /* ---- Awards, in the hero ----
-       The cropped phone leaves the two lower corners of the hero empty; the
-       awards take them. Quiet enough to read as provenance rather than as a
-       second headline, and the phone rises in front of them, which is what
-       gives that band its depth. */
-    @media (min-width: 1181px) {
-      .hero .creds {
-        position: absolute; left: 0; right: 0;
-        bottom: clamp(20px, 4vh, 52px);
-        gap: 0; z-index: 1; pointer-events: none;
-      }
-      .hero .creds-head { display: none; }
-      .hero .awards {
-        display: flex; justify-content: space-between; align-items: flex-end;
-        gap: 0; max-width: none;
-      }
-      .hero .award { width: clamp(150px, 15vw, 208px); gap: 12px; }
-      /* The gutter rule sat mid-hero, straight through the phone. */
-      .hero .award + .award { padding-left: 0; border-left: 0; text-align: right; align-items: flex-end; }
-      .hero .award + .award .award-art { align-items: flex-end; }
-      .hero .award-art { min-height: 0; gap: 10px; }
-      .hero .award-logo--pinch     { max-width: 104px; }
-      .hero .award-logo--startmate { max-width: 96px; }
-      .hero .award-logo--stripe    { max-width: 112px; }
-      .hero .award-meta { font-size: 11.5px; line-height: 1.45; opacity: .62; }
-      .hero .award-meta strong { font-size: 11.5px; }
-    }
-    /* Below that the phone is gone or the hero is too narrow to flank, so the
-       awards simply follow the copy in flow. */
-    @media (max-width: 1180px) {
-      .hero .creds { margin-top: clamp(28px, 5vw, 48px); }
-    }
-
-    .eyebrow {
-      align-self: flex-start;
-      display: inline-block;
-      font-size: 13px; letter-spacing: -.004em;
-      color: var(--muted);
-    }
-    /* The mark is the word, set correctly: semibold, sentence case,
-       tracked to −0.033em. No display face, no extra weight. */
-    /* The hero says one thing. The name is in the menubar, and the supporting
-       line and the call to action are on the phone's own screen — the way the
-       reference does it. */
-    /* Paper, flat. It used to be a red gradient clipped to the text, which
-       meant a background-clip dance and a @supports fallback for the browsers
-       that don't do it — none of which a solid colour needs. The red is left to
-       do its one job on the page: the mark, the buttons, the live states. */
-    .hero-display {
-      font-weight: 600;
-      font-size: clamp(38px, 6.2vw, 86px);
-      line-height: .98; letter-spacing: -0.042em;
-      margin: 0; max-width: 13ch; text-wrap: balance;
-      color: var(--text);
-    }
+    /* Ink, flat, 600. No gradient clipped to the text, no display face, no
+       extra weight — the red is left to do its one job on the page. */
+    .hero-display{position:relative;z-index:2;font-weight:600;font-size:clamp(38px,6.4vw,88px);line-height:.98;letter-spacing:-.042em;margin:0;max-width:13ch;text-wrap:balance;color:var(--ink)}
     /* Off at every width: the phone's own splash screen carries the supporting
-       line and the call to action, portrait included. They come back only when
-       the stage is dropped for reduced motion — see the .is-static block. */
-    .hero .hero-sub, .hero .hero-cta { display: none; }
-    .hero .hero-sub {
-      margin: 0; max-width: 46ch;
-      font-size: 17px; line-height: 1.45; letter-spacing: -.011em;
-      color: var(--muted);
-    }
+       line and the call to action. They come back only when the stage is
+       dropped for reduced motion — see the .is-static block. */
+    .hero .hero-sub,.hero .hero-cta{display:none}
+    .hero .hero-sub{margin:0;max-width:46ch;font-size:17px;line-height:1.45;letter-spacing:-.011em;color:var(--muted)}
 
     /* ---- The stage ----
        Hero and demo share one scroll range and one phone. --s docks the phone
        from the hero into the demo column (0 -> 1); --p then banks it through the
        four steps. Both are written by the STAGE script, one number per frame. */
-    @property --s { syntax: '<number>'; inherits: true; initial-value: 0; }
-    .stage { --s: 0; --p: 0; position: relative; }
-
-    /* The pin takes no space at all: a zero-height sticky box that rides the top
-       of the viewport for the stage's whole scroll range. It must NOT be given a
-       height plus a negative margin — margins are part of the sticky constraint
-       rectangle, so that keeps it stuck a whole viewport past the stage and the
-       phone ends up floating over the sections below. */
-    .stage-pin {
-      /* Stuck so that the phone's own top lands mid-viewport. Offsetting the pin
-         rather than the phone matters: the phone sits AT the pin, so the moment
-         the pin releases at the stage's bottom the phone leaves with the content
-         instead of trailing half a viewport behind it. */
-      position: sticky; top: calc(50vh - 310px); height: 0; z-index: 3;
-      pointer-events: none;
-      /* Where the phone sits in the hero, relative to its docked resting place.
-         Declared here so the bloom can read them too and travel with it. */
-      --hero-y: 120px;        /* all replaced by layout() on load and resize */
-      --hero-scale: .8;
-      --dock-x: 300px;
-      /* Where the phone rests once docked. Wide screens park it at full size
-         beside the copy, so these are inert there; portrait it parks small and
-         high with the copy underneath, which is what they exist for. */
-      --dock-y: 0px;
-      --dock-scale: 1;
-      /* How far the frame lies back in the hero. It stands up as the phone
-         docks, so the screens are read flat on. 1400px of perspective is the
-         reference's 700 scaled to our frame — perspective is absolute px, so
-         it has to follow the frame's height or the foreshortening changes. */
-      --tilt: 50deg;
-      --persp: 1400px;
-    }
-
-    /* The bloom: a soft ground of accent behind the phone so it reads as lit
-       rather than pasted onto a flat black page. It takes the dock's travel but
-       none of its rotation or scale, so it stays a circle, and it thins out as
-       the phone docks — loudest in the hero, almost gone by the demo. */
-    .stage-glow {
-      position: absolute; left: 50%; top: 50%;
-      width: clamp(520px, 62vw, 900px); aspect-ratio: 1;
-      transform:
-        translate(-50%, -50%)
-        translate3d(
-          calc(var(--s) * var(--dock-x)),
-          calc((1 - var(--s)) * var(--hero-y) + var(--s) * var(--dock-y)),
-          0);
-      background:
-        radial-gradient(circle closest-side,
-          color-mix(in oklab, var(--g-rose) 30%, transparent) 0%,
-          color-mix(in oklab, var(--g-rose) 9%, transparent) 40%,
-          transparent 100%) -6% -4% / 76% 76% no-repeat,
-        radial-gradient(circle closest-side,
-          color-mix(in oklab, var(--g-lilac) 26%, transparent) 0%,
-          color-mix(in oklab, var(--g-cool) 8%, transparent) 42%,
-          transparent 100%) 106% 100% / 80% 80% no-repeat;
-      opacity: calc((1 - var(--s) * .55) * var(--out, 1));
-      will-change: transform, opacity;
-    }
-
-    /* Sonar: rings leaving the phone, on the same travel as the bloom so it
-       stays concentric with it. Hero only — it fades out as the phone docks,
-       where the steps are doing the talking. */
-    .stage-sonar {
-      position: absolute; left: 50%; top: 50%;
-      width: clamp(420px, 46vw, 700px); aspect-ratio: 1;
-      transform:
-        translate(-50%, -50%)
-        translate3d(
-          calc(var(--s) * var(--dock-x)),
-          calc((1 - var(--s)) * var(--hero-y) + var(--s) * var(--dock-y)),
-          0);
-      opacity: calc((1 - var(--s)) * var(--out, 1));
-    }
-    .stage-sonar span {
-      position: absolute; inset: 0; border-radius: 50%;
-      border: 1px solid color-mix(in oklab, var(--g-rose) 45%, transparent);
-      opacity: 0;
-      animation: sonar 7s cubic-bezier(.22, .61, .36, 1) infinite;
-    }
-    .stage-sonar span:nth-child(2) { animation-delay: 2.33s; }
-    .stage-sonar span:nth-child(3) { animation-delay: 4.66s; }
-    @keyframes sonar {
-      0%   { transform: scale(.16); opacity: 0; }
-      12%  { opacity: .3; }
-      100% { transform: scale(1); opacity: 0; }
-    }
-
-    .stage-pin .phone {
-      position: absolute; left: 50%; top: 0;
-      margin-left: -150px;                       /* half the 300px frame */
-      transform:
-        translate3d(
-          calc(var(--s) * var(--dock-x)),
-          calc((1 - var(--s)) * var(--hero-y) + var(--s) * var(--dock-y)),
-          0)
+    @property --s{syntax:'<number>';inherits:true;initial-value:0}
+    .stage{--s:0;--p:0;position:relative}
+    /* A zero-height sticky box riding the top of the viewport for the stage's
+       whole range. It must NOT be given a height plus a negative margin —
+       margins are part of the sticky constraint rectangle. */
+    .stage-pin{position:sticky;top:calc(50vh - 310px);height:0;z-index:3;pointer-events:none;
+      --hero-y:120px;--hero-scale:.8;--dock-x:300px;--dock-y:0px;--dock-scale:1;
+      --tilt:50deg;--persp:1400px}
+    /* No bloom and no page-level sonar. On paper the phone is the one dark
+       object in the frame — it needs a shadow, not a light source. */
+    .stage-pin .phone{position:absolute;left:50%;top:0;margin-left:-150px;
+      transform:translate3d(0,var(--exit,0px),0)
+        translate3d(calc(var(--s) * var(--dock-x)),calc((1 - var(--s)) * var(--hero-y) + var(--s) * var(--dock-y)),0)
         scale(calc(var(--s) * var(--dock-scale) + (1 - var(--s)) * var(--hero-scale)))
-        translate3d(0, calc((1 - var(--out, 1)) * -70px), 0)
         /* Innermost, so the tilt happens in the frame's own space and every
-           transform above it stays a plain screen-space move. That keeps the
-           dock maths linear — layout() can place a projected edge by solving
-           for --hero-y once instead of iterating. */
-        perspective(var(--persp))
-        rotateX(calc((1 - var(--s)) * var(--tilt)));
-      opacity: var(--out, 1);
-      will-change: transform, opacity;
+           transform above it stays a plain screen-space move. */
+        perspective(var(--persp)) rotateX(calc((1 - var(--s)) * var(--tilt)))}
+
+    /* ---- Splash panel ----
+       The app's opening screen, drawn rather than captured so it stays crisp at
+       the hero's scale. */
+    .phone-reel .scr--splash{display:flex;flex-direction:column;padding:0;background:#000}
+    .splash-foot{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:flex-start;padding:40px 20px 30px}
+    /* The app's opening screen is the logo, the lock-up as it is drawn
+       everywhere else: mark, then wordmark, on one line. The rings that used to
+       pulse in here are out on the page behind the phone now — one radar per
+       screen, and it is the page that owns it. */
+    .splash-logo{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;gap:12px}
+    .splash-mark{flex:none;width:44px;height:44px}
+    .splash-mark svg{width:100%;height:100%;display:block}
+    .splash-word{font-size:31px;font-weight:600;letter-spacing:-.028em;color:#F5F5F7}
+    .splash-line{margin:16px 0 0;font-size:29px;font-weight:600;line-height:1.04;letter-spacing:-.032em;color:#F5F5F7}
+    .splash-sub{margin:10px 0 0;font-size:13px;line-height:1.45;letter-spacing:-.008em;color:var(--muted-dark)}
+    .splash-btn{margin-top:16px;display:flex;align-items:center;justify-content:center;height:46px;border-radius:23px;background:var(--red-raised);color:#fff;font-size:15.5px;font-weight:500;letter-spacing:-.01em}
+
+    /* ---- Buttons ---- */
+    .btn{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;font-weight:500;font-size:15px;letter-spacing:-.01em;height:40px;padding:0 20px;border-radius:999px;margin-top:6px;background:var(--red);color:#fff;transition:background .15s var(--ease)}
+    .btn:hover{background:var(--red-deep);color:#fff}
+    .btn--sm{height:31px;padding:0 15px;font-size:13.5px;font-weight:500}
+    .btn:hover .arrow{transform:translateX(3px)}
+    .arrow{transition:transform .15s var(--ease)}
+    /* Outlined, on the ink band. */
+    .btn--ghost{background:none;color:#F5F5F7;border:1px solid var(--hairline-on-dark);margin-top:clamp(20px,2.4vw,28px)}
+    .btn--ghost:hover{background:none;color:#fff;border-color:#F5F5F7}
+
+    /* ---- The tight fold ----
+       When the viewport is too short for the splash screen to be read at the
+       scale that fits, the phone stops carrying the fold's supporting line and
+       call to action — so the hero takes them back. layout() decides this and
+       sets the class; it is not a media query, because it depends on the solved
+       scale rather than on a width. */
+    @media (min-width:901px){
+      .hero.is-tight .hero-sub{display:block;margin:0 auto}
+      .hero.is-tight .hero-cta{display:inline-flex;align-self:center}
     }
 
-    /* Splash panel — the app's opening screen, drawn rather than captured so it
-       stays crisp at the hero's scale and follows the page's own tokens.
-       Three parts, like the reference: a colour-block graphic across the top
-       half, then the lockup breaking it from a single line of display type. */
-    .phone-reel .scr--splash {
-      display: flex; flex-direction: column;
-      /* True black, not Surface: an OLED screen showing an app that opens on
-         black, which also sits a shade below the page behind it so the glass
-         still reads as its own surface. */
-      padding: 0; background: #000;
-    }
-    .splash-foot {
-      flex: 1 1 auto; min-height: 0;
-      display: flex; flex-direction: column; justify-content: flex-start;
-      /* Top clears the island, which now floats over the screen rather than
-         sitting in a strip above it. */
-      padding: 40px 20px 30px;
-    }
-    /* The mark, with rings leaving it and fading out. It takes ALL the slack
-       above the copy, which pushes the lockup and its button down onto the
-       bottom of the screen — the reference's splash fills its screen top to
-       bottom, and once the frame is tilted the whole of it is in view, so a
-       screen with its content bunched in the top half reads as half empty. */
-    .splash-pulse {
-      flex: 1 1 auto; min-height: 0;
-      position: relative; display: grid; place-items: center;
-    }
-    .splash-pulse i {
-      display: block; width: 60px; height: 60px; border-radius: 50%;
-      background: var(--accent); position: relative; z-index: 1;
-    }
-    .splash-pulse span {
-      position: absolute; width: 60px; height: 60px; border-radius: 50%;
-      border: 1px solid color-mix(in oklab, var(--accent) 55%, transparent);
-      opacity: 0;
-      animation: splash-pulse 4.2s cubic-bezier(.22, .61, .36, 1) infinite;
-    }
-    .splash-pulse span:nth-child(2) { animation-delay: 1.4s; }
-    .splash-pulse span:nth-child(3) { animation-delay: 2.8s; }
-    @keyframes splash-pulse {
-      0%   { transform: scale(1); opacity: 0; }
-      14%  { opacity: .5; }
-      100% { transform: scale(4.2); opacity: 0; }
-    }
+    /* ---- Impulse Intelligence ----
+       The one section on the page that is told rather than laid out. A pinned
+       full-bleed canvas holds a field of ~1,200 particles and a wireframe, and
+       one scroll number moves them through four formations:
 
-    .splash-line {
-      margin: 16px 0 0; font-size: 29px; font-weight: 600;
-      line-height: 1.04; letter-spacing: -.032em; color: var(--text);
-    }
-    .splash-sub {
-      margin: 10px 0 0; font-size: 13px; line-height: 1.45;
-      letter-spacing: -.008em; color: var(--muted);
-    }
-    .splash-btn {
-      margin-top: 16px; display: flex; align-items: center; justify-content: center;
-      height: 46px; border-radius: 23px;
-      background: var(--accent); color: var(--accent-ink);
-      font-size: 15.5px; font-weight: 500; letter-spacing: -.01em;
-    }
+         0  a drifting cloud        nobody knows anything
+         1  a flat ordered lattice  every booking is a data point
+         2  a surface rises         discount x hour -> fill rate
+         3  the peak resolves       one number, and the card it becomes
 
+       The morph is continuous — the field is interpolated between formations,
+       never switched — so it scrubs cleanly in both directions and holds a
+       readable frame at any scroll position. Ink particles on paper, red kept
+       for the peak and the recommendation. */
+    .iq{position:relative;overflow-x:clip;border-top:1px solid var(--hairline)}
+    .iq-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
 
-    /* ---- Hero CTA ---- */
-    .btn {
-      display: inline-flex; align-items: center; gap: 10px; align-self: flex-start;
-      font-weight: 500; font-size: 16px; letter-spacing: -.01em;
-      height: 44px; padding: 0 22px; border-radius: 22px; margin-top: 6px;
-      background: var(--accent); color: var(--accent-ink);
-      transition: background .15s var(--ease);
-    }
-    .btn:hover { background: var(--accent-deep); }
-    .btn--sm { height: 38px; padding: 0 18px; border-radius: 19px; font-size: 15px; }
-    .btn:hover .arrow { transform: translateX(3px); }
-    .arrow { transition: transform .15s var(--ease); }
+    /* ---- The section names itself ----
+       Two rows of the name at display size running against each other: the page
+       already speaks marquee, so the entrance is that device at a larger scale.
+       Solid ink over outline, so two rows of heavy type do not fight. A
+       repetition of the h2 inside, so it is aria-hidden. */
+    /* Breaks the wrap's measure and runs the full width of the viewport: the
+       name is the section's entrance, and an entrance that stops at a 1180px
+       column is a heading. No edge mask — the rows are meant to run off both
+       sides, which is what says they continue. */
+    .iq-intro{width:100vw;margin-left:calc(50% - 50vw);display:flex;flex-direction:column;gap:clamp(0px,.4vw,6px);padding:clamp(34px,6vw,80px) 0 clamp(10px,2vw,26px);overflow:hidden}
+    .iq-run{display:flex;width:max-content;will-change:transform}
+    .iq-run--a{animation:iq-run-a 34s linear infinite}
+    .iq-run--b{animation:iq-run-b 34s linear infinite}
+    .iq-run span{display:block;flex:none;padding-right:clamp(20px,3vw,54px);font-weight:600;font-size:clamp(52px,11.5vw,164px);line-height:.9;letter-spacing:-.05em;color:var(--ink)}
+    /* The two brand colours, one to a row: ink states the name, red carries it
+       as an outline. Red type at this size on paper is 4.9:1 filled, so the
+       outlined row is the one that takes the accent — a solid red row this
+       large would own the page. */
+    .iq-run--b span{color:transparent;-webkit-text-stroke:1.5px var(--red)}
+    @supports not (-webkit-text-stroke:1px red){.iq-run--b span{color:var(--red)}}
+    @keyframes iq-run-a{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+    @keyframes iq-run-b{from{transform:translateX(-50%)}to{transform:translateX(0)}}
 
-    /* ---- Awards ---- */
-    /* Two accolades, shown flat: the event's own artwork over one quiet caption.
-       No panels, no pills — the marks are transparent PNGs, so they sit straight
-       on the page background and a card around them would only add chrome the
-       hero doesn't need. A single hairline does all the dividing. */
-    .creds {
-      display: flex; flex-direction: column;
-      gap: clamp(16px, 2vw, 24px);
-      margin-top: clamp(10px, 2.2vw, 22px);
-    }
-    .creds-head { display: flex; align-items: center; gap: clamp(12px, 1.6vw, 18px); }
-    .creds-label {
-      font-size: 14px; font-weight: 500; letter-spacing: -.005em;
-      color: var(--muted); white-space: nowrap;
-    }
-    /* Hairline running out from the label to the width of the awards below. */
-    .creds-rule { flex: 1 1 auto; height: 1px; min-width: 0; background: var(--hairline); }
+    /* The stage is full-bleed: the field needs the whole width to read as space
+       rather than as a chart in a box. Negative margins take it out of the
+       page's gutter, and the copy inside is re-inset to the same measure. */
+    .iq-stage{position:relative;height:440vh;margin:0 calc(var(--pad) * -1)}
+    .iq-pin{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden}
+    .iq-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 
-    .awards {
-      list-style: none; margin: 0; padding: 0;
-      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: clamp(26px, 4vw, 54px);
-    }
-    .creds-head, .awards { width: 100%; max-width: 760px; }
+    /* Copy sits on the field, in a column that never crosses the middle, so the
+       peak always has clear paper to rise into. */
+    /* A paper scrim under the copy corner. The field runs behind the text, and
+       ink particles at 40% under a 26px heading muddy it — this lifts the
+       corner back to clean paper without a panel or a box. */
+    .iq-layer::before{content:"";position:absolute;left:0;right:0;bottom:0;height:42%;background:linear-gradient(to top,var(--paper) 0%,color-mix(in srgb,var(--paper) 62%,transparent) 46%,transparent 100%);pointer-events:none}
+    .iq-layer{position:absolute;inset:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding:calc(54px + clamp(10px,2vh,26px)) var(--pad) clamp(18px,3vh,30px);pointer-events:none}
+    .iq-head,.iq-steps,.iq-rail{position:relative}
+    .iq-head{display:flex;flex-direction:column;gap:10px}
+    .iq-title{font-weight:600;font-size:clamp(24px,3vw,34px);line-height:1.12;letter-spacing:-.024em;margin:0;max-width:19ch}
 
-    .award { display: flex; flex-direction: column; gap: clamp(12px, 1.6vw, 18px); }
-    /* The only division between the two — no border box, just the rule, set far
-       enough out that it reads as a column gutter rather than an edge. */
-    .award + .award {
-      padding-left: clamp(26px, 4vw, 54px);
-      border-left: 1px solid var(--hairline);
-    }
+    /* ---- The four steps ----
+       Stacked in one cell so they cross-fade in place without moving anything
+       around them; only one is ever lit, and the rail below says where you are
+       and what is coming. */
+    .iq-steps{position:relative;align-self:end;max-width:38ch}
+    .iq-step{grid-area:1 / 1;opacity:0;transform:translate3d(0,10px,0);transition:opacity .34s var(--ease),transform .34s var(--ease)}
+    .iq-steps{display:grid}
+    .iq-step.is-on{opacity:1;transform:none}
+    .iq-step h3{font-weight:600;font-size:clamp(19px,2.2vw,26px);line-height:1.16;letter-spacing:-.022em;margin:0;color:var(--ink)}
+    .iq-step p{font-size:clamp(14px,1.4vw,16px);line-height:1.5;letter-spacing:-.011em;color:var(--muted);margin:9px 0 0;max-width:36ch}
 
-    /* A stage of fixed height, top-aligned. The three-line wordmark and the
-       stack of two single-line logos then start on the same line, and their
-       captions — pushed down by the auto margin below — end on the same one. */
-    .award-art {
-      display: flex; flex-direction: column;
-      align-items: flex-start; gap: clamp(16px, 2vw, 24px);
-      min-height: clamp(100px, 11.5vw, 126px);
-    }
-    .award-art img { display: block; width: 100%; height: auto; }
-    .award-logo--pinch     { max-width: clamp(134px, 15vw, 164px); }
-    .award-logo--startmate { max-width: clamp(134px, 15vw, 164px); }
-    .award-logo--stripe    { max-width: clamp(154px, 17vw, 186px); }
+    /* ---- The timeline ----
+       A single hairline across the foot with four marks on it, the travelled
+       part drawn in red. The whole section's progress, in one line. */
+    .iq-rail{margin-top:clamp(16px,3vh,30px);display:grid;gap:12px}
+    .iq-line{position:relative;height:1px;background:var(--hairline)}
+    .iq-line i{position:absolute;left:0;top:0;height:1px;background:var(--red);width:calc(var(--p,0) * 100%)}
+    .iq-line b{position:absolute;top:-2.5px;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:var(--paper);box-shadow:inset 0 0 0 1px var(--hairline);transition:box-shadow .25s var(--ease),background .25s var(--ease)}
+    .iq-line b.is-past{background:var(--red);box-shadow:none}
+    .iq-line b.is-at{background:var(--red);box-shadow:0 0 0 4px color-mix(in srgb,var(--red) 18%,transparent)}
+    .iq-marks{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;font-size:11.5px;letter-spacing:-.004em;color:var(--muted)}
+    .iq-marks span{transition:color .25s var(--ease)}
+    .iq-marks span+span{text-align:center}
+    .iq-marks span:last-child{text-align:right}
+    .iq-marks span.is-at{color:var(--ink);font-weight:600}
 
-    /* Placement leads in coral, the event it was won at follows in grey. */
-    .award-meta {
-      margin: auto 0 0;
-      font-size: clamp(13px, 1.3vw, 14px); letter-spacing: -.01em;
-      line-height: 1.5; color: var(--muted);
-    }
-    .award-meta strong { display: block; font-weight: 600; color: var(--text); }
-    .award-rank { color: var(--accent); }
+    /* ---- The prediction card ----
+       Two things, in the order a venue manager needs them: the prediction —
+       what this offer is expected to DO — and under it the offer itself. The
+       card is small enough to read as one object, sits in the clear paper
+       top-right, and the canvas draws a leader from the peak to its corner so
+       it is visibly the reading of that high point. The only surface here. */
+    .iq-card{position:absolute;right:var(--pad);top:calc(54px + clamp(14px,4vh,42px));width:min(212px,30vw);display:grid;gap:12px;
+      opacity:var(--card,0);transform:translate3d(0,calc((1 - var(--card,0)) * -10px),0)}
+    /* The inputs, as a label/value pair per line — nothing but type. */
+    .iq-card-rows{display:grid;gap:5px;margin:0;font-size:12.5px;line-height:1.3}
+    .iq-card-rows div{display:grid;grid-template-columns:4.4em 1fr;gap:10px}
+    .iq-card-rows dt,.iq-card-rows dd{margin:0}
+    .iq-card-rows dt{color:var(--muted)}
+    .iq-card-rows dd{color:var(--ink);font-weight:500;letter-spacing:-.008em}
+    /* The prediction: what the venue is actually buying. */
+    .iq-card-tag{display:flex;align-items:center;gap:9px;font-size:10px;font-weight:600;letter-spacing:.14em;color:var(--muted);margin:0}
+    .iq-card-tag::after{content:"";flex:1;height:1px;background:var(--hairline)}
+    .iq-card-out{display:grid;gap:3px;margin:0}
+    .iq-card-out b{font-weight:600;font-size:16px;letter-spacing:-.022em;color:var(--ink)}
+    .iq-card-out b+b{color:var(--red)}
 
-    /* Two columns of logos get too narrow to read once the hero column does —
-       stack them, and turn the gutter rule into a divider between the rows. */
-    @media (max-width: 620px) {
-      .awards { grid-template-columns: 1fr; gap: clamp(22px, 6vw, 28px); }
-      .award-art { min-height: 0; }
-      .award + .award {
-        padding-left: 0; border-left: 0;
-        padding-top: clamp(22px, 6vw, 28px);
-        border-top: 1px solid var(--hairline);
-      }
+    /* ---- Phone: the same stage, told bottom-up ----
+       The section keeps its pin and its build at phone widths — what changes is
+       the composition. The field fills the pinned box, the reading sits at the
+       foot of it, and the steps swipe sideways one at a time the way the
+       how-it-works copy does under the phone. Only reduced motion opts out. */
+    @media (max-width:900px){
+      .iq-layer{padding:calc(54px + clamp(8px,2vh,18px)) var(--pad) calc(clamp(14px,3vh,26px) + 104px)}
+      .iq-head{gap:8px}
+      .iq-steps{max-width:none;align-self:end;text-align:left}
+      /* Sideways, not up: arriving from the right, leaving to the left, so a
+         swipe is what the section looks like it wants. */
+      .iq-step{transform:translate3d(16px,0,0)}
+      .iq-step.is-past{transform:translate3d(-16px,0,0)}
+      .iq-step.is-on{transform:none}
+      .iq-step h3{font-size:clamp(21px,5.6vw,26px)}
+      .iq-step p{font-size:15px;max-width:40ch;margin-top:8px}
+      .iq-rail{display:none}
+      /* The payoff, as a strip across the foot rather than a corner card. */
+      .iq-card{left:var(--pad);right:var(--pad);top:auto;bottom:clamp(14px,3vh,26px);width:auto;gap:8px;padding-top:12px;border-top:1px solid var(--hairline)}
+      .iq-card-rows{display:flex;flex-wrap:wrap;gap:4px 18px}
+      .iq-card-rows div{display:flex;grid-template-columns:none;gap:6px}
+      .iq-card-tag{display:none}
+      .iq-card-out{display:flex;gap:14px}
+    }
+    /* ---- Reduced motion: no pin, no build ----
+       The field is drawn once at its finished state, the four steps stand open
+       beneath it, and the card is simply there. */
+    @media (prefers-reduced-motion:reduce){
+      .iq-stage{height:auto;margin:0}
+      .iq-pin{position:static;height:auto;overflow:visible;display:block}
+      .iq-canvas{position:static;height:min(48vh,360px);margin-bottom:clamp(20px,6vw,32px)}
+      .iq-layer{position:relative;display:grid;grid-template-rows:none;padding:0;gap:clamp(20px,5vw,30px);background:none}
+      .iq-layer::before{display:none}
+      .iq-steps{max-width:none;display:grid;gap:clamp(20px,5vw,28px);text-align:left}
+      .iq-step{grid-area:auto;opacity:1;transform:none;transition:none}
+      .iq-step p{max-width:52ch}
+      .iq-card{position:static;width:auto;--card:1;transform:none;left:auto;right:auto;bottom:auto;padding-top:clamp(16px,4vw,22px);border-top:1px solid var(--hairline)}
+      .iq-rail{display:none}
+    }
+    @media (max-width:560px){
+      .iq-intro{padding:clamp(26px,7vw,44px) 0 clamp(8px,2vw,16px)}
+      .iq-step p{font-size:14.5px}
+      .iq-card-out b{font-size:15px}
+    }
+    @media (prefers-reduced-motion:reduce){.iq-run--a,.iq-run--b{animation:none}}
+
+    /* ---- Recognition, as a timeline ----
+       Two dates eight days apart, so the section is built on the gap between
+       them: a hairline running down the left with a red thread drawn along it
+       as you scroll, a date and a mark on the inside, and the photograph of the
+       night on the outside. The reveal is scroll-linked rather than a
+       transition, and every entry is visible by default — a reveal gated on a
+       CSS transition is invisible in any frozen timeline. */
+    .tl{--tp:0;padding-top:clamp(40px,6vw,90px);border-top:1px solid var(--hairline)}
+    .tl-title{font-weight:600;font-size:clamp(28px,3.8vw,50px);line-height:1.06;letter-spacing:-.032em;margin:0;max-width:16ch}
+    .tl-list{list-style:none;position:relative;margin:clamp(38px,5vw,72px) 0 0;padding:0;display:grid;gap:clamp(44px,6vw,104px)}
+    /* The rule, and the thread drawn along it. Scale rather than height, so the
+       browser animates it on the compositor. */
+    .tl-rule{position:absolute;left:0;top:6px;bottom:6px;width:1px;background:var(--hairline)}
+    .tl-rule i{position:absolute;inset:0;background:var(--red);transform:scaleY(var(--tp));transform-origin:top;display:block}
+    .tl-item{position:relative;display:grid;grid-template-columns:minmax(0,270px) minmax(0,1fr);gap:clamp(24px,4vw,64px);align-items:start;padding-left:clamp(26px,3.4vw,50px)}
+    /* The node on the rule. Paper-filled so the rule stops at its edge, and it
+       takes the accent once the thread has reached it. */
+    .tl-item::before{content:'';position:absolute;left:-4px;top:2px;width:9px;height:9px;border-radius:50%;background:var(--paper);box-shadow:0 0 0 1px var(--hairline);transition:box-shadow .3s var(--ease),background .3s var(--ease)}
+    .tl-item.is-on::before{background:var(--red);box-shadow:0 0 0 1px var(--red)}
+    .tl-meta{display:flex;flex-direction:column;gap:clamp(14px,1.8vw,22px)}
+    /* The date is the headline of each entry — the day large, the month beside
+       it, both in ink. */
+    .tl-date{display:flex;align-items:baseline;gap:8px;font-weight:600;font-size:clamp(15px,1.5vw,17px);letter-spacing:-.02em;color:var(--ink)}
+    .tl-date b{font-weight:600;font-size:clamp(30px,3.4vw,42px);line-height:.9;letter-spacing:-.04em}
+    .tl-logo{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+    /* Both marks are white-on-transparent PNGs — invisible on paper. Invert
+       flips the RGB and leaves the alpha, so a white mark becomes a black one
+       and keeps its shape. The Pinch artwork is full colour and is left be. */
+    .award-logo--startmate,.award-logo--stripe{filter:invert(1)}
+    .tl-logo img{display:block;width:100%;height:auto}
+    .award-logo--pinch{max-width:104px}
+    .award-logo--startmate{max-width:96px}
+    .award-logo--stripe{max-width:108px}
+    .award-meta{margin:0;font-size:13.5px;letter-spacing:-.01em;line-height:1.5;color:var(--muted)}
+    .award-meta strong{display:block;font-weight:600;color:var(--ink)}
+    .award-rank{color:var(--red)}
+    /* The photograph. It arrives by uncovering from the top rather than fading:
+       nothing on this page fades in, and a photo that slides its own top edge
+       down reads as the entry opening. */
+    .tl-shot{margin:0;position:relative;aspect-ratio:4 / 3;border-radius:var(--r-panel);overflow:hidden;background:#DEDEDE}
+    .tl-shot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+    .tl.is-live .tl-item{opacity:calc(.3 + .7 * var(--r,1));transform:translate3d(0,calc((1 - var(--r,1)) * 22px),0);will-change:opacity,transform}
+    .tl.is-live .tl-shot{clip-path:inset(calc((1 - var(--r,1)) * 22%) 0 0 0)}
+    @media (max-width:760px){
+      .tl-item{grid-template-columns:1fr;gap:20px;padding-left:26px}
+      .tl-date b{font-size:32px}
+    }
+    @media (prefers-reduced-motion:reduce){
+      .tl.is-live .tl-item{opacity:1;transform:none}
+      .tl.is-live .tl-shot{clip-path:none}
+      .tl-rule i{transform:none}
+      .tl-item::before{transition:none}
+    }
+    /* Print gets the finished state outright — the page is paginated from a
+       single static frame, so there is no scroll for the driver to read. */
+    @media print{
+      .tl.is-live .tl-item{opacity:1;transform:none}
+      .tl.is-live .tl-shot{clip-path:none}
+      .tl-rule i{transform:none}
     }
 
     /* ---- Category marquee ---- */
-    .strip {
-      overflow: hidden;
-      border-top: 1px solid var(--hairline);
-      border-bottom: 1px solid var(--hairline);
-      padding: clamp(16px, 2vw, 22px) 0;
-      -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
-      mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+    .strip{overflow:hidden;border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline);padding:clamp(16px,2vw,22px) 0;-webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
+    .marquee{display:flex;gap:0;width:max-content;animation:marquee 32s linear infinite}
+    .marquee-group{display:flex;gap:clamp(20px,2.6vw,40px);padding-right:clamp(20px,2.6vw,40px)}
+    .chip{font-weight:500;font-size:clamp(15px,1.6vw,19px);letter-spacing:-.016em;color:var(--ink);white-space:nowrap;display:inline-flex;align-items:center;gap:clamp(20px,2.6vw,40px)}
+    .sep{color:var(--muted);opacity:.5;margin-left:clamp(20px,2.6vw,40px)}
+
+    /* ---- Full-bleed bands ----
+       Two, and they are the page's whole rhythm: paper for the product story,
+       red where it asks for something, ink where it changes audience. They sit
+       outside .wrap so nothing has to be done with viewport units. */
+    .band{padding:clamp(60px,8.5vw,124px) clamp(20px,4vw,40px)}
+    .band--red{background:var(--red);color:#fff}
+    .band--ink{background:var(--ink);color:#F5F5F7}
+
+    /* ---- Scroll demo: sticky phone, stepped copy ---- */
+    .demo-head{margin-bottom:clamp(24px,3vw,40px)}
+    .demo-title{font-weight:600;font-size:clamp(30px,4.4vw,52px);line-height:1.06;letter-spacing:-.03em;margin:0;max-width:16ch}
+    /* One column. The phone is pinned over the page, not laid out beside the
+       copy, so the steps just need to stay clear of where it flies. */
+    .demo-grid{display:block}
+    .demo-steps{padding-bottom:30vh}
+    .demo-step{max-width:46ch;min-height:82vh;display:flex;flex-direction:column;justify-content:center;opacity:0;transition:opacity .25s var(--ease)}
+    /* Phone swings left on these, so the copy takes the other side. */
+    .demo-step:nth-child(even){margin-left:auto}
+    .demo-step.is-on{opacity:1}
+    .demo-step h3{font-weight:600;font-size:clamp(24px,3vw,34px);line-height:1.12;letter-spacing:-.024em;margin:0;max-width:20ch}
+    .demo-step p{font-size:clamp(15px,1.5vw,17px);line-height:1.5;letter-spacing:-.011em;color:var(--muted);margin:14px 0 0;max-width:48ch}
+
+    /* ---- The phone ----
+       A device rather than a rounded rectangle. The rim is a conic sweep of
+       metal so it brightens and dulls around the perimeter the way a chamfer
+       does; the buttons break the edges; the whole thing sits on a shadow that
+       is doing all the lighting now the bloom is gone. Every part is a
+       percentage of the 300x620 frame, so one scale() carries the lot. */
+    .phone{position:relative;width:300px;height:620px;flex-shrink:0;border-radius:48px;padding:11px;
+      background:conic-gradient(from 216deg,#676a70 0deg,#b7bac1 30deg,#7b7e85 72deg,#3f4147 106deg,#9a9da4 148deg,#cccfd6 184deg,#72757c 218deg,#3a3c42 258deg,#a7aab1 298deg,#808389 332deg,#676a70 360deg);
+      box-shadow:0 48px 96px -28px rgba(10,10,10,.42),0 14px 34px -14px rgba(10,10,10,.3)}
+    /* The black the screen sits in: the metal is only the outer third of the
+       frame's edge, and the rest is this. Without it the silver reads as a fat
+       chrome border. */
+    .phone::before{content:'';position:absolute;inset:4px;border-radius:44px;background:#0A0A0C}
+    .phone-screen{position:relative;width:100%;height:100%;overflow:hidden;border-radius:37px;background:#101012;box-shadow:0 0 0 1px rgba(255,255,255,.07),0 0 0 2px rgba(0,0,0,.8)}
+    .phone-btn{position:absolute;width:3px;z-index:4;pointer-events:none}
+    .phone-btn--l{left:-2px;border-radius:2px 0 0 2px;background:linear-gradient(to left,#4c4e54 0%,#9a9da4 55%,#d4d7dd 100%)}
+    .phone-btn--r{right:-2px;border-radius:0 2px 2px 0;background:linear-gradient(to right,#4c4e54 0%,#9a9da4 55%,#d4d7dd 100%)}
+    .phone-btn--action{top:16.8%;height:4.8%}
+    .phone-btn--vol-up{top:24.5%;height:9%}
+    .phone-btn--vol-dn{top:35.5%;height:9%}
+    .phone-btn--power{top:28.4%;height:14.8%}
+    .phone-island{position:absolute;top:2.1%;left:50%;transform:translateX(-50%);width:29.3%;height:4.2%;border-radius:999px;background:#000;z-index:5;box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
+    .phone-island::after{content:'';position:absolute;right:8%;top:50%;height:30%;aspect-ratio:1;border-radius:50%;transform:translateY(-50%);background:radial-gradient(circle at 34% 28%,#1b2530 0%,#05070a 74%);box-shadow:inset 0 0 0 1px rgba(110,138,175,.16)}
+    /* A flex line of full-size panels. Direction is the only thing that changes
+       between breakpoints, and flex:0 0 100% resolves against whichever axis is
+       the main one — so a panel is exactly one screen either way. */
+    /* No will-change here either. It is the direct parent of the splash panel's
+       DOM text, so pinning its raster scale is what left that type a stretched
+       bitmap under the phone's 0.65 hero scale and 50° tilt. The stage writes
+       --reel every frame, which keeps it on the compositor path anyway. */
+    .phone-reel{position:absolute;inset:0;display:flex;flex-direction:column;align-items:stretch;transform:translate3d(0,calc(var(--reel,0) * -100%),0)}
+    /* The captures are drawn at the screen's own aspect (278:598 → 390x839), so
+       they fill it edge to edge with nothing cropped and no letterbox band to
+       paper over. cover rather than contain so a rounding difference shows as a
+       sub-pixel crop instead of a hairline of background. */
+    .scr{flex:0 0 100%;display:block;width:100%;height:100%;object-fit:cover;object-position:center top;background-color:#0A0A0A;pointer-events:none}
+
+    /* ---- Phones: the same stage, stood up portrait ----
+       The phone pins near the top of the viewport, the step's copy sits pinned
+       underneath and cross-fades, and the screens slide SIDEWAYS. The same two
+       numbers drive all of it — only the geometry changes. */
+    @media (max-width:900px){
+      .phone-reel{flex-direction:row;transform:translate3d(calc(var(--reel,0) * -100%),0,0)}
+      .hero{align-items:center;text-align:center}
+      /* The global clamp bottoms out at its floor down here, which left the
+         headline small under a phone that had gone large. */
+      .hero-display{font-size:clamp(40px,12vw,58px);max-width:15ch}
+      /* The section's own heading has nowhere to sit that the pinned phone does
+         not already occupy — the four step titles carry it instead. */
+      .demo-head{display:none}
+      .demo{min-height:380vh}
+      .demo-grid{position:sticky;top:0;height:100vh;height:100svh}
+      /* Anchored to the BOTTOM of the pinned box: the copy grows upward, away
+         from the phone, however many lines a step runs to. */
+      .demo-steps{position:absolute;left:0;right:0;bottom:clamp(26px,8vh,72px);padding:0;margin:0}
+      /* Opacity and the sideways drift are written by the stage script off the
+         same number as the reel, so the copy changes exactly in step with the
+         screen behind it rather than on a timer of its own. */
+      .demo-step,.demo-step:nth-child(even){position:absolute;left:0;right:0;bottom:0;min-height:0;display:block;margin:0;max-width:none;padding:0 6px;text-align:center;opacity:0;transition:none;will-change:opacity,transform}
+      .demo-step.is-on{opacity:1}
+      .demo-step h3{font-size:clamp(23px,6.4vw,30px);max-width:none;margin:0 auto}
+      .demo-step p{font-size:14.5px;max-width:34ch;margin:12px auto 0}
+      /* ---- Reduced motion: no stage at all ----
+         The pinned phone is dropped and each step carries its own screen inline
+         (cloned in JS), so the section is a plain vertical scroll — and the hero
+         needs its own words back. */
+      .stage.is-static .stage-pin{display:none}
+      .stage.is-static .hero{align-items:flex-start;text-align:left}
+      .stage.is-static .hero .hero-sub{display:block}
+      .stage.is-static .hero .hero-cta{display:inline-flex}
+      .stage.is-static .demo-head{display:block}
+      .stage.is-static .demo{min-height:0}
+      .stage.is-static .demo-grid{position:static;height:auto}
+      .stage.is-static .demo-steps{position:static;bottom:auto}
+      .stage.is-static .demo-step{position:static;text-align:left;opacity:1;transition:none;padding:0 0 clamp(44px,10vw,72px)}
+      .stage.is-static .demo-step:last-child{padding-bottom:0}
+      .stage.is-static .demo-step h3{margin:0}
+      .stage.is-static .demo-step p{margin:14px 0 0}
+      .step-phone{display:flex;justify-content:center;margin-bottom:20px}
+      /* Every part of the frame is a percentage of it, so the clones only need
+         the frame's own size — rim, buttons and island follow. */
+      .step-phone .phone{width:214px;height:440px;border-radius:36px;padding:8px}
+      .step-phone .phone::before{inset:3px;border-radius:33px}
+      .step-phone .phone-screen{border-radius:28px}
     }
-    .marquee {
-      display: flex; gap: 0; width: max-content;
-      animation: marquee 32s linear infinite;
+
+    /* ---- Waitlist: the red band ----
+       The page's one place to act, and the only thing on it that is a colour
+       rather than a surface. No card, no border, no shadow — the band IS the
+       emphasis, so the form can sit flat on it. Type is white at full strength;
+       only the field edges are alpha. */
+    .waitlist{scroll-margin-top:74px}
+    .wl-card{max-width:none;margin:0}
+    .wl-counter{display:inline-flex;align-items:center;gap:9px;font-weight:500;font-size:13px;letter-spacing:-.005em;color:#fff;border:1px solid var(--hairline-on-red);border-radius:999px;padding:7px 14px;margin:0 0 clamp(18px,2vw,26px)}
+    .wl-counter .dot{width:7px;height:7px;border-radius:50%;flex:none;background:#fff}
+    .wl-counter b{font-weight:600}
+    .wl-head{font-weight:600;font-size:clamp(30px,4.6vw,58px);line-height:1;letter-spacing:-.036em;margin:0;color:#fff;max-width:18ch;text-wrap:balance}
+    .wl-sub{font-size:clamp(15px,1.4vw,18px);line-height:1.45;letter-spacing:-.011em;color:#fff;margin:14px 0 0;max-width:52ch}
+    .wl-invite{display:flex;align-items:center;gap:10px;font-size:14px;color:#fff;border:1px solid var(--hairline-on-red);border-radius:999px;padding:9px 16px;margin:clamp(20px,2.4vw,28px) 0 0;align-self:flex-start;width:fit-content}
+    .wl-invite b{font-weight:600}
+
+    .wl-form{display:grid;grid-template-columns:1fr;gap:clamp(16px,1.8vw,20px);margin-top:clamp(26px,3.2vw,40px)}
+    .wl-field{display:flex;flex-direction:column;gap:7px;min-width:0}
+    /* Full white. 13px type at .78 composites to 3.98:1 on Impulse Red, which
+       is under the floor — and the alpha was buying nothing a weight step does
+       not buy more cheaply. */
+    .wl-label{font-weight:500;font-size:13px;letter-spacing:-.005em;color:#fff}
+    /* Outlined, transparent, white. A white fill here would put a second
+       surface on the band and undo the point of it. */
+    .wl-input,.wl-select select{width:100%;font-size:16px;font-weight:400;color:#fff;background:transparent;border:1px solid var(--hairline-on-red);border-radius:var(--r-in);padding:14px 15px;min-height:50px;transition:border-color .15s ease}
+    /* Placeholders are the one thing on the band allowed to sit back, and .78
+       still composites to 4.5:1 on the red. */
+    .wl-input::placeholder{color:#fff;opacity:.78}
+    .wl-input:hover,.wl-select select:hover{border-color:#fff}
+    .wl-input:focus-visible,.wl-select select:focus-visible,.wl-btn:focus-visible,.wl-share-btn:focus-visible,a:focus-visible,.wl-chip input:focus-visible + span{outline:2px solid #fff;outline-offset:2px}
+    .band--red a:focus-visible{outline-color:#fff}
+    .wl-input[aria-invalid="true"],.wl-select select[aria-invalid="true"]{border-color:#fff;border-width:2px}
+    /* Native select for one-thumb use; only the chevron is custom. */
+    .wl-select{position:relative;display:flex}
+    .wl-select select{appearance:none;-webkit-appearance:none;padding-right:42px;cursor:pointer}
+    .wl-select select option{color:var(--ink);background:#fff}
+    .wl-select::after{content:'';position:absolute;right:18px;top:50%;width:7px;height:7px;margin-top:-5px;border-right:1.5px solid #fff;border-bottom:1.5px solid #fff;transform:rotate(45deg);pointer-events:none}
+    /* Multi-select as toggle chips — native checkboxes underneath, so keyboard
+       and screen-reader behaviour is the browser's. A <select multiple> is close
+       to unusable one-thumbed on a phone. */
+    .wl-chips{display:flex;flex-wrap:wrap;gap:9px}
+    .wl-chip{display:inline-flex;position:relative;cursor:pointer}
+    .wl-chip input{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;cursor:pointer}
+    .wl-chip span{display:inline-flex;align-items:center;font-weight:500;font-size:14.5px;color:#fff;background:transparent;border:1px solid var(--hairline-on-red);border-radius:999px;padding:11px 16px;min-height:44px;transition:background .15s ease,color .15s ease,border-color .15s ease}
+    .wl-chip:hover span{border-color:#fff}
+    .wl-chip input:checked + span{background:#fff;color:var(--red);border-color:#fff}
+    .wl-other{margin-top:16px;display:flex;flex-direction:column;gap:7px}
+    .wl-error{font-size:13px;font-weight:500;color:#fff;margin:0}
+    .wl-error:empty{display:none}
+    /* Reversed out: white on the band, red type. The only button on the page
+       that is not red, because it is standing on red. */
+    .wl-btn{width:100%;display:inline-flex;align-items:center;justify-content:center;gap:10px;font-weight:500;font-size:16px;letter-spacing:-.011em;background:#fff;color:var(--red);border:none;border-radius:999px;padding:16px 26px;min-height:52px;cursor:pointer;transition:opacity .15s ease}
+    .wl-btn:hover:not(:disabled){opacity:.88}
+    .wl-btn:disabled{opacity:.5;cursor:not-allowed}
+
+    .wl-confirm{margin-top:clamp(26px,3.2vw,40px);animation:wl-pop .26s ease-out both}
+    .wl-position{font-weight:600;font-size:clamp(32px,4.8vw,56px);line-height:1;letter-spacing:-.036em;color:#fff;margin:0}
+    .wl-confirm-sub{font-size:clamp(15px,1.4vw,17px);line-height:1.45;color:#fff;margin:12px 0 0;max-width:46ch}
+    .wl-link-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;border:1px solid var(--hairline-on-red);border-radius:var(--r-in);padding:11px 13px;margin-top:clamp(20px,2.4vw,28px);max-width:560px}
+    .wl-link{flex:1 1 200px;min-width:0;font-size:13px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .wl-shares{display:flex;flex-wrap:wrap;gap:9px;margin-top:12px}
+    .wl-share-btn{display:inline-flex;align-items:center;gap:8px;font-weight:500;font-size:14px;color:#fff;background:transparent;border:1px solid var(--hairline-on-red);border-radius:999px;padding:10px 16px;min-height:44px;cursor:pointer;transition:border-color .15s ease,background .15s ease,color .15s ease}
+    .wl-share-btn:hover{border-color:#fff}
+    .wl-share-btn.is-primary{background:#fff;color:var(--red);border-color:#fff}
+    .wl-share-btn.is-primary:hover{opacity:.88}
+    .wl-referrals{font-size:14px;letter-spacing:-.005em;color:#fff;margin:clamp(18px,2vw,24px) 0 0}
+    .wl-referrals b{font-weight:600}
+    @media (min-width:640px){
+      .wl-form{grid-template-columns:1fr 1fr;max-width:760px}
+      .wl-form .wl-submit,.wl-form .wl-field-wide{grid-column:1 / -1}
+      /* The chip group wants the full row; a lone select doesn't. */
+      .wl-field-wide .wl-select{max-width:340px}
+      .wl-field-wide .wl-other{max-width:460px}
+      .wl-btn{width:auto;justify-self:start;padding-inline:32px}
     }
-    .marquee-group {
-      display: flex;
-      gap: clamp(20px, 2.6vw, 40px);
-      padding-right: clamp(20px, 2.6vw, 40px);
-    }
-    .chip {
-      font-weight: 600; font-size: clamp(16px, 1.8vw, 22px);
-      color: var(--text); white-space: nowrap;
-      display: inline-flex; align-items: center; gap: clamp(20px, 2.6vw, 40px);
-    }
-    .sep { color: var(--muted); margin-left: clamp(20px, 2.6vw, 40px); }
+
+    /* ---- Venues: the ink band ----
+       The page's second audience, and the change of ground is what says so.
+       Flat against the band — the red one above it is the only place with a
+       filled button, so the two audiences' CTAs never compete at equal weight. */
+    .venues{scroll-margin-top:74px}
+    .venues-grid{max-width:none;margin:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,360px);gap:clamp(28px,4vw,64px);align-items:start}
+    .venues-copy{display:flex;flex-direction:column;align-items:flex-start}
+    .venues-title{font-weight:600;font-size:clamp(28px,3.8vw,48px);line-height:1.06;letter-spacing:-.032em;margin:0;max-width:18ch;color:#F5F5F7}
+    .venues-lede{font-size:clamp(15px,1.5vw,18px);line-height:1.5;letter-spacing:-.011em;color:var(--muted-dark);margin:16px 0 0;max-width:52ch}
+    .venues-points{list-style:none;margin:0;padding:0;display:grid;gap:1px}
+    /* Hairline-separated rows rather than boxes — the same flat treatment as
+       the awards band up on the paper. */
+    .venues-points li{padding:14px 0;border-top:1px solid var(--hairline-on-dark);font-size:14px;line-height:1.5;color:var(--muted-dark)}
+    .venues-points li:first-child{border-top:0;padding-top:0}
+    .venues-points strong{display:block;font-weight:600;font-size:15px;color:#F5F5F7;letter-spacing:-.01em;margin-bottom:2px}
+    @media (max-width:720px){.venues-grid{grid-template-columns:1fr}}
+
+    /* ---- Footer ---- */
+    .footer{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;padding-top:clamp(16px,3vw,28px);border-top:1px solid var(--hairline)}
+    .footer-note{font-size:12.5px;letter-spacing:-.004em;color:var(--muted)}
 
     /* ---- Venue enquiry dialog ----
        A real <dialog>, so the top layer, the backdrop, focus trapping and
-       Escape are the browser's rather than ours. The fields reuse the
-       waitlist's .wl-* classes; only the shell is new. */
-    .vx {
-      margin: auto;                       /* centred in the top layer */
-      width: min(560px, calc(100vw - 28px));
-      max-width: none;
-      padding: 0; border: 0; background: none; color: var(--text);
-      overflow: visible;
-    }
-    .vx::backdrop { background: rgba(0, 0, 0, .74); }
-    .vx-panel {
-      position: relative;
-      background: var(--surface);
-      border: 1px solid var(--hairline);
-      border-radius: 22px;
-      padding: clamp(22px, 3vw, 34px);
-      box-shadow: 0 40px 90px -40px rgba(0, 0, 0, .9);
-      /* A five-field form on a short phone has to scroll somewhere. */
-      max-height: calc(100dvh - 32px);
-      overflow-y: auto;
-    }
+       Escape are the browser's rather than ours. One white panel on a dark
+       backdrop — the only surface on the page, and it is a modal, so it has
+       earned one. Its fields override the waitlist's red-band styling. */
+    .vx{margin:auto;width:min(560px,calc(100vw - 28px));max-width:none;padding:0;border:0;background:none;color:var(--ink);overflow:visible}
+    .vx::backdrop{background:rgba(10,10,10,.66);backdrop-filter:blur(3px)}
+    .vx-panel{position:relative;background:#fff;border-radius:var(--r-panel);padding:clamp(22px,3vw,34px);box-shadow:0 40px 90px -40px rgba(10,10,10,.5);max-height:calc(100dvh - 32px);overflow-y:auto}
     /* The form is the grid, not the panel — the panel holds the form and the
        confirmation, and only one of those is ever on screen. */
-    .vx-panel > form { display: grid; gap: clamp(14px, 1.8vw, 18px); }
-    .vx-panel textarea.wl-input {
-      /* A textarea does not inherit the page's face on its own. */
-      font-family: inherit;
-      min-height: 0; line-height: 1.45; resize: vertical;
-    }
-    /* The waitlist lets its button shrink to its label above 640px, because it
-       sits in a wide two-column form. This one is in a 490px modal, where a
-       full-width button is the only thing that reads as the end of the form. */
-    .vx-panel .wl-btn { width: 100%; justify-self: stretch; }
-    .vx-title {
-      font-weight: 900; font-size: clamp(24px, 3vw, 32px);
-      line-height: 1.04; letter-spacing: -.03em;
-      margin: 6px 44px 0 0;              /* clear of the close button */
-    }
-    .vx-sub {
-      font-size: 15px; line-height: 1.45; color: var(--muted);
-      margin: 0; max-width: 44ch;
-    }
-    .vx-close {
-      position: absolute; top: 14px; right: 14px;
-      width: 38px; height: 38px; border-radius: 50%;
-      display: inline-flex; align-items: center; justify-content: center;
-      font-size: 22px; line-height: 1;
-      color: var(--muted); background: none;
-      border: 1px solid var(--hairline); cursor: pointer;
-      transition: color .15s ease, border-color .15s ease;
-    }
-    .vx-close:hover { color: var(--text); border-color: var(--muted); }
+    .vx-panel > form{display:grid;gap:clamp(13px,1.6vw,17px)}
+    .vx-panel .wl-label{color:var(--muted);opacity:1}
+    .vx-panel .wl-input{color:var(--ink);background:#fff;border-color:var(--hairline)}
+    .vx-panel .wl-input::placeholder{color:var(--muted);opacity:.75}
+    .vx-panel .wl-input:hover{border-color:var(--ink)}
+    .vx-panel .wl-input:focus-visible{outline-color:var(--red)}
+    .vx-panel .wl-input[aria-invalid="true"]{border-color:var(--red);border-width:1px}
+    .vx-panel .wl-error{color:var(--red)}
+    .vx-panel textarea.wl-input{font-family:inherit;min-height:0;line-height:1.45;resize:vertical}
+    /* Full width: in a 560px modal that is the only thing that reads as the end
+       of the form. And red, because here it is standing on white. */
+    .vx-panel .wl-btn{width:100%;justify-self:stretch;background:var(--red);color:#fff}
+    .vx-panel .wl-btn:hover:not(:disabled){background:var(--red-deep);opacity:1}
+    .vx-title{font-weight:600;font-size:clamp(23px,3vw,30px);line-height:1.06;letter-spacing:-.032em;margin:0 44px 0 0}
+    .vx-sub{font-size:15px;line-height:1.45;color:var(--muted);margin:0;max-width:44ch}
+    .vx-close{position:absolute;top:14px;right:14px;width:34px;height:34px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:20px;line-height:1;color:var(--muted);background:none;border:1px solid var(--hairline);cursor:pointer;transition:color .15s ease,border-color .15s ease}
+    .vx-close:hover{color:var(--ink);border-color:var(--ink)}
     /* The honeypot. Off-screen rather than display:none — a bot that filters on
        computed style skips the latter, and a real user never tabs to it. */
-    .vx-trap {
-      position: absolute; left: -9999px; top: 0;
-      width: 1px; height: 1px; overflow: hidden;
-    }
-    /* A short phone cannot hold the whole form; tighten it rather than make the
-       venue scroll further than it has to. Font size stays at 16px — anything
-       smaller and iOS Safari zooms the viewport on focus. */
-    @media (max-height: 760px) {
-      .vx-panel { padding: 20px; }
-      .vx-panel > form { gap: 12px; }
-      .vx-title { font-size: 23px; margin-top: 2px; }
-      .vx-sub { font-size: 14px; }
-      .vx-panel .wl-input { min-height: 46px; padding: 12px 14px; }
-    }
-
-    .vx-done { display: grid; gap: 12px; justify-items: start; }
-    .vx-done h3 {
-      font-weight: 900; font-size: clamp(22px, 2.6vw, 28px);
-      letter-spacing: -.028em; margin: 0;
-    }
-    .vx-done p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--muted); }
-
-    /* ---- Venue pitch ---- */
-    /* The page's second audience. It sits after the waitlist because a venue
-       owner will scroll looking for it, while a punter won't — and it's flat
-       against the page rather than a panel, so the waitlist card above stays
-       the one surface competing for a click. */
-    .venues { border-top: 1px solid var(--hairline); padding-top: clamp(30px, 4vw, 52px); }
-    .venues-grid {
-      display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 360px);
-      gap: clamp(28px, 4vw, 56px); align-items: start;
-    }
-    .venues-copy { display: flex; flex-direction: column; align-items: flex-start; }
-    .venues-title {
-      font-weight: 600; font-size: clamp(28px, 3.6vw, 44px);
-      line-height: 1.08; letter-spacing: -.028em;
-      margin: 12px 0 0; max-width: 18ch;
-    }
-    .venues-lede {
-      font-size: clamp(15px, 1.5vw, 18px); line-height: 1.5;
-      color: var(--muted); margin: 16px 0 0; max-width: 52ch;
-    }
-    /* Outlined, not filled — "Join the waitlist" stays the page's one solid
-       button so the two audiences' CTAs don't compete at equal weight. */
-    .btn--ghost {
-      background: none; color: var(--accent);
-      border: 1px solid var(--hairline);
-      margin-top: clamp(20px, 2.4vw, 28px);
-    }
-    .btn--ghost:hover { background: none; border-color: var(--accent); }
-
-    .venues-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
-    /* Hairline-separated rows rather than boxes — same flat treatment as the
-       awards row up in the hero. */
-    .venues-points li {
-      padding: 14px 0; border-top: 1px solid var(--hairline);
-      font-size: 14px; line-height: 1.5; color: var(--muted);
-    }
-    .venues-points li:first-child { border-top: 0; padding-top: 0; }
-    .venues-points strong {
-      display: block; font-weight: 600; font-size: 15px;
-      color: var(--text); letter-spacing: -.01em; margin-bottom: 2px;
+    .vx-trap{position:absolute;left:-9999px;top:0;width:1px;height:1px;overflow:hidden}
+    .vx-done{display:grid;gap:12px;justify-items:start}
+    .vx-done h3{font-weight:600;font-size:clamp(21px,2.6vw,26px);letter-spacing:-.03em;margin:0}
+    .vx-done p{margin:0;font-size:15px;line-height:1.5;color:var(--muted)}
+    .vx-done .btn--ghost{color:var(--red);border-color:var(--hairline)}
+    .vx-done .btn--ghost:hover{color:var(--red-deep);border-color:var(--red)}
+    /* A short phone cannot hold the whole form. Font size stays at 16px —
+       anything smaller and iOS Safari zooms the viewport on focus. */
+    @media (max-height:760px){
+      .vx-panel{padding:20px}
+      .vx-panel > form{gap:12px}
+      .vx-title{font-size:22px;margin-top:2px}
+      .vx-sub{font-size:14px}
+      .vx-panel .wl-input{min-height:46px;padding:12px 14px}
     }
 
-    @media (max-width: 720px) {
-      .venues-grid { grid-template-columns: 1fr; }
-    }
-
-    /* ---- Header nav ---- */
-    /* One link, for the audience that has to go looking for its own section. */
-    .header-link {
-      font-size: 15px; font-weight: 500; color: var(--muted);
-      transition: color .15s ease;
-    }
-    .header-link:hover { color: var(--text); }
-
-    /* ---- Footer ---- */
-    .footer {
-      margin-top: auto;
-      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-      gap: 16px;
-      padding-top: clamp(16px, 3vw, 32px);
-      border-top: 1px solid var(--hairline);
-    }
-    .footer-note {
-      font-size: 14px; letter-spacing: -.005em; color: var(--muted);
-    }
-
-    /* ---- Scroll demo: sticky phone, stepped copy ---- */
-    .demo-head { margin-bottom: clamp(24px, 3vw, 40px); }
-    .demo-title {
-      font-weight: 600; font-size: clamp(30px, 4.4vw, 52px);
-      line-height: 1.06; letter-spacing: -.03em;
-      margin: 10px 0 0; max-width: 16ch;
-    }
-    /* One column. The phone is pinned over the page, not laid out beside the
-       copy, so the steps just need to stay clear of where it flies. */
-    .demo-grid { display: block; }
-    .demo-steps { padding-bottom: 30vh; }
-    .demo-step { max-width: 46ch; }
-    /* Phone swings left on these, so the copy takes the other side. */
-    .demo-step:nth-child(even) { margin-left: auto; }
-
-    /* Steps column */
-    .demo-step {
-      min-height: 82vh; display: flex; flex-direction: column; justify-content: center;
-      opacity: 0; transition: opacity .25s var(--ease);
-    }
-    .demo-step.is-on { opacity: 1; }
-    .demo-step h3 {
-      font-weight: 600; font-size: clamp(24px, 3vw, 34px);
-      line-height: 1.12; letter-spacing: -.024em; margin: 0; max-width: 20ch;
-    }
-    .demo-step p {
-      font-size: clamp(15px, 1.5vw, 17px); line-height: 1.5; letter-spacing: -.011em;
-      color: var(--muted); margin: 14px 0 0; max-width: 48ch;
-    }
-
-    /* ---- The phone ----
-       A device rather than a rounded rectangle. The rim is a metal gradient
-       lit from the top left and picked out again on the opposite corner —
-       two highlights are what stop a black frame reading as a black hole —
-       the buttons break the left and right edges, and the whole thing sits on
-       a drop shadow. Every part is a percentage of the 300x620 frame, so one
-       scale() carries the lot to any size without a second set of numbers. */
-    .phone {
-      position: relative;
-      width: 300px; height: 620px; flex-shrink: 0;
-      border-radius: 48px; padding: 11px;
-      /* The rim, and only the rim. A conic sweep rather than one flat ring, so
-         the metal brightens and dulls around the perimeter the way a chamfer
-         actually does — that variation is the whole difference between silver
-         and grey. The reference's own edge runs a mid grey with specular hits
-         near white; these are those, opened up a little for a darker page. */
-      background: conic-gradient(from 216deg,
-        #676a70   0deg, #b7bac1  30deg, #7b7e85  72deg, #3f4147 106deg,
-        #9a9da4 148deg, #cccfd6 184deg, #72757c 218deg, #3a3c42 258deg,
-        #a7aab1 298deg, #808389 332deg, #676a70 360deg);
-      box-shadow:
-        0 44px 90px -34px rgba(0, 0, 0, .95),
-        0 10px 26px -14px rgba(0, 0, 0, .7);
-    }
-    /* The black the screen sits in. In the reference the metal is only the
-       outer third of the frame's edge — 16px of a 44px bezel — and the rest is
-       this. Without it the silver reads as a fat chrome border. */
-    .phone::before {
-      content: ''; position: absolute; inset: 4px;
-      border-radius: 44px; background: #0A0A0C;
-    }
-    .phone-screen {
-      position: relative; width: 100%; height: 100%; overflow: hidden;
-      border-radius: 37px; background: #101012;
-      /* The step down from rim to glass: a lit hairline, then a dark one. */
-      box-shadow:
-        0 0 0 1px rgba(255, 255, 255, .07),
-        0 0 0 2px rgba(0, 0, 0, .8);
-    }
-    /* Left: action button, then the volume pair. Right: the side button.
-       Positioned in percent so the frame's own scale carries them. */
-    .phone-btn {
-      position: absolute; width: 3px; z-index: 4;
-      pointer-events: none;
-    }
-    /* Same metal as the rim, lit on the face that points away from the frame. */
-    .phone-btn--l {
-      left: -2px; border-radius: 2px 0 0 2px;
-      background: linear-gradient(to left, #4c4e54 0%, #9a9da4 55%, #d4d7dd 100%);
-    }
-    .phone-btn--r {
-      right: -2px; border-radius: 0 2px 2px 0;
-      background: linear-gradient(to right, #4c4e54 0%, #9a9da4 55%, #d4d7dd 100%);
-    }
-    .phone-btn--action { top: 16.8%; height: 4.8%; }
-    .phone-btn--vol-up { top: 24.5%; height: 9%; }
-    .phone-btn--vol-dn { top: 35.5%; height: 9%; }
-    .phone-btn--power  { top: 28.4%; height: 14.8%; }
-
-    .phone-island {
-      position: absolute; top: 2.1%; left: 50%; transform: translateX(-50%);
-      width: 29.3%; height: 4.2%; border-radius: 999px;
-      background: #000; z-index: 5;
-      /* The pill is black on a screen that is now also black, so it needs an
-         edge or it disappears in the hero. Barely there on purpose — enough to
-         keep the shape, not enough to read as a drawn-on outline. */
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
-    }
-    /* The camera, off to one side of the pill the way it actually sits. */
-    .phone-island::after {
-      content: ''; position: absolute; right: 8%; top: 50%;
-      height: 30%; aspect-ratio: 1; border-radius: 50%;
-      transform: translateY(-50%);
-      background: radial-gradient(circle at 34% 28%, #1b2530 0%, #05070a 74%);
-      box-shadow: inset 0 0 0 1px rgba(110, 138, 175, .16);
-    }
-
-    /* Edge to edge, island included — the captures run under it the way an
-       app's own content does, rather than starting below a black band that
-       cut the top off every photo. It also removes the one place a neighbouring
-       panel could show: the reel is now exactly the screen, so a panel one step
-       away sits fully outside it and the screen's own overflow clips it. */
-    /* A flex line of full-size panels. Direction is the only thing that
-       changes between breakpoints — a column on the wide stage, a row on
-       phones, where the reference slides its screens sideways. `flex: 0 0 100%`
-       resolves against whichever axis is the main one, so a panel is exactly
-       one screen either way and --reel stays a plain screen count. */
-    .phone-reel {
-      position: absolute; inset: 0;
-      display: flex; flex-direction: column; align-items: stretch;
-      transform: translate3d(0, calc(var(--reel, 0) * -100%), 0);
-      will-change: transform;
-    }
-    /* The captures are 390x746 — a shorter screen than this frame's 278x598,
-       so filling it edge to edge would crop 17px off either side and eat the
-       app's own margins. Fit the WIDTH instead and hang the capture off the
-       bottom, then fill the band that leaves at the top with the capture's own
-       first few rows, stretched: `contain` letterboxes, and an element's
-       background paints through the letterbox. On the list screens those rows
-       are flat app background; on the ones that open with a photo the photo
-       simply carries on up under the island, which is what it does on a phone. */
-    .scr {
-      flex: 0 0 100%;
-      display: block; width: 100%; height: 100%;
-      object-fit: contain; object-position: center bottom;
-      background-image: var(--shot);
-      background-repeat: no-repeat;
-      background-position: center top;
-      /* 3000% leaves only the capture's top two or three rows showing in that
-         band. Any looser and the deal screen drags the top edge of its red
-         countdown pill up the screen as a streak. */
-      background-size: 100% 3000%;
-      pointer-events: none;
-    }
-
-
-    /* ---- Phones: the same stage, stood up portrait ----
-       The reference keeps its phone on small screens rather than dropping it:
-       the phone pins near the top of the viewport, the step's copy sits pinned
-       underneath and cross-fades, and the screens slide SIDEWAYS instead of up.
-       The same two numbers drive all of it — only the geometry changes, and
-       layout() writes the portrait dock from JS. */
-    @media (max-width: 900px) {
-      /* Sideways. One --reel step is a screen WIDTH of travel here. */
-      .phone-reel {
-        flex-direction: row;
-        transform: translate3d(calc(var(--reel, 0) * -100%), 0, 0);
-      }
-
-      /* The hero is one line of type with the phone rising into frame under
-         it, centred, the way the reference sets it portrait. */
-      .hero { align-items: center; text-align: center; }
-      /* The global clamp bottoms out at its 38px floor down here, which left
-         the headline small under a phone that had gone large. The phone is the
-         one that gave ground — this takes the type back up so the hero reads
-         as a line of display with a device under it, the way the reference's
-         does, rather than as two things of roughly equal weight. */
-      .hero-display { font-size: clamp(40px, 12vw, 58px); max-width: 15ch; }
-
-      /* The section's own heading has nowhere to sit that the pinned phone
-         does not already occupy — the four step titles carry it instead. */
-      .demo-head { display: none; }
-
-      /* Scroll length for the four steps. The grid pins for all of it. */
-      .demo { min-height: 380vh; }
-      .demo-grid {
-        position: sticky; top: 0;
-        height: 100vh; height: 100svh;
-      }
-      /* Anchored to the BOTTOM of the pinned box: the copy then grows upward,
-         away from the phone, however many lines a step runs to. Its own height
-         is zero — every step inside it is absolute — so this is just a line to
-         hang them from. */
-      .demo-steps {
-        position: absolute; left: 0; right: 0; bottom: clamp(26px, 8vh, 72px);
-        padding: 0; margin: 0;
-      }
-      /* Opacity and the small sideways drift are written by the stage script
-         off the same number as the reel, so the copy changes exactly in step
-         with the screen behind it rather than on a timer of its own. */
-      .demo-step, .demo-step:nth-child(even) {
-        position: absolute; left: 0; right: 0; bottom: 0;
-        min-height: 0; display: block; margin: 0; max-width: none;
-        padding: 0 6px; text-align: center;
-        opacity: 0; transition: none;
-        will-change: opacity, transform;
-      }
-      .demo-step.is-on { opacity: 1; }
-      .demo-step h3 {
-        font-size: clamp(23px, 6.4vw, 30px); max-width: none; margin: 0 auto;
-      }
-      .demo-step p { font-size: 14.5px; max-width: 34ch; margin: 12px auto 0; }
-
-      /* Out of the hero's corners and into a band of its own: portrait there
-         are no empty corners, and the phone flies straight through where they
-         would be. Moved in the DOM by the stage script. */
-      .wrap > .creds {
-        border-top: 1px solid var(--hairline);
-        padding-top: clamp(22px, 6vw, 34px);
-      }
-
-      /* ---- Reduced motion: no stage at all ----
-         The pinned phone is dropped and each step carries its own screen inline
-         (cloned in JS), so the section is a plain vertical scroll: screen,
-         copy, screen, copy — and the hero needs its own words back. */
-      .stage.is-static .stage-pin { display: none; }
-      .stage.is-static .hero { align-items: flex-start; text-align: left; }
-      .stage.is-static .hero .hero-sub { display: block; }
-      .stage.is-static .hero .hero-cta { display: inline-flex; }
-      .stage.is-static .demo-head { display: block; }
-      .stage.is-static .demo { min-height: 0; }
-      .stage.is-static .demo-grid { position: static; height: auto; }
-      .stage.is-static .demo-steps { position: static; bottom: auto; }
-      .stage.is-static .demo-step {
-        position: static; text-align: left;
-        opacity: 1; transition: none;
-        padding: 0 0 clamp(44px, 10vw, 72px);
-      }
-      .stage.is-static .demo-step:last-child { padding-bottom: 0; }
-      .stage.is-static .demo-step h3 { margin: 0; }
-      .stage.is-static .demo-step p { margin: 14px 0 0; }
-      .step-phone { display: flex; justify-content: center; margin-bottom: 20px; }
-      /* Every part of the frame is a percentage of it, so the clones only
-         need the frame's own size — the rim, buttons and island follow. */
-      .step-phone .phone { width: 214px; height: 440px; border-radius: 36px; padding: 8px; }
-      .step-phone .phone::before { inset: 3px; border-radius: 33px; }
-      .step-phone .phone-screen { border-radius: 28px; }
-    }
-
-    /* ---- Waitlist ---- */
-    .waitlist { scroll-margin-top: clamp(20px, 4vw, 40px); }
-    .wl-card {
-      background: var(--surface);
-      border: 1px solid var(--hairline);
-      border-radius: 22px;
-      padding: clamp(24px, 3.4vw, 48px);
-      box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.6);
-      /* Entrance: fade up once, on scroll into view. */
-      opacity: 0;
-      transform: translateY(16px);
-      transition: opacity .2s ease, transform .2s ease;
-    }
-    .wl-card.is-visible { opacity: 1; transform: none; }
-
-    .wl-counter {
-      display: inline-flex; align-items: center; gap: 10px;
-      font-weight: 500; font-size: 13.5px; letter-spacing: -.005em;
-      color: var(--muted);
-      border: 1px solid var(--hairline); border-radius: 100px;
-      padding: 8px 16px; margin: 0 0 clamp(18px, 2vw, 26px);
-    }
-    .wl-counter .dot {
-      width: 8px; height: 8px; border-radius: 50%; flex: none;
-      background: var(--accent); box-shadow: 0 0 12px rgba(255, 90, 77, .7);
-    }
-    .wl-counter b { color: var(--text); font-weight: 700; }
-
-    .wl-head {
-      font-weight: 900;
-      font-size: clamp(30px, 4.4vw, 52px);
-      line-height: 0.98; letter-spacing: -0.03em;
-      margin: 10px 0 0; color: var(--text); max-width: 18ch;
-    }
-    .wl-sub {
-      font-size: clamp(15px, 1.4vw, 18px);
-      line-height: 1.45; color: var(--muted);
-      margin: 14px 0 0; max-width: 52ch;
-    }
-
-    .wl-invite {
-      display: flex; align-items: center; gap: 10px;
-      font-size: 14px; color: var(--muted);
-      background: color-mix(in oklab, var(--accent) 10%, transparent);
-      border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
-      border-radius: 100px; padding: 10px 18px;
-      margin: clamp(20px, 2.4vw, 28px) 0 0; align-self: flex-start;
-      width: fit-content;
-    }
-    .wl-invite b { color: var(--text); font-weight: 600; }
-
-    /* ---- Form ---- */
-    .wl-form {
-      display: grid; grid-template-columns: 1fr;
-      gap: clamp(16px, 1.8vw, 20px);
-      margin-top: clamp(24px, 3vw, 34px);
-    }
-    .wl-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-    .wl-label {
-      font-weight: 500; font-size: 13.5px; letter-spacing: -.005em;
-      color: var(--muted);
-    }
-    .wl-input, .wl-select select {
-      width: 100%;
-      /* 16px keeps iOS Safari from zooming the viewport on focus. */
-      font-size: 16px; font-weight: 500;
-      color: var(--text); background: var(--bg);
-      border: 1px solid var(--hairline); border-radius: 14px;
-      padding: 15px 16px; min-height: 52px;
-      transition: border-color .15s ease;
-    }
-    .wl-input::placeholder { color: var(--muted); opacity: .7; }
-    .wl-input:hover, .wl-select select:hover { border-color: var(--muted); }
-    .wl-input:focus-visible, .wl-select select:focus-visible, .wl-btn:focus-visible,
-    .wl-share-btn:focus-visible, a:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
-    }
-    .wl-input[aria-invalid="true"], .wl-select select[aria-invalid="true"] {
-      border-color: var(--accent);
-    }
-
-    /* Native select for one-thumb use; only the chevron is custom. */
-    .wl-select { position: relative; display: flex; }
-    .wl-select select { appearance: none; -webkit-appearance: none; padding-right: 42px; cursor: pointer; }
-    .wl-select::after {
-      content: '';
-      position: absolute; right: 18px; top: 50%;
-      width: 8px; height: 8px; margin-top: -6px;
-      border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
-      transform: rotate(45deg); pointer-events: none;
-    }
-
-    /* Multi-select as toggle chips — native checkboxes underneath, so keyboard
-       and screen-reader behaviour is the browser's, not ours. A <select multiple>
-       is close to unusable one-thumbed on a phone. */
-    .wl-chips { display: flex; flex-wrap: wrap; gap: 10px; }
-    .wl-chip { display: inline-flex; position: relative; cursor: pointer; }
-    .wl-chip input {
-      /* Visually hidden but still focusable and hit-testable. */
-      position: absolute; inset: 0; width: 100%; height: 100%;
-      opacity: 0; margin: 0; cursor: pointer;
-    }
-    .wl-chip span {
-      display: inline-flex; align-items: center;
-      font-weight: 600; font-size: 15px;
-      color: var(--text); background: var(--bg);
-      border: 1px solid var(--hairline); border-radius: 100px;
-      padding: 12px 18px; min-height: 46px;
-      transition: background .15s ease, color .15s ease, border-color .15s ease;
-    }
-    .wl-chip:hover span { border-color: var(--muted); }
-    .wl-chip input:checked + span {
-      background: var(--accent); color: var(--accent-ink); border-color: transparent;
-    }
-    .wl-chip input:focus-visible + span {
-      outline: 2px solid var(--accent); outline-offset: 2px;
-    }
-    .wl-other { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
-
-    .wl-error {
-      font-size: 13px; color: var(--accent); margin: 0;
-    }
-    .wl-error:empty { display: none; }
-
-    .wl-btn {
-      width: 100%;
-      display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-      font-weight: 700; font-size: 16px;
-      background: var(--accent); color: var(--accent-ink);
-      border: none; border-radius: 100px;
-      padding: 17px 26px; min-height: 56px; cursor: pointer;
-      transition: opacity .15s ease, transform .15s ease;
-    }
-    .wl-btn:hover:not(:disabled) { transform: translateY(-2px); }
-    .wl-btn:disabled { opacity: .55; cursor: not-allowed; }
-
-    /* ---- Confirmation ---- */
-    .wl-confirm { margin-top: clamp(24px, 3vw, 34px); }
-    .wl-confirm { animation: wl-pop .26s ease-out both; }
-    .wl-position {
-      font-weight: 900; font-size: clamp(34px, 5vw, 56px);
-      line-height: 1; letter-spacing: -0.03em;
-      color: var(--accent); margin: 0;
-    }
-    .wl-confirm-sub {
-      font-size: clamp(15px, 1.4vw, 17px); line-height: 1.45;
-      color: var(--muted); margin: 12px 0 0; max-width: 46ch;
-    }
-    .wl-link-row {
-      display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
-      background: var(--bg); border: 1px solid var(--hairline);
-      border-radius: 14px; padding: 12px 14px;
-      margin-top: clamp(20px, 2.4vw, 28px);
-    }
-    .wl-link {
-      flex: 1 1 200px; min-width: 0;
-      font-size: 13px; color: var(--text);
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
-    .wl-shares { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
-    .wl-share-btn {
-      display: inline-flex; align-items: center; gap: 8px;
-      font-weight: 600; font-size: 14px;
-      color: var(--text); background: transparent;
-      border: 1px solid var(--hairline); border-radius: 100px;
-      padding: 11px 18px; min-height: 44px; cursor: pointer;
-      transition: border-color .15s ease, color .15s ease;
-    }
-    .wl-share-btn:hover { border-color: var(--muted); }
-    .wl-share-btn.is-primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
-    .wl-referrals {
-      font-size: 14px; letter-spacing: -.005em;
-      color: var(--muted); margin: clamp(18px, 2vw, 24px) 0 0;
-    }
-    .wl-referrals b { color: var(--text); }
-
-    @media (min-width: 640px) {
-      .wl-form { grid-template-columns: 1fr 1fr; }
-      .wl-form .wl-submit, .wl-form .wl-field-wide { grid-column: 1 / -1; }
-      /* The chip group wants the full row; a lone select doesn't. */
-      .wl-field-wide .wl-select { max-width: 340px; }
-      .wl-field-wide .wl-other { max-width: 460px; }
-      .wl-btn { width: auto; justify-self: start; padding-inline: 34px; }
-    }
-
-    @keyframes wl-pop {
-      from { opacity: 0; transform: scale(.97); }
-      to   { opacity: 1; transform: none; }
-    }
-    @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-    @media (prefers-reduced-motion: reduce) {
-      html { scroll-behavior: auto; }
-      .marquee { animation: none; }
-      /* Radar keeps its fixed rings; only the outward pulses stop. */
-      .btn, .arrow, body { transition: none; }
-      .btn:hover { transform: none; }
-      .stage-sonar { display: none; }
-      .splash-pulse span { animation: none; opacity: .28; }
-      .splash-pulse span:nth-child(1) { transform: scale(2); }
-      .splash-pulse span:nth-child(2) { transform: scale(3.2); }
-      .splash-pulse span:nth-child(3) { transform: scale(4.4); }
+    @keyframes wl-pop{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
+    @keyframes marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+    @media (prefers-reduced-motion:reduce){
+      html{scroll-behavior:auto}
+      .marquee{animation:none}
+      .btn,.arrow,body{transition:none}
+      /* The standing rings stay; only the sweep stops. */
+      .radar span{display:none}
       /* Scroll demo: every step legible at once, no fading or sliding. The JS
-         driver never attaches, so --p and --reel keep their initial 0 — this just
-         makes sure the phone sits square rather than at the arc's starting tilt. */
-      .demo-step { opacity: 1; transition: none; }
-      .stage-pin .phone { transform: none; }
-      .scr { transition: none; }
-      /* Waitlist: no entrance or celebration motion — the card is simply there. */
-      .wl-card { opacity: 1; transform: none; transition: none; }
-      .wl-confirm { animation: none; }
-      .wl-btn, .wl-input, .wl-select select, .wl-share-btn { transition: none; }
-      .wl-btn:hover:not(:disabled) { transform: none; }
+         driver never attaches, so --p and --reel keep their initial 0 — this
+         just makes sure the phone sits square rather than mid-tilt. */
+      .demo-step{opacity:1;transition:none}
+      .stage-pin .phone{transform:none}
+      .wl-confirm{animation:none}
+      .wl-btn,.wl-input,.wl-select select,.wl-share-btn{transition:none}
     }
   </style>
 </head>
@@ -1100,22 +706,25 @@
     </defs>
   </svg>
 
+  <div class="nav">
+  <header class="header">
+    <a class="brand" href="#">
+      <span class="mark"><svg viewBox="0 0 200 200" aria-hidden="true"><use href="#pulsemark"/></svg></span>
+      <span class="brand-name">Impulse</span>
+    </a>
+
+    <nav class="header-nav" aria-label="Sections">
+      <a class="header-link" href="#how-it-works">How it works</a>
+      <a class="header-link" href="#waitlist">Early access</a>
+      <a class="header-link" href="#venues">For venues</a>
+    </nav>
+
+    <a class="btn btn--sm" href="#waitlist">Join the waitlist</a>
+  </header>
+  </div>
+
   <div class="wrap">
 
-    <header class="header">
-      <a class="brand" href="#">
-        <span class="mark"><svg viewBox="0 0 200 200" aria-hidden="true"><use href="#pulsemark"/></svg></span>
-        <span class="brand-name">Impulse</span>
-      </a>
-
-      <nav class="header-nav" aria-label="Sections">
-        <a class="header-link" href="#how-it-works">How it works</a>
-        <a class="header-link" href="#waitlist">Early access</a>
-        <a class="header-link" href="#venues">For venues</a>
-      </nav>
-
-      <a class="btn btn--sm" href="#waitlist">Join the waitlist</a>
-    </header>
 
     <div class="stage">
 
@@ -1127,8 +736,10 @@
       through the handover instead of cutting.
     -->
     <div class="stage-pin" aria-hidden="true">
-      <div class="stage-glow"></div>
-      <div class="stage-sonar"><span></span><span></span><span></span></div>
+        <!-- Decorative: the radar the phone used to carry on its own screen.
+             Inside the pin so it tracks the frame; before it so it paints
+             behind it. -->
+        <div class="radar" aria-hidden="true"><i></i><i></i><i></i><span></span><span></span><span></span></div>
       <div class="phone">
         <span class="phone-btn phone-btn--l phone-btn--action"></span>
         <span class="phone-btn phone-btn--l phone-btn--vol-up"></span>
@@ -1140,9 +751,9 @@
 
             <div class="scr scr--splash">
               <div class="splash-foot">
-                <div class="splash-pulse" aria-hidden="true">
-                  <span></span><span></span><span></span>
-                  <i></i>
+                <div class="splash-logo" aria-hidden="true">
+                  <span class="splash-mark"><svg viewBox="0 0 200 200"><use href="#pulsemark"/></svg></span>
+                  <span class="splash-word">Impulse</span>
                 </div>
                 <p class="splash-line">Last-minute<br>plans</p>
                 <p class="splash-sub">Sydney, whenever you’re free, with the price already worked out.</p>
@@ -1150,10 +761,10 @@
               </div>
             </div>
 
-            <img class="scr" src="assets/app/feed.png" style="--shot:url(assets/app/feed.png)"   width="390" height="746" alt="" decoding="async">
-            <img class="scr" src="assets/app/deal.png" style="--shot:url(assets/app/deal.png)"   width="390" height="746" alt="" decoding="async" loading="lazy">
-            <img class="scr" src="assets/app/huddle.png" style="--shot:url(assets/app/huddle.png)" width="390" height="746" alt="" decoding="async" loading="lazy">
-            <img class="scr" src="assets/app/claim.png" style="--shot:url(assets/app/claim.png)"  width="390" height="746" alt="" decoding="async" loading="lazy">
+            <img class="scr" src="assets/app/feed.png" width="390" height="839" alt="The Tonight feed: live slots near you, each with its price and closing time" decoding="async">
+            <img class="scr" src="assets/app/deal.png" width="390" height="839" alt="A slot in detail: tonight’s price against the usual one" decoding="async" loading="lazy">
+            <img class="scr" src="assets/app/huddle.png" width="390" height="839" alt="A group huddle: everyone ranks their top three" decoding="async" loading="lazy">
+            <img class="scr" src="assets/app/claim.png" width="390" height="839" alt="Claiming a slot: a deposit now, the rest at the venue" decoding="async" loading="lazy">
 
           </div>
         </div>
@@ -1169,43 +780,10 @@
       <p class="hero-sub">Whenever you’re free, Sydney venues cut the price on the hours they would rather not sit empty. You see what is on, what it costs and when it ends.</p>
       <a class="btn hero-cta" href="#waitlist">Join the waitlist</a>
 
-      <div class="creds">
-        <div class="creds-head">
-          <span class="creds-label">Recognised at</span>
-          <span class="creds-rule" aria-hidden="true"></span>
-        </div>
-
-        <ul class="awards">
-          <li class="award">
-            <div class="award-art">
-              <img class="award-logo--pinch" src="data:image/png;base64,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"
-                   width="420" height="314" alt="Pinch Me, I Want 50K!" decoding="async">
-            </div>
-            <p class="award-meta">
-              <strong><span class="award-rank">2nd place</span> &middot; National hackathon</strong>
-              Pinch Payments &amp; The Founders Union
-            </p>
-          </li>
-
-          <li class="award">
-            <div class="award-art">
-              <img class="award-logo--startmate" src="data:image/png;base64,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"
-                   width="320" height="55" alt="Startmate" decoding="async">
-              <img class="award-logo--stripe" src="data:image/png;base64,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"
-                   width="360" height="42" alt="Stripe Startups" decoding="async">
-            </div>
-            <p class="award-meta">
-              <strong><span class="award-rank">Winner</span> &middot; Wildcard Award</strong>
-              Stripe Startups Build Day
-            </p>
-          </li>
-        </ul>
-      </div>
     </section>
 
     <section class="demo" id="how-it-works" aria-labelledby="demo-title">
       <div class="demo-head">
-        <span class="eyebrow">How it works</span>
         <h2 class="demo-title" id="demo-title">Find it, claim it, show up.</h2>
       </div>
 
@@ -1240,6 +818,103 @@
 
     </div><!-- /.stage -->
 
+    <section class="iq" id="intelligence" aria-labelledby="iq-title">
+      <p class="iq-sr">An animated field of points standing for past bookings. It begins as a formless drifting cloud, settles into an ordered lattice as bookings accumulate, then lifts into a curved surface of fill rate against discount and hour of the evening. The surface has one high point: past that discount a venue gives away margin without filling any more seats. That high point is the discount Impulse recommends, shown here as a worked example — Lane &amp; Co. on a Tuesday, thirty per cent off with five lanes free between eight and ten, expected to bring in eight to twelve players and about three hundred and ten dollars more on the session.</p>
+
+      <div class="iq-intro" aria-hidden="true">
+        <div class="iq-run iq-run--a"><span>Impulse</span><span>Impulse</span><span>Impulse</span><span>Impulse</span><span>Impulse</span><span>Impulse</span><span>Impulse</span><span>Impulse</span><span>Impulse</span><span>Impulse</span><span>Impulse</span><span>Impulse</span></div>
+        <div class="iq-run iq-run--b"><span>Intelligence</span><span>Intelligence</span><span>Intelligence</span><span>Intelligence</span><span>Intelligence</span><span>Intelligence</span><span>Intelligence</span><span>Intelligence</span><span>Intelligence</span><span>Intelligence</span><span>Intelligence</span><span>Intelligence</span></div>
+      </div>
+
+      <div class="iq-stage">
+        <div class="iq-pin">
+          <canvas class="iq-canvas" id="iq-canvas" aria-hidden="true"></canvas>
+
+          <div class="iq-layer">
+            <div class="iq-head">
+              <h2 class="iq-title" id="iq-title">The discount that fills the room.</h2>
+            </div>
+
+            <div class="iq-steps">
+              <article class="iq-step is-on">
+                <h3>Right now, venues guess.</h3>
+                <p>Twenty per cent on a Tuesday, half price when it is quiet. The number is picked by feel, and nobody finds out what it should have been.</p>
+              </article>
+              <article class="iq-step">
+                <h3>Every booking is a data point.</h3>
+                <p>What the venue offered, what it filled, the night, the hour. One booking says nothing on its own.</p>
+              </article>
+              <article class="iq-step">
+                <h3>A surface comes out of it.</h3>
+                <p>Discount against hour of the evening, and how full the room got. A few hundred bookings and the shape is unmistakable.</p>
+              </article>
+              <article class="iq-step">
+                <h3>We tell them the number.</h3>
+                <p>One high point on the surface. Past it, a venue gives away margin for seats it would have filled anyway.</p>
+              </article>
+            </div>
+
+            <div class="iq-rail" aria-hidden="true">
+              <div class="iq-line" id="iq-line"><i></i><b style="left:2%"></b><b style="left:34.6%"></b><b style="left:67.3%"></b><b style="left:98%"></b></div>
+              <div class="iq-marks" id="iq-marks"><span class="is-at">Guessing</span><span>Bookings</span><span>The surface</span><span>The number</span></div>
+            </div>
+          </div>
+
+          <!-- The output. The canvas draws the leader that ties it to the peak. -->
+          <div class="iq-card" id="iq-card">
+            <dl class="iq-card-rows">
+              <div><dt>Day</dt><dd>Tuesday</dd></div>
+              <div><dt>Time</dt><dd>8–10pm</dd></div>
+              <div><dt>Offer</dt><dd>30% off</dd></div>
+              <div><dt>Supply</dt><dd>5 lanes free</dd></div>
+            </dl>
+            <p class="iq-card-tag">PREDICTION</p>
+            <p class="iq-card-out"><b>8–12 players</b><b>+$310 takings</b></p>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <section class="tl" id="awards" aria-labelledby="tl-title">
+      <h2 class="tl-title" id="tl-title">Two weeks in August.</h2>
+      <ol class="tl-list">
+        <span class="tl-rule" aria-hidden="true"><i></i></span>
+        <li class="tl-item">
+          <div class="tl-meta">
+            <span class="tl-date"><b>10</b> August</span>
+            <div class="tl-logo">
+            <img class="award-logo--pinch" src="data:image/png;base64,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" width="420" height="314" alt="Pinch Me, I Want 50K!" decoding="async">
+            </div>
+            <p class="award-meta">
+          <strong><span class="award-rank">2nd place</span> &middot; National hackathon</strong>
+          Pinch Payments &amp; The Founders Union
+          </p>
+          </div>
+          <figure class="tl-shot">
+            <img src="assets/awards/pinch-hackathon.webp" alt="The Impulse team at the Pinch Payments hackathon" loading="lazy" decoding="async">
+          </figure>
+        </li>
+        <li class="tl-item">
+          <div class="tl-meta">
+            <span class="tl-date"><b>18</b> August</span>
+            <div class="tl-logo">
+            <img class="award-logo--startmate" src="data:image/png;base64,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" width="320" height="55" alt="Startmate" decoding="async">
+            <img class="award-logo--stripe" src="data:image/png;base64,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" width="360" height="42" alt="Stripe Startups" decoding="async">
+            </div>
+            <p class="award-meta">
+          <strong><span class="award-rank">Winner</span> &middot; Wildcard Award</strong>
+          Stripe Startups Build Day
+          </p>
+          </div>
+          <figure class="tl-shot">
+            <img src="assets/awards/startmate-wildcard.webp" alt="Impulse accepting the Wildcard Award at Stripe Startups Build Day" loading="lazy" decoding="async">
+          </figure>
+        </li>
+      </ol>
+    </section>
+
+
     <section class="strip" aria-label="Categories">
       <div class="marquee">
         <div class="marquee-group">
@@ -1267,146 +942,146 @@
       </div>
     </section>
 
-    <section class="waitlist" id="waitlist" aria-labelledby="wl-head">
-      <div class="wl-card" id="wl-card">
+</div>
 
-        <span class="eyebrow">Early access</span>
+  <section class="waitlist band band--red" id="waitlist" aria-labelledby="wl-head">
+  <div class="wl-card" id="wl-card">
 
-        <!-- Counter is hidden until the count resolves, so it never flashes "0". -->
-        <p class="wl-counter" id="wl-counter" hidden>
-          <span class="dot" aria-hidden="true"></span>
-          <span id="wl-counter-text"></span>
-        </p>
 
-        <h2 class="wl-head" id="wl-head">See the prices before they go public.</h2>
-        <p class="wl-sub">
-          We open Sydney one suburb at a time. Tell us where you are and what you
-          do, and you go on the list for that area.
-        </p>
+    <!-- Counter is hidden until the count resolves, so it never flashes "0". -->
+    <p class="wl-counter" id="wl-counter" hidden>
+      <span class="dot" aria-hidden="true"></span>
+      <span id="wl-counter-text"></span>
+    </p>
 
-        <!-- Invite banner — only shown when ?ref= resolves to a real entry. -->
-        <p class="wl-invite" id="wl-invite" hidden>
-          You were invited by <b id="wl-invite-name"></b>
-        </p>
+    <h2 class="wl-head" id="wl-head">See the prices before they go public.</h2>
+    <p class="wl-sub">
+      We open Sydney one suburb at a time. Tell us where you are and what you
+      do, and you go on the list for that area.
+    </p>
 
-        <form class="wl-form" id="wl-form" novalidate>
-          <div class="wl-field">
-            <label class="wl-label" for="wl-name">Name</label>
-            <input class="wl-input" id="wl-name" name="name" type="text"
-                   autocomplete="name" required placeholder="Your name"
-                   aria-describedby="wl-name-error">
-            <p class="wl-error" id="wl-name-error" role="alert"></p>
-          </div>
+    <!-- Invite banner — only shown when ?ref= resolves to a real entry. -->
+    <p class="wl-invite" id="wl-invite" hidden>
+      You were invited by <b id="wl-invite-name"></b>
+    </p>
 
-          <div class="wl-field">
-            <label class="wl-label" for="wl-email">Email</label>
-            <input class="wl-input" id="wl-email" name="email" type="email"
-                   autocomplete="email" inputmode="email" required placeholder="you@email.com"
-                   aria-describedby="wl-email-error">
-            <p class="wl-error" id="wl-email-error" role="alert"></p>
-          </div>
-
-          <div class="wl-field wl-field-wide">
-            <span class="wl-label" id="wl-activity-label">What do you go out for?</span>
-            <div class="wl-chips" role="group" aria-labelledby="wl-activity-label"
-                 aria-describedby="wl-activity-error" id="wl-activities">
-              <label class="wl-chip"><input type="checkbox" value="Bowling"><span>Bowling</span></label>
-              <label class="wl-chip"><input type="checkbox" value="Escape Room"><span>Escape room</span></label>
-              <label class="wl-chip"><input type="checkbox" value="Karaoke"><span>Karaoke</span></label>
-              <label class="wl-chip"><input type="checkbox" value="Mini Golf"><span>Mini golf</span></label>
-              <label class="wl-chip"><input type="checkbox" value="Go-karting"><span>Go-karting</span></label>
-              <label class="wl-chip"><input type="checkbox" value="Comedy"><span>Comedy</span></label>
-              <label class="wl-chip"><input type="checkbox" value="Live Music"><span>Live music</span></label>
-              <label class="wl-chip"><input type="checkbox" value="Something else" id="wl-other-toggle"><span>Something else</span></label>
-            </div>
-            <p class="wl-error" id="wl-activity-error" role="alert"></p>
-
-            <!-- Revealed only when "Something else" is ticked. -->
-            <div class="wl-other" id="wl-other-wrap" hidden>
-              <label class="wl-label" for="wl-other">What else?</label>
-              <input class="wl-input" id="wl-other" type="text" maxlength="80"
-                     placeholder="Axe throwing, trivia, rock climbing…"
-                     aria-describedby="wl-other-error">
-              <p class="wl-error" id="wl-other-error" role="alert"></p>
-            </div>
-          </div>
-
-          <div class="wl-field wl-field-wide">
-            <label class="wl-label" for="wl-area">Where in Sydney?</label>
-            <span class="wl-select">
-              <select id="wl-area" name="area" required aria-describedby="wl-area-error">
-                <option value="CBD">CBD</option>
-                <option value="Inner West">Inner West</option>
-                <option value="Eastern Suburbs">Eastern Suburbs</option>
-                <option value="North Shore">North Shore</option>
-                <option value="South Sydney">South Sydney</option>
-                <option value="Western Sydney">Western Sydney</option>
-              </select>
-            </span>
-            <p class="wl-error" id="wl-area-error" role="alert"></p>
-          </div>
-
-          <div class="wl-submit">
-            <button class="wl-btn" id="wl-submit" type="submit">Join the waitlist</button>
-            <p class="wl-error" id="wl-form-error" role="alert" style="margin-top:12px"></p>
-          </div>
-        </form>
-
-        <!-- Post-signup. Replaces the form in place; no navigation. -->
-        <div class="wl-confirm" id="wl-confirm" hidden>
-          <p class="wl-position" id="wl-position"></p>
-          <p class="wl-confirm-sub" id="wl-confirm-sub">
-            Share your link to move up — top 50 become Founding Members
-          </p>
-
-          <div class="wl-link-row">
-            <span class="wl-link" id="wl-link"></span>
-            <button class="wl-share-btn is-primary" id="wl-copy" type="button">Copy link</button>
-          </div>
-
-          <div class="wl-shares">
-            <button class="wl-share-btn" id="wl-share" type="button" hidden>Share</button>
-            <button class="wl-share-btn" id="wl-whatsapp" type="button">WhatsApp</button>
-            <button class="wl-share-btn" id="wl-instagram" type="button">Instagram Stories</button>
-          </div>
-          <p class="wl-error" id="wl-share-status" role="status" style="margin-top:10px"></p>
-
-          <p class="wl-referrals" id="wl-referrals"></p>
-        </div>
-
+    <form class="wl-form" id="wl-form" novalidate>
+      <div class="wl-field">
+        <label class="wl-label" for="wl-name">Name</label>
+        <input class="wl-input" id="wl-name" name="name" type="text"
+               autocomplete="name" required placeholder="Your name"
+               aria-describedby="wl-name-error">
+        <p class="wl-error" id="wl-name-error" role="alert"></p>
       </div>
-    </section>
 
-    <section class="venues" id="venues" aria-labelledby="venues-title">
-      <div class="venues-grid">
-        <div class="venues-copy">
-          <span class="eyebrow">For venues</span>
-          <h2 class="venues-title" id="venues-title">Fill your quiet hours. On your terms.</h2>
-          <p class="venues-lede">
-            You choose the discount, the window and how many spots. We bring you
-            people deciding what to do with a free hour. Pilots run three months,
-            free, with no lock-in and no new hardware.
-          </p>
-          <!-- Stays a real mailto: link. The script upgrades it into the
-               dialog below; without JS, or without <dialog>, it still works. -->
-          <a class="btn btn--ghost" id="vx-open"
-             href="mailto:rahul@impulseapp.au,manoj@impulseapp.au?subject=Impulse%20pilot%20enquiry">
-            Talk to us <span class="arrow">→</span>
-          </a>
-        </div>
-
-        <ul class="venues-points">
-          <li><strong>Three months, free</strong>No cost to you for the length of the pilot.</li>
-          <li><strong>You set the price</strong>Nothing goes live that you have not set.</li>
-          <li><strong>Settled at the venue</strong>Guests pay a deposit to hold the spot. The rest is paid to you on the night.</li>
-        </ul>
+      <div class="wl-field">
+        <label class="wl-label" for="wl-email">Email</label>
+        <input class="wl-input" id="wl-email" name="email" type="email"
+               autocomplete="email" inputmode="email" required placeholder="you@email.com"
+               aria-describedby="wl-email-error">
+        <p class="wl-error" id="wl-email-error" role="alert"></p>
       </div>
-    </section>
 
+      <div class="wl-field wl-field-wide">
+        <span class="wl-label" id="wl-activity-label">What do you go out for?</span>
+        <div class="wl-chips" role="group" aria-labelledby="wl-activity-label"
+             aria-describedby="wl-activity-error" id="wl-activities">
+          <label class="wl-chip"><input type="checkbox" value="Bowling"><span>Bowling</span></label>
+          <label class="wl-chip"><input type="checkbox" value="Escape Room"><span>Escape room</span></label>
+          <label class="wl-chip"><input type="checkbox" value="Karaoke"><span>Karaoke</span></label>
+          <label class="wl-chip"><input type="checkbox" value="Mini Golf"><span>Mini golf</span></label>
+          <label class="wl-chip"><input type="checkbox" value="Go-karting"><span>Go-karting</span></label>
+          <label class="wl-chip"><input type="checkbox" value="Comedy"><span>Comedy</span></label>
+          <label class="wl-chip"><input type="checkbox" value="Live Music"><span>Live music</span></label>
+          <label class="wl-chip"><input type="checkbox" value="Something else" id="wl-other-toggle"><span>Something else</span></label>
+        </div>
+        <p class="wl-error" id="wl-activity-error" role="alert"></p>
+
+        <!-- Revealed only when "Something else" is ticked. -->
+        <div class="wl-other" id="wl-other-wrap" hidden>
+          <label class="wl-label" for="wl-other">What else?</label>
+          <input class="wl-input" id="wl-other" type="text" maxlength="80"
+                 placeholder="Axe throwing, trivia, rock climbing…"
+                 aria-describedby="wl-other-error">
+          <p class="wl-error" id="wl-other-error" role="alert"></p>
+        </div>
+      </div>
+
+      <div class="wl-field wl-field-wide">
+        <label class="wl-label" for="wl-area">Where in Sydney?</label>
+        <span class="wl-select">
+          <select id="wl-area" name="area" required aria-describedby="wl-area-error">
+            <option value="CBD">CBD</option>
+            <option value="Inner West">Inner West</option>
+            <option value="Eastern Suburbs">Eastern Suburbs</option>
+            <option value="North Shore">North Shore</option>
+            <option value="South Sydney">South Sydney</option>
+            <option value="Western Sydney">Western Sydney</option>
+          </select>
+        </span>
+        <p class="wl-error" id="wl-area-error" role="alert"></p>
+      </div>
+
+      <div class="wl-submit">
+        <button class="wl-btn" id="wl-submit" type="submit">Join the waitlist</button>
+        <p class="wl-error" id="wl-form-error" role="alert" style="margin-top:12px"></p>
+      </div>
+    </form>
+
+    <!-- Post-signup. Replaces the form in place; no navigation. -->
+    <div class="wl-confirm" id="wl-confirm" hidden>
+      <p class="wl-position" id="wl-position"></p>
+      <p class="wl-confirm-sub" id="wl-confirm-sub">
+        Share your link to move up — top 50 become Founding Members
+      </p>
+
+      <div class="wl-link-row">
+        <span class="wl-link" id="wl-link"></span>
+        <button class="wl-share-btn is-primary" id="wl-copy" type="button">Copy link</button>
+      </div>
+
+      <div class="wl-shares">
+        <button class="wl-share-btn" id="wl-share" type="button" hidden>Share</button>
+        <button class="wl-share-btn" id="wl-whatsapp" type="button">WhatsApp</button>
+        <button class="wl-share-btn" id="wl-instagram" type="button">Instagram Stories</button>
+      </div>
+      <p class="wl-error" id="wl-share-status" role="status" style="margin-top:10px"></p>
+
+      <p class="wl-referrals" id="wl-referrals"></p>
+    </div>
+
+  </div>
+</section>
+
+  <section class="venues band band--ink" id="venues" aria-labelledby="venues-title">
+  <div class="venues-grid">
+    <div class="venues-copy">
+      <h2 class="venues-title" id="venues-title">Fill your quiet hours. On your terms.</h2>
+      <p class="venues-lede">
+        You choose the discount, the window and how many spots. We bring you
+        people deciding what to do with a free hour. Pilots run three months,
+        free, with no lock-in and no new hardware.
+      </p>
+      <!-- Stays a real mailto: link. The script upgrades it into the
+           dialog below; without JS, or without <dialog>, it still works. -->
+      <a class="btn btn--ghost" id="vx-open"
+         href="mailto:rahul@impulseapp.au,manoj@impulseapp.au?subject=Impulse%20pilot%20enquiry">
+        Talk to us <span class="arrow">→</span>
+      </a>
+    </div>
+
+    <ul class="venues-points">
+      <li><strong>Three months, free</strong>No cost to you for the length of the pilot.</li>
+      <li><strong>You set the price</strong>Nothing goes live that you have not set.</li>
+      <li><strong>Settled at the venue</strong>Guests pay a deposit to hold the spot. The rest is paid to you on the night.</li>
+    </ul>
+  </div>
+</section>
+
+  <div class="wrap wrap--foot">
     <footer class="footer">
       <span class="footer-note">Impulse · Made in Sydney</span>
     </footer>
-
   </div>
 
   <script>
@@ -1445,9 +1120,9 @@
       if (!reel || !screens.length) return;
 
       var display = document.querySelector('.hero-display');
+      var nav = document.querySelector('.nav');
+      var heroCta = document.querySelector('.hero-cta');
       var heroEl = document.querySelector('.hero');
-      var creds = document.querySelector('.creds');
-      var credsHome = creds ? creds.parentNode : null;
 
       var small = window.matchMedia('(max-width: 900px)');
       var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -1485,28 +1160,15 @@
         });
       }
 
-      // The awards fill the hero's empty lower corners on a wide screen.
-      // Portrait there are no corners — the phone flies through where they
-      // would be — so they become their own band under the whole stage.
-      function placeCreds(below) {
-        if (!creds) return;
-        if (below) {
-          if (creds.parentNode !== stage.parentNode) {
-            stage.parentNode.insertBefore(creds, stage.nextSibling);
-          }
-        } else if (creds.parentNode !== credsHome) {
-          credsHome.appendChild(creds);
-        }
-      }
-
       // ---- Reduced motion: leave every step legible and nothing flying ----
       if (reduce.matches) {
         stage.classList.add('is-static');
+        var navEl = document.querySelector('.nav');
+        if (navEl) navEl.classList.add('is-solid');
         each(steps, function (st) { st.classList.add('is-on'); });
         stage.style.setProperty('--s', 1);
         reel.style.setProperty('--reel', 1);
         var staticSync = function () {
-          placeCreds(false);
           heroEl.style.removeProperty('min-height');
           if (small.matches) buildInline(); else teardownInline();
         };
@@ -1588,7 +1250,13 @@
           pin.style.setProperty('--dock-x', '0px');
         } else {
           pin.style.removeProperty('top');
-          pin.style.setProperty('--dock-scale', 1);
+          // Solve the docked scale against the viewport, the way the hero's is
+          // solved: the frame is 620 tall at scale 1, so anything shorter than
+          // about 668px was cutting the island and status row off the top and
+          // the tab bar off the bottom. scale() is about the frame's centre and
+          // the pin sits at 50vh - 310, so the centre stays on 50vh whatever
+          // the scale — no --dock-y correction is needed.
+          pin.style.setProperty('--dock-scale', Math.min(1, (vh - 48) / 620));
           pin.style.setProperty('--dock-y', '0px');
         }
 
@@ -1607,15 +1275,36 @@
         // Measured at the fold, since that is the widest part of the frame that
         // anyone actually sees — the bottom edge is wider still, but it is below
         // the fold and so it never has to fit.
-        var floor = display.getBoundingClientRect().bottom + window.scrollY
-                  + (isSmall ? 24 : gap());
-        var top = Math.max(floor, vh - BUTTON * widthScale);
-        // Solved, not clamped. Whatever room is left under the headline, this is
-        // the scale that puts the button's top edge exactly on the fold: where
-        // the frame sits at its full width this comes back as widthScale, and
-        // where the headline pushed it down it comes back smaller, so the width
-        // is never the thing that gives way.
-        var scale = Math.max(.55, (vh - top) / BUTTON);
+        // Where the fold cuts the phone: the bottom of the viewport.
+        var foldY = vh;
+        var gapPx = isSmall ? 24 : Math.min(gap(), 40);
+        // Solved, not clamped. Whatever room is left under the copy, this is the
+        // scale that puts the button's top edge exactly on the crop line: where
+        // the frame sits at its full width it comes back as widthScale, and
+        // where the copy pushed it down it comes back smaller, so the width is
+        // never the thing that gives way.
+        function solve(fl) {
+          var tp = Math.max(fl, foldY - BUTTON * widthScale);
+          return { top: tp, k: (foldY - tp) / BUTTON };
+        }
+        var r = solve(display.getBoundingClientRect().bottom + window.scrollY + gapPx);
+
+        // Below about .62 the splash screen's own type is too small to read and
+        // its button is under the crop line — so the phone is no longer carrying
+        // the fold's sentence or its call to action, and the hero has to. The
+        // class brings both back (they are in the markup, only display:none),
+        // and the frame is then solved again under the taller copy.
+        if (!isSmall) {
+          var tight = r.k < .62;
+          heroEl.classList.toggle('is-tight', tight);
+          if (tight && heroCta) {
+            r = solve(heroCta.getBoundingClientRect().bottom + window.scrollY + gapPx);
+          }
+        } else {
+          heroEl.classList.remove('is-tight');
+        }
+        var top = r.top;
+        var scale = Math.max(.55, r.k);
         place(scale, top);
 
         // Kept as a guard. Nothing rotates now, so the measured top should match
@@ -1674,8 +1363,21 @@
         // Exit: 1 while the stage still has half a viewport to run, easing to 0
         // as it ends. Without this the phone simply unpins and hangs over the
         // next section for its own height in scroll.
-        var out = clamp01((stage.getBoundingClientRect().bottom - mid) / (vh * .55));
+        var stageBottom = stage.getBoundingClientRect().bottom;
+        // The exit: zero while the section still fills the viewport, then the
+        // exact distance its bottom edge has travelled past the foot of it, so
+        // the frame leaves at the same speed as the page.
+        stage.style.setProperty('--exit', Math.min(0, stageBottom - vh).toFixed(1) + 'px');
+        var out = clamp01((stageBottom - vh * .8) / (vh * .55));
         stage.style.setProperty('--out', ease(out));
+
+        // The bar goes surface-less only while the radar is in the FOLD. The
+        // stage runs on past that into the docked demo, where the frame's top
+        // edge rides inside the 54px bar — and ink links on a near-black phone
+        // is worse than the cut line the transparency was there to avoid. So
+        // the condition is the dock, not the end of the stage: solid from the
+        // moment the frame starts moving up into the bar.
+        if (nav) nav.classList.toggle('is-solid', sEased > .5 || stageBottom < 54);
 
         // Reel: the splash slides away as the phone docks, then each screen
         // holds while its copy is read before sliding to the next. Which way it
@@ -1729,7 +1431,6 @@
       function sync() {
         isSmall = small.matches;
         teardownInline();
-        placeCreds(isSmall);
         // frame() writes these portrait; landscape the class does the work and
         // a leftover inline opacity would pin a step on or off for good.
         each(steps, function (st) {
@@ -1759,6 +1460,498 @@
 
   <script>
     /*
+      IMPULSE INTELLIGENCE — a field of points, told through four formations.
+
+      One number drives everything:
+
+        p  0 -> 1   how far the section's pinned range has been travelled
+
+      From p comes a continuous position in formation space (0..3), and from
+      that every particle's target. The field is INTERPOLATED between
+      formations, never switched, so the story scrubs both ways and any frozen
+      frame — a capture, a print, a paused scroll — is a composed picture.
+
+      The 3D is hand-rolled: yaw, pitch, a perspective divide, and a painter's
+      pass ordered back to front. No library, and nothing on the page to load.
+    */
+    (function () {
+      var section = document.querySelector('.iq');
+      if (!section) return;
+      var stage = section.querySelector('.iq-stage');
+      var cv = document.getElementById('iq-canvas');
+      var steps = section.querySelectorAll('.iq-step');
+      var marks = document.querySelectorAll('#iq-marks span');
+      var dots = document.querySelectorAll('#iq-line b');
+      var lineEl = document.getElementById('iq-line');
+      var card = document.getElementById('iq-card');
+      var cardEl = card, stepsEl = section.querySelector('.iq-steps');
+      if (!stage || !cv) return;
+      var ctx = cv.getContext('2d');
+
+      /* ---- the field ---------------------------------------------------- */
+      // A 44 x 30 lattice: the surface needs enough rows to read as a surface,
+      // and enough columns for the wireframe to describe it.
+      var CU = 44, CV = 30, N = CU * CV;
+
+      function mulberry32(a) {
+        return function () {
+          a |= 0; a = a + 0x6D2B79F5 | 0;
+          var x = Math.imul(a ^ a >>> 15, 1 | a);
+          x = x + Math.imul(x ^ x >>> 7, 61 | x) ^ x;
+          return ((x ^ x >>> 14) >>> 0) / 4294967296;
+        };
+      }
+      // Seeded, so the cloud is identical on every load and between captures.
+      var rand = mulberry32(20260907);
+
+      // Fill rate as a function of discount (u) and hour of the evening (v).
+      // One clear maximum, falling away on both sides: past the peak discount
+      // the room is no fuller, and the late slots never fill like the early
+      // ones. PEAK is the recommendation the card is built on.
+      var PU = .5, PV = .54;
+      function surf(u, v) {
+        var a = Math.exp(-Math.pow((u - PU) / .30, 2));
+        var b = .58 + .42 * Math.exp(-Math.pow((v - PV) / .34, 2));
+        return a * b;
+      }
+      // World Y is negative-up, so a full room rises out of the plane.
+      var FLOOR = .34;
+      function surfY(u, v) { return FLOOR - surf(u, v) * .82; }
+
+      var P = [];
+      for (var iv = 0; iv < CV; iv++) {
+        for (var iu = 0; iu < CU; iu++) {
+          var u = iu / (CU - 1), v = iv / (CV - 1);
+          // A little jitter on the lattice, so it reads as bookings that landed
+          // on a grid rather than as a manufactured mesh.
+          var ju = u + (rand() - .5) * .012, jv = v + (rand() - .5) * .012;
+          P.push({
+            iu: iu, iv: iv, u: u, v: v,
+            // 0 — the cloud: no order at all, and its own drift.
+            cx: (rand() - .5) * 2.5, cy: (rand() - .5) * 1.5, cz: (rand() - .5) * 2.5,
+            ph: rand() * 6.283, sp: .5 + rand() * .9,
+            // 1 — the lattice: flat, ordered, on the floor plane.
+            lx: (ju - .5) * 1.98, ly: FLOOR, lz: (jv - .5) * 1.98,
+            // 2/3 — the surface.
+            sx: (ju - .5) * 1.98, sy: surfY(ju, jv), sz: (jv - .5) * 1.98,
+            h: surf(ju, jv),
+            // Arrival order, so formations resolve as a sweep rather than all
+            // at once. Diagonal, front-left first.
+            ord: (u * .6 + v * .4) + (rand() - .5) * .1
+          });
+        }
+      }
+
+      function clamp01(t) { return t < 0 ? 0 : t > 1 ? 1 : t; }
+      function ease(t) { return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+      function ramp(p, a, b) { return ease(clamp01((p - a) / (b - a))); }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+
+      /* ---- projection --------------------------------------------------- */
+      var W = 0, H = 0, cx0 = 0, cy0 = 0, sc = 1, dpr = 1;
+      // The band the copy owns, and the corner the card owns — both measured
+      // from the elements themselves rather than guessed at as percentages,
+      // since the copy's height depends on which step is lit and on how the
+      // headings wrap. FLOOR_Y is where the field has to stop.
+      var floorY = 0, cardAnchor = null;
+      function size() {
+        var box = cv.getBoundingClientRect();
+        if (!box.width || !box.height) return false;
+        dpr = Math.min(2, window.devicePixelRatio || 1);
+        var w = Math.round(box.width), hh = Math.round(box.height);
+        if (w !== W || hh !== H) {
+          W = w; H = hh;
+          cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+        }
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        // Everything the field may use: under the nav, above the copy.
+        var stepsBox = stepsEl ? stepsEl.getBoundingClientRect() : null;
+        floorY = stepsBox ? Math.max(H * .5, stepsBox.top - box.top - 16) : H * .78;
+        var top = 46;
+        cx0 = W / 2;
+        cy0 = top + (floorY - top) * .54;
+        sc = Math.min(W * .40, (floorY - top) * .82);
+
+        // Where the leader has to land: the card's lower-left corner.
+        // In the stacked layout the card sits below the canvas, not over it —
+        // there is no corner to point at, so there is no leader.
+        cardAnchor = null;
+        if (cardEl) {
+          var cb = cardEl.getBoundingClientRect();
+          if (cb.top < box.bottom) cardAnchor = { x: cb.left - box.left - 14, y: cb.bottom - box.top };
+        }
+        return true;
+      }
+
+      var FOV = 3.2;
+      // Nine opacity buckets a colour, each with room for the whole field.
+      // Allocated once: nothing in the draw loop allocates.
+      var buckets = (function () {
+        function bank() {
+          var out = [];
+          for (var i = 0; i < 9; i++) out.push({ n: 0, x: new Float32Array(N), y: new Float32Array(N), r: new Float32Array(N) });
+          return out;
+        }
+        return { ink: bank(), red: bank() };
+      })();
+      var pxx = new Float32Array(N), pyy = new Float32Array(N), pzz = new Float32Array(N), pss = new Float32Array(N);
+
+      function project(p, yaw, pitch) {
+        var sy = Math.sin(yaw), cyw = Math.cos(yaw), sp = Math.sin(pitch), cp = Math.cos(pitch);
+        for (var i = 0; i < N; i++) {
+          var o = P[i], x = o.x, y = o.y, z = o.z;
+          var x1 = x * cyw - z * sy, z1 = x * sy + z * cyw;
+          var y1 = y * cp - z1 * sp, z2 = y * sp + z1 * cp;
+          var s = FOV / (FOV + z2);
+          pxx[i] = cx0 + x1 * s * sc;
+          pyy[i] = cy0 + y1 * s * sc;
+          pzz[i] = z2; pss[i] = s;
+        }
+      }
+
+      /* ---- the frame ---------------------------------------------------- */
+      var t0 = performance.now();
+      function draw(p, now) {
+        if (!size()) return;
+        lastDraw = now;
+        ctx.clearRect(0, 0, W, H);
+        var tt = (now - t0) / 1000;
+
+        // Where we are in formation space, and the eased blend between the two
+        // formations either side of it.
+        var toLattice = ramp(p, .10, .34);   // cloud    -> lattice
+        var toSurface = ramp(p, .38, .70);   // lattice  -> surface
+        var resolve = ramp(p, .72, .93);     // the peak resolves
+        var settle = 1 - toLattice;          // how much drift is left
+
+        // The camera turns a little across the section — enough to feel
+        // dimensional, not enough to disorient.
+        var yaw = lerp(-.62, .30, ease(clamp01(p))) + Math.sin(tt * .12) * .03;
+        var pitch = lerp(.20, .46, ease(clamp01(p * 1.1)));
+
+        for (var i = 0; i < N; i++) {
+          var o = P[i];
+          // Per-particle stagger: each one is a little ahead or behind the
+          // formation as a whole, so a change sweeps across the field.
+          var la = clamp01((toLattice - o.ord * .34) / .66);
+          var sa = clamp01((toSurface - o.ord * .40) / .60);
+          la = ease(la); sa = ease(sa);
+
+          var dr = settle * .16;
+          var cxp = o.cx + Math.sin(tt * .45 * o.sp + o.ph) * dr;
+          var cyp = o.cy + Math.cos(tt * .38 * o.sp + o.ph) * dr * .7;
+          var czp = o.cz + Math.sin(tt * .40 * o.sp + o.ph * 1.7) * dr;
+
+          var ax = lerp(cxp, o.lx, la), ay = lerp(cyp, o.ly, la), az = lerp(czp, o.lz, la);
+          o.x = lerp(ax, o.sx, sa); o.y = lerp(ay, o.sy, sa); o.z = lerp(az, o.sz, sa);
+          o.la = la; o.sa = sa;
+        }
+        project(P, yaw, pitch);
+
+        /* the wireframe — the surface's own description, drawn only once the
+           field has arrived on it, and only along every third line so it reads
+           as structure rather than as graph paper. */
+        var wire = ramp(p, .50, .74) * (.55 + .45 * resolve);
+        if (wire > .01) {
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = 'rgba(10,10,10,' + (.16 * wire).toFixed(3) + ')';
+          ctx.beginPath();
+          for (var r = 0; r < CV; r += 3) {
+            for (var c2 = 0; c2 < CU; c2++) {
+              var idx = r * CU + c2;
+              if (c2 === 0) ctx.moveTo(pxx[idx], pyy[idx]); else ctx.lineTo(pxx[idx], pyy[idx]);
+            }
+          }
+          for (var c3 = 0; c3 < CU; c3 += 3) {
+            for (var r2 = 0; r2 < CV; r2++) {
+              var idx2 = r2 * CU + c3;
+              if (r2 === 0) ctx.moveTo(pxx[idx2], pyy[idx2]); else ctx.lineTo(pxx[idx2], pyy[idx2]);
+            }
+          }
+          ctx.stroke();
+        }
+
+        /* the particles. Batched by quantised opacity — one fillStyle and one
+           fill per bucket instead of per particle, which is the difference
+           between a frame that costs 1,300 state changes and one that costs
+           about twenty. Depth is carried in the alpha and the radius, so
+           dropping the back-to-front sort costs nothing visible and saves
+           allocating and sorting an index array every frame. */
+        var B = 9, inkB = buckets.ink, redB = buckets.red;
+        for (var b = 0; b < B; b++) { inkB[b].n = 0; redB[b].n = 0; }
+
+        for (var k = 0; k < N; k++) {
+          var o3 = P[k];
+          var depth = clamp01((pss[k] - .72) / .5);
+          var rr2 = 1.05 + 1.5 * pss[k] * (.72 + .28 * o3.la);
+          // Red is earned: only near the top of the surface, and only once the
+          // section has got there.
+          var hot = clamp01((o3.h - .62) / .34) * resolve * o3.sa;
+          var a = (.20 + .34 * depth) * (.55 + .45 * o3.la);
+          var bank, alpha;
+          if (hot > .04) { bank = redB; alpha = a * (.5 + .5 * hot) + .18 * hot; }
+          else { bank = inkB; alpha = a; }
+          var bi = alpha <= 0 ? 0 : Math.min(B - 1, (alpha * B) | 0);
+          var slot = bank[bi], nn = slot.n;
+          slot.x[nn] = pxx[k]; slot.y[nn] = pyy[k]; slot.r[nn] = rr2; slot.n = nn + 1;
+        }
+
+        for (var bk = 0; bk < B; bk++) {
+          var alphaOf = ((bk + .5) / B).toFixed(3);
+          var si = inkB[bk];
+          if (si.n) {
+            ctx.fillStyle = 'rgba(10,10,10,' + alphaOf + ')';
+            ctx.beginPath();
+            for (var q = 0; q < si.n; q++) {
+              ctx.moveTo(si.x[q] + si.r[q], si.y[q]);
+              ctx.arc(si.x[q], si.y[q], si.r[q], 0, 6.2832);
+            }
+            ctx.fill();
+          }
+          var sr = redB[bk];
+          if (sr.n) {
+            ctx.fillStyle = 'rgba(200,8,21,' + alphaOf + ')';
+            ctx.beginPath();
+            for (var q2 = 0; q2 < sr.n; q2++) {
+              ctx.moveTo(sr.x[q2] + sr.r[q2], sr.y[q2]);
+              ctx.arc(sr.x[q2], sr.y[q2], sr.r[q2], 0, 6.2832);
+            }
+            ctx.fill();
+          }
+        }
+
+        /* the peak: a ring on the high point, and a leader up to its label. */
+        if (resolve > .01) {
+          var pk = { x: (PU - .5) * 1.98, y: surfY(PU, PV), z: (PV - .5) * 1.98 };
+          var syw = Math.sin(yaw), cyw2 = Math.cos(yaw), spw = Math.sin(pitch), cpw = Math.cos(pitch);
+          var x1p = pk.x * cyw2 - pk.z * syw, z1p = pk.x * syw + pk.z * cyw2;
+          var y1p = pk.y * cpw - z1p * spw, z2p = pk.y * spw + z1p * cpw;
+          var sp2 = FOV / (FOV + z2p);
+          var mx = cx0 + x1p * sp2 * sc, my = cy0 + y1p * sp2 * sc;
+          var rise = (1 - resolve) * 20;
+
+          ctx.strokeStyle = 'rgba(200,8,21,' + (.55 * resolve).toFixed(3) + ')';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(mx, my - rise, 13 + 5 * (1 - resolve), 0, 6.2832);
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(200,8,21,' + resolve.toFixed(3) + ')';
+          ctx.beginPath(); ctx.arc(mx, my - rise, 4.2, 0, 6.2832); ctx.fill();
+
+          // The leader: out of the peak, up to the card's lower-left corner, so
+          // the card is visibly the reading of THIS point. An elbow rather than
+          // a diagonal — it crosses the field once, at a right angle, and reads
+          // as a callout instead of a stray line.
+          var lab = ramp(p, .78, .94);
+          if (lab > .01 && cardAnchor && cardAnchor.y < H && !mqSmall.matches) {
+            var ry = my - rise - 14;
+            var ex = cardAnchor.x, ey = cardAnchor.y;
+            var kneeY = ey;
+            ctx.strokeStyle = 'rgba(200,8,21,' + (.5 * lab).toFixed(3) + ')';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(mx, ry);
+            // Drawn as one path, revealed by shortening it: the vertical leg
+            // first, then the run across to the card.
+            var upTo = ry + (kneeY - ry) * Math.min(1, lab * 1.8);
+            ctx.lineTo(mx, upTo);
+            if (lab > .55) {
+              var t2 = clamp01((lab - .55) / .45);
+              ctx.lineTo(mx + (ex - mx) * t2, kneeY);
+              if (t2 > .92) ctx.lineTo(ex, ey);
+            }
+            ctx.stroke();
+            if (lab > .96) {
+              ctx.fillStyle = 'rgba(200,8,21,' + lab.toFixed(3) + ')';
+              ctx.beginPath(); ctx.arc(ex, ey, 2.6, 0, 6.2832); ctx.fill();
+            }
+          }
+        }
+
+        /* the axes, named rather than measured: the field is a picture of a
+           relationship, and numbers on it would promise a precision the demo
+           does not have. */
+        var axf = ramp(p, .44, .66);
+        if (axf > .01) {
+          ctx.font = '400 12.5px -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif';
+          ctx.fillStyle = 'rgba(95,95,99,' + (.9 * axf).toFixed(3) + ')';
+          ctx.textAlign = 'center';
+          var e0 = (CV - 1) * CU, e1 = (CV - 1) * CU + CU - 1, e2 = CU - 1;
+          ctx.fillText('Discount', (pxx[e0] + pxx[e1]) / 2, Math.max(pyy[e0], pyy[e1]) + 26);
+          ctx.textAlign = 'left';
+          ctx.fillText('Hour of the evening', (pxx[e1] + pxx[e2]) / 2 + 14, (pyy[e1] + pyy[e2]) / 2 + 4);
+        }
+
+        /* Whatever the field did, the copy's band is cleared: a soft
+           destination-out gradient over the bottom, so the type always stands
+           on clean paper and the field fades into it rather than being cut.
+           The CSS scrim underneath softens the same edge from the other side. */
+        // Fully opaque BY the floor, not past it: the erase has to be complete
+        // where the copy starts, or a few surviving particles sit on the type.
+        var fadeTop = Math.max(0, floorY - 74);
+        var er = ctx.createLinearGradient(0, fadeTop, 0, floorY);
+        er.addColorStop(0, 'rgba(0,0,0,0)');
+        er.addColorStop(.5, 'rgba(0,0,0,.55)');
+        er.addColorStop(1, 'rgba(0,0,0,1)');
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.fillStyle = er;
+        ctx.fillRect(0, fadeTop, W, H - fadeTop);
+        ctx.globalCompositeOperation = 'source-over';
+
+        /* ---- the copy and the rail ---- */
+        var at = p < .17 ? 0 : p < .42 ? 1 : p < .74 ? 2 : 3;
+        for (var s2 = 0; s2 < steps.length; s2++) {
+          steps[s2].classList.toggle('is-on', s2 === at);
+          // A step that has been passed leaves to the left, so the phone's
+          // sideways swap has a direction rather than a flicker.
+          steps[s2].classList.toggle('is-past', s2 < at);
+        }
+        for (var m2 = 0; m2 < marks.length; m2++) marks[m2].classList.toggle('is-at', m2 === at);
+        for (var d2 = 0; d2 < dots.length; d2++) {
+          dots[d2].classList.toggle('is-at', d2 === at);
+          dots[d2].classList.toggle('is-past', d2 < at);
+        }
+        if (lineEl) lineEl.style.setProperty('--p', p.toFixed(4));
+        if (card) card.style.setProperty('--card', ramp(p, .78, .90).toFixed(3));
+      }
+
+      /* ---- the driver ---------------------------------------------------- */
+      var mqReduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+      var mqSmall = window.matchMedia('(max-width: 900px)');
+      // Only reduced motion opts out of the build: the phone keeps the pin.
+      function isStatic() { return mqReduce.matches; }
+
+      var visible = false, running = false, p = 0;
+
+      function progress() {
+        var box = stage.getBoundingClientRect();
+        var r = Math.max(1, box.height - window.innerHeight);
+        return clamp01(-box.top / r);
+      }
+
+      var lastDraw = -1e9;
+      function tick(now) {
+        if (!running) return;
+        // Skip if a scroll already painted this frame.
+        if (now - lastDraw > 6) draw(p, now);
+        // The field only animates on its own while there is drift left in it;
+        // once the lattice has formed, scroll is the only thing that moves it.
+        if (visible && !isStatic()) requestAnimationFrame(tick);
+        else running = false;
+      }
+      function start() {
+        if (running || isStatic()) return;
+        running = true; requestAnimationFrame(tick);
+      }
+
+      // Scroll paints SYNCHRONOUSLY when the rAF loop is not already running.
+      // Contexts that throttle rAF — a background tab, a capture harness, a
+      // print pass — would otherwise leave the canvas blank at its default
+      // 300x150, and the whole section with it.
+      function onScroll() {
+        if (isStatic()) { staticFrame(); return; }
+        p = progress();
+        // Always paint, even with the idle loop nominally running: where rAF is
+        // throttled the loop never comes back, and deferring to it froze the
+        // field on whatever frame it last managed.
+        draw(p, performance.now());
+      }
+
+      function staticFrame() {
+        // The finished field, once, with every step open — safe only because
+        // the stacked CSS is in force at exactly these widths.
+        running = false;
+        draw(1, t0);
+        for (var s3 = 0; s3 < steps.length; s3++) { steps[s3].classList.add('is-on'); steps[s3].classList.remove('is-past'); }
+        if (card) card.style.removeProperty('--card');
+      }
+
+      if ('IntersectionObserver' in window) {
+        new IntersectionObserver(function (es) {
+          visible = es[0].isIntersecting;
+          if (visible) { p = progress(); start(); }
+        }, { rootMargin: '10% 0px' }).observe(stage);
+      } else { visible = true; }
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+      if (mqReduce.addEventListener) {
+        mqReduce.addEventListener('change', onScroll);
+        mqSmall.addEventListener('change', onScroll);
+      }
+      // One synchronous frame before anything is scheduled, so the field is on
+      // screen even where rAF never fires.
+      if (isStatic()) { staticFrame(); } else { onScroll(); start(); }
+    })();
+  </script>
+
+  <script>
+    /*
+      THE RECOGNITION TIMELINE — one number per frame, same shape as the stage.
+
+        --tp   0 -> 1  draws the red thread down the rule as the list passes
+        --r    0 -> 1  per entry: how far it has opened
+
+      Both are written from a single rAF-throttled scroll listener, and every
+      transform is a CSS calc() off them. The section is visible with no JS at
+      all — .is-live is what opts it into being animated, so a frozen timeline
+      (a capture, an embed, print) shows the finished state rather than a blank.
+    */
+    (function () {
+      var tl = document.querySelector('.tl');
+      if (!tl) return;
+      var list = tl.querySelector('.tl-list');
+      var items = tl.querySelectorAll('.tl-item');
+      if (!list || !items.length) return;
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        tl.classList.add('is-live');
+        tl.style.setProperty('--tp', 1);
+        Array.prototype.forEach.call(items, function (it) { it.classList.add('is-on'); });
+        return;
+      }
+      // Seed every entry at its finished value BEFORE opting the section into
+      // being animated: if the driver never runs a frame — a frozen timeline, a
+      // print, a capture at scroll 0 — the state on screen is the finished one
+      // rather than a 30%-opacity, top-cropped draft.
+      Array.prototype.forEach.call(items, function (it) {
+        it.style.setProperty('--r', 1);
+        it.classList.add('is-on');
+      });
+      tl.style.setProperty('--tp', 1);
+      tl.classList.add('is-live');
+
+      function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+      function ease(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+
+      var ticking = false;
+      function frame() {
+        ticking = false;
+        var vh = window.innerHeight;
+        var box = list.getBoundingClientRect();
+        // The thread tracks a line two thirds down the viewport, so it is drawn
+        // just ahead of whichever entry is being read.
+        var lead = vh * .66;
+        tl.style.setProperty('--tp', clamp01((lead - box.top) / Math.max(1, box.height)));
+        Array.prototype.forEach.call(items, function (it) {
+          var r = it.getBoundingClientRect();
+          // Opens over the last third of its approach and is fully open by the
+          // time its own top reaches the middle of the viewport.
+          var v = ease(clamp01((vh * .92 - r.top) / (vh * .42)));
+          it.style.setProperty('--r', v);
+          it.classList.toggle('is-on', v > .5);
+        });
+      }
+      function onScroll() { if (ticking) return; ticking = true; requestAnimationFrame(frame); }
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+      frame();
+    })();
+  </script>
+
+
+  <script>
+    /*
       The two forms on this page — the waitlist and the venue enquiry — both
       talk to the FastAPI backend (backend/routers/{waitlist,contact}.py).
 
@@ -1778,19 +1971,10 @@
       var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       var refCode = new URLSearchParams(location.search).get('ref');
 
-      // ---- Entrance animation: fade up once, on scroll into view ----
-      if ('IntersectionObserver' in window) {
-        var io = new IntersectionObserver(function (entries) {
-          entries.forEach(function (e) {
-            if (!e.isIntersecting) return;
-            e.target.classList.add('is-visible');
-            io.unobserve(e.target);
-          });
-        }, { threshold: 0.15 });
-        io.observe(card);
-      } else {
-        card.classList.add('is-visible');
-      }
+      /* No entrance animation. The waitlist is a full-bleed red band rather
+         than a card, so there is no surface to fade up — and a reveal that is
+         gated on a CSS transition is invisible in any frozen timeline
+         (captures, embeds, print). It is simply there. */
 
       // ---- Live counter (page load only — never polled) ----
       fetch(API_BASE + '/api/waitlist/count')
@@ -2031,7 +2215,6 @@
       <button class="vx-close" id="vx-close" type="button" aria-label="Close">&times;</button>
 
       <form id="vx-form" novalidate>
-        <span class="eyebrow">For venues</span>
         <h2 class="vx-title" id="vx-title">Tell us about your venue</h2>
         <p class="vx-sub">Three months free, no lock-in, no new hardware. We answer every one of these ourselves.</p>
 

@@ -34,3 +34,15 @@ mobile/*.mobileprovision
 mobile/*.orig.*
 mobile/web-build/
 mobile/.env*
+
+# macOS
+.DS_Store
+
+# Node (each sub-project also ignores its own; this is the safety net)
+node_modules/
+
+# Claude Code — per-developer settings and fetched skill content.
+# skills-lock.json IS committed: it pins what .agents/skills is restored from.
+.claude/settings.local.json
+.claude/skills/
+.agents/skills/

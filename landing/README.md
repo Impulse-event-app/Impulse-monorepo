@@ -1,36 +1,65 @@
 # Impulse — landing page
 
-A single, self-contained landing page that routes visitors to the two sides of Impulse:
+A single, self-contained landing page with two asks on it:
 
-- **Going out** → the consumer app (`mobile-sdk54`, EAS Hosting)
-- **For venues** → the venue dashboard (`venue-web`, Vercel)
+- **Join the waitlist** → posts to the API (`backend`), red full-bleed band
+- **Run a pilot** → venue enquiry dialog, ink full-bleed band
 
 Built as static files — `index.html` plus `assets/` (no build step, no framework, no
-runtime dependency). It follows **Impulse Brand & Voice Guidelines v2.0**: Impulse Red
-on ink, the system typeface only, sentence case throughout, hairlines instead of
-shadows and tinted fills.
+runtime dependency). It follows **Impulse Brand & Voice Guidelines v2.0**: Paper ground
+with Impulse Red as a signal, the system typeface only, sentence case throughout,
+hairlines instead of shadows and tinted fills.
+
+The page is authored in the Claude Design project **Impulse Landing v2**
+(`8718453c-8d03-4b71-819f-b028f98597a6`, file `Impulse Landing v2.html`) and imported
+here. See [Importing from Claude Design](#importing-from-claude-design) before editing.
+
+## Sections
+
+| | |
+| --- | --- |
+| Hero | Menubar over one line of display type, phone rising into the lower half |
+| How it works (`#how-it-works`) | Four scroll-driven steps sharing one pinned phone |
+| Intelligence (`#intelligence`) | "The discount that fills the room" — the pricing story |
+| Awards (`#awards`) | Two-entry timeline, August 2026 |
+| Categories | Marquee of what Impulse covers |
+| Early access (`#waitlist`) | The red band. Waitlist form + live signup count |
+| For venues (`#venues`) | The ink band. Pilot pitch + enquiry dialog |
 
 ## Assets
 
-`assets/app/*.png` are real screens captured from the live app at
-<https://impulse.expo.app> at a 390x746 phone viewport. They drive both the hero phone
-and the scroll-driven reel in the "How it works" section. To refresh them, capture at
-the same size so the reel geometry still lines up.
+`assets/app/*.png` are real screens from the live app, **390x839** — the screen's own
+aspect (278:598) at 390 wide. They drive both the hero phone and the scroll-driven reel
+in "How it works", and the markup declares `width="390" height="839"`, so if you
+recapture, match that size or the reel geometry stops lining up.
 
-> Note: these were captured while the app still ran on the previous (coral / Archivo)
-> brand, so the screens inside the phone do not yet match the page around them. They
-> need recapturing once `mobile-sdk54` moves to v2.0 tokens.
+These are the **v2-brand** captures (Impulse Red on ink). The earlier set was taken
+while the app still ran on the coral / Archivo brand and did not match the page around
+it; that is resolved.
 
-## Configure the links
+`assets/awards/*.webp` are the two award photographs in the timeline. They are WebP
+rather than PNG deliberately — the Startmate original is a 2.2 MB PNG, and 79 KB of
+WebP is indistinguishable at the size it renders.
 
-Open [index.html](index.html) and edit the two `href`s under the `LINKS` comment:
+## The API
 
-| Card        | Points to            | Default                          |
-| ----------- | -------------------- | -------------------------------- |
-| Going out   | consumer app         | `https://impulseapp.expo.app`    |
-| For venues  | venue dashboard      | `https://venue-web.vercel.app`   |
+There is no build step, so `API_BASE` is a literal near the top of the page script:
 
-> ⚠️ Confirm these against your actual production URLs — they're best-guess defaults.
+```js
+var API_BASE = 'https://impulse-monorepo.onrender.com';
+```
+
+It backs four calls:
+
+| Endpoint | Used by |
+| --- | --- |
+| `GET /api/waitlist/count` | The live "N people on the waitlist" pill |
+| `GET /api/waitlist/referrer/:code` | Referral attribution from a `?ref=` link |
+| `POST /api/waitlist` | The waitlist form |
+| `POST /api/contact/venue` | The venue enquiry dialog |
+
+If the API is unreachable the count pill stays hidden and the venue form hands back the
+`mailto:` rather than pretending it sent.
 
 ## Preview locally
 
@@ -51,19 +80,41 @@ It's plain static files, so anything works:
 - **EAS Hosting** — `eas deploy` after exporting, or serve it as static assets.
 - **GitHub Pages** — publish the folder.
 
+## Importing from Claude Design
+
+`index.html` is the design project's `Impulse Landing v2.html` with three production
+edits. Re-apply them on every re-import:
+
+1. The two `<image-slot>` elements in the awards timeline become plain `<img>` tags
+   pointing at `assets/awards/*.webp`. `<image-slot>` is a design-canvas scaffold
+   (drag-to-fill placeholders backed by an `.image-slots.state.json` sidecar) and has no
+   place in a deployed page.
+2. `.tl-shot image-slot { … }` becomes `.tl-shot img { …; object-fit:cover; display:block }`
+   — the slot filled its figure absolutely, so a bare `<img>` needs the cover fit spelled out.
+3. Drop `<script src="image-slot.js"></script>`.
+
+> The design API caps file reads at 256 KiB, which the Startmate PNG exceeds. Fetch
+> oversized assets through the project's own `GetFile` RPC in the browser instead, and
+> re-encode before committing.
+
 ## Notes
 
-- **Venue enquiries**: the `For venues` section (`#venues`) links to a `mailto:` for
-  `rahul@impulseapp.au`. The address is deliberately not shown as visible text — the
-  button just reads "Email us" — but it is still in the `href`, so it is readable in the
-  page source. Assemble it in JS on click if you want it hidden from scrapers too.
+- **Venue enquiries**: the `#venues` band links to a `mailto:` for `rahul@impulseapp.au`
+  and `manoj@impulseapp.au`. The addresses are deliberately not shown as visible text —
+  the button just reads "Talk to us" — but they are still in the `href`, so they are
+  readable in the page source. Assemble them in JS on click if you want them hidden from
+  scrapers too.
 
-- **Theme**: dark only.
+- **Theme**: light only. Paper (`#EBEBEB`) ground, Ink (`#0A0A0A`) type, with
+  `color-scheme: light` set so the UA renders form controls light. The two full-bleed
+  bands are the only surfaces that break the paper.
+
 - **Fonts**: the system stack (`-apple-system, BlinkMacSystemFont, "SF Pro Text", ...`).
   No webfonts are loaded.
+
 - **Motion — the stage**: the hero and "How it works" are wrapped in one `.stage`
   holding a single phone, pinned by a zero-height sticky `.stage-pin`. One
-  rAF-throttled scroll listener writes three numbers per frame and every transform is
+  rAF-throttled scroll listener writes a few numbers per frame and every transform is
   CSS `calc()` off them:
 
   | | |
@@ -71,23 +122,19 @@ It's plain static files, so anything works:
   | `--s` | docks the phone — large and low in the hero, then parked in the demo column. Hits 1 exactly as the first step centres. |
   | `--p` | runs the four steps: banks the phone and drives the reel. |
   | `--out` | fades and lifts the phone away over the stage's tail, so it is gone before the awards. |
+  | `--reel` | the reel's own offset, written as `ease(s) + i + t`. |
 
-  The reel is five panels — an HTML splash, then the four captures — positioned at
-  `ease(s) + demoReel`, so the screen keeps scrolling through the hero-to-demo
-  handover rather than cutting.
+  The reel is five panels — an HTML splash, then the four captures — positioned so the
+  screen keeps scrolling through the hero-to-demo handover rather than cutting.
 
-  The splash is drawn, not captured, in three parts like the reference: the radar's
-  **sweep** variant at room scale across the top 46% — Impulse Red on Paper, bled well
-  past the panel so the arcs run off every edge — then the lockup breaking that from a
-  single line of display type, with the button pinned to the bottom.
+  The splash is drawn, not captured, in three parts: the radar's **sweep** variant at
+  room scale across the top, bled well past the panel so the arcs run off every edge,
+  then the lockup breaking that from a single line of display type, with the button
+  pinned to the bottom.
 
-  Two deliberate choices there. The reversed treatment rather than a red ground: a
-  half-screen red fill is decoration, and the guidelines reserve red for live and
-  tappable things, with the icon as the only exception. And the sweep rather than the
-  closed rings: it is the guidelines' own mark for live states, and whole and centred
-  the closed rings read as a bullseye, where cropped arcs read as a signal. Note `.phone-reel .scr--splash` needs that extra class
-  — `.scr` sets `display: block` further down the sheet and wins at equal specificity,
-  which silently stops the panel being a flex column.
+  Note `.phone-reel .scr--splash` needs that extra class — `.scr` sets `display: block`
+  further down the sheet and wins at equal specificity, which silently stops the panel
+  being a flex column.
 
   Two things to leave alone: `.stage-pin` must stay **zero-height** (a height plus a
   negative margin keeps it stuck a whole viewport past the stage, because margins are
@@ -98,26 +145,9 @@ It's plain static files, so anything works:
   JS. The driver and the marquee are skipped entirely under `prefers-reduced-motion`,
   which parks the phone docked on the feed with every step legible.
 
-- **Hero**: a menubar (mark and name left, section links centred, the one CTA right)
-  over a single line of display type, with the phone rising into the lower half. The
-  supporting line and the "Get started" button live on the phone's own splash screen,
-  not on the page — so `.hero-sub` and `.hero-cta` are hidden above 900px and shown
-  below it, where the phone is gone. Both rules are scoped to `.hero`, because `.btn`
-  sets `display` later in the sheet and would otherwise win on source order.
-
-- **The bloom** (`.stage-glow`): two soft radial lobes behind the phone, warm and
-  cool. It takes the dock's travel but none of its rotation or scale, so it stays
-  circular, and it thins out as the phone docks. Each lobe needs an explicit tile plus
-  `closest-side` — an offset radial sizes to farthest-corner by default, so a
-  `transparent` stop short of 100% never reaches the box edge and the lobe clips as a
-  visible rectangle.
-
-- **Deliberate brand override.** The display gradient (`--g-warm` → `--g-cool`) and the
-  bloom override one explicit rule in Impulse Brand Guidelines v2.0: no gradients. That
-  was a decision taken to bring the page closer to its reference, not an oversight.
-  Every hue involved is Impulse's own — Paper falling through Red Raised to Red Deep —
-  so no colour on the page comes from outside the brand. If v2.0 is reinstated, set the
-  gradient to a flat `var(--text)` and `.stage-glow` to a single accent lobe.
+- **No bloom.** The dark page had two soft radial lobes behind the phone. On paper
+  nothing glows, so the ground is flat and the phone is the one dark object on it —
+  the hairline sonar rings do the work instead.
 
 - **Alternating sides**: the phone parks right / left / right / left across the four
   steps (`SIDES` in the stage script, interpolated on the same `t` as the reel), and
@@ -126,3 +156,7 @@ It's plain static files, so anything works:
 - **Dock timing**: `--s` finishes at `demoTop - 30vh`, *not* when the first step
   centres. Tied to the step, the phone was still at hero size — cropped and full width —
   while the section heading scrolled up, and sat on top of it.
+
+- **The awards timeline**: entries reveal on `--r` and the photographs uncover from the
+  top (`clip-path: inset(...)`) rather than fading — nothing on this page fades in, and
+  a photo that slides its own top edge down reads as the entry opening.
