@@ -93,6 +93,14 @@ body {
 
 input, button, select, textarea { font-family: inherit; }
 input:focus, textarea:focus, select:focus { outline: none; }
+
+/* Placeholders are examples, not values. Without this they inherit near-full
+   contrast and a blank form reads as an already-filled one. */
+input::placeholder, textarea::placeholder {
+  color: var(--faint);
+  opacity: 1;              /* Firefox dims placeholders again by default */
+  font-style: italic;
+}
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--accent); opacity: .8; }
 

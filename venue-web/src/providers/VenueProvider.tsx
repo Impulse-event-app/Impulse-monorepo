@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useState,
-} from "react";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, venueApi, type Venue } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
@@ -62,7 +57,17 @@ export function VenueProvider({ children }: { children: React.ReactNode }) {
     retry: (count, err) => !(err instanceof ApiError && err.status < 500) && count < 2,
   });
 
-  const venues = data ?? (pending ? [pending] : []);
+  // Merge rather than `data ?? [pending]`: once the query has resolved for an
+  // owner with no venues, `data` is [] — not undefined — so `??` never falls
+  // through and the just-created venue was dropped, leaving the page they were
+  // redirected to blank until a manual reload.
+  const venues = useMemo(() => {
+    const fetched = data ?? [];
+    if (pending && !fetched.some((v) => v.id === pending.id)) {
+      return [pending, ...fetched];
+    }
+    return fetched;
+  }, [data, pending]);
 
   // Honour the stored/selected venue only while it's still one of theirs —
   // otherwise fall back to the first, so a deleted venue can't wedge the app.

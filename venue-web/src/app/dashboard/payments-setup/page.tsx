@@ -22,6 +22,7 @@ import {
   fieldInput,
   fieldLabel,
   iconBtnDanger,
+  requiredMark,
   switchKnob,
   switchTrack,
   toneBadge,
@@ -295,6 +296,9 @@ export default function PaymentsSetupPage() {
         own bank account. This is a one-off. Your progress saves as you go, so you can stop and come
         back on any device.
       </p>
+      <p style={{ ...fieldLabel, marginBottom: 26 }}>
+        <span style={requiredMark}>*</span> Required
+      </p>
 
       {/* ── Status ─────────────────────────────────────────────────────────── */}
       {created && (
@@ -395,55 +399,55 @@ export default function PaymentsSetupPage() {
           <h3 style={sectionTitle}>Business details</h3>
           <div style={grid2}>
             <div>
-              <label style={fieldLabel}>Registered company name</label>
+              <label style={fieldLabel}>Registered company name<span style={requiredMark}>*</span></label>
               <input
                 value={draft.company_name ?? ""}
                 onChange={(e) => setField("company_name", e.target.value)}
-                placeholder="The Lantern Room Pty Ltd"
+                placeholder="e.g. The Lantern Room Pty Ltd"
                 style={{ ...fieldInput, borderColor: fieldErrors.company_name ? "var(--accent)" : "var(--line2)" }}
               />
               {fieldErrors.company_name && <p style={errStyle}>{fieldErrors.company_name}</p>}
             </div>
             <div>
-              <label style={fieldLabel}>ABN</label>
+              <label style={fieldLabel}>ABN<span style={requiredMark}>*</span></label>
               <input
                 value={draft.abn ?? ""}
                 onChange={(e) => setField("abn", e.target.value)}
-                placeholder="12 345 678 901"
+                placeholder="e.g. 12 345 678 901"
                 style={{ ...fieldInput, borderColor: fieldErrors.abn ? "var(--accent)" : "var(--line2)" }}
               />
               {fieldErrors.abn && <p style={errStyle}>{fieldErrors.abn}</p>}
             </div>
             <div>
-              <label style={fieldLabel}>Company email</label>
+              <label style={fieldLabel}>Company email<span style={requiredMark}>*</span></label>
               <input
                 value={draft.company_email ?? ""}
                 onChange={(e) => setField("company_email", e.target.value)}
-                placeholder="accounts@yourvenue.com.au"
+                placeholder="e.g. accounts@yourvenue.com.au"
                 style={{ ...fieldInput, borderColor: fieldErrors.company_email ? "var(--accent)" : "var(--line2)" }}
               />
               {fieldErrors.company_email && <p style={errStyle}>{fieldErrors.company_email}</p>}
             </div>
             <div>
-              <label style={fieldLabel}>Company phone</label>
+              <label style={fieldLabel}>Company phone <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
               <input
                 value={draft.company_phone ?? ""}
                 onChange={(e) => setField("company_phone", e.target.value)}
-                placeholder="02 9000 0000"
+                placeholder="e.g. 02 9000 0000"
                 style={fieldInput}
               />
             </div>
             <div>
-              <label style={fieldLabel}>Street address</label>
+              <label style={fieldLabel}>Street address <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
               <input
                 value={draft.legal_street_address ?? ""}
                 onChange={(e) => setField("legal_street_address", e.target.value)}
-                placeholder="123 Main St"
+                placeholder="e.g. 123 Main St"
                 style={fieldInput}
               />
             </div>
             <div>
-              <label style={fieldLabel}>Suburb</label>
+              <label style={fieldLabel}>Suburb <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
               <input
                 value={draft.legal_suburb ?? ""}
                 onChange={(e) => setField("legal_suburb", e.target.value)}
@@ -451,16 +455,16 @@ export default function PaymentsSetupPage() {
               />
             </div>
             <div>
-              <label style={fieldLabel}>State</label>
+              <label style={fieldLabel}>State <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
               <input
                 value={draft.legal_state ?? ""}
                 onChange={(e) => setField("legal_state", e.target.value)}
-                placeholder="NSW"
+                placeholder="e.g. NSW"
                 style={fieldInput}
               />
             </div>
             <div>
-              <label style={fieldLabel}>Postcode</label>
+              <label style={fieldLabel}>Postcode <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
               <input
                 value={draft.legal_postcode ?? ""}
                 onChange={(e) => setField("legal_postcode", e.target.value)}
@@ -480,32 +484,32 @@ export default function PaymentsSetupPage() {
           </p>
           <div style={grid2}>
             <div style={{ gridColumn: "1 / -1" }}>
-              <label style={fieldLabel}>Account name</label>
+              <label style={fieldLabel}>Account name<span style={requiredMark}>*</span></label>
               <input
                 value={draft.bank_account_name ?? ""}
                 onChange={(e) => setField("bank_account_name", e.target.value)}
-                placeholder="The Lantern Room Pty Ltd"
+                placeholder="e.g. The Lantern Room Pty Ltd"
                 style={{ ...fieldInput, borderColor: fieldErrors.bank_account_name ? "var(--accent)" : "var(--line2)" }}
               />
               {fieldErrors.bank_account_name && <p style={errStyle}>{fieldErrors.bank_account_name}</p>}
             </div>
             <div>
-              <label style={fieldLabel}>BSB</label>
+              <label style={fieldLabel}>BSB<span style={requiredMark}>*</span></label>
               <input
                 value={draft.bank_bsb ?? ""}
                 onChange={(e) => setField("bank_bsb", e.target.value)}
-                placeholder="062-000"
+                placeholder="e.g. 062-000"
                 inputMode="numeric"
                 style={{ ...fieldInput, borderColor: fieldErrors.bank_bsb ? "var(--accent)" : "var(--line2)" }}
               />
               {fieldErrors.bank_bsb && <p style={errStyle}>{fieldErrors.bank_bsb}</p>}
             </div>
             <div>
-              <label style={fieldLabel}>Account number</label>
+              <label style={fieldLabel}>Account number<span style={requiredMark}>*</span></label>
               <input
                 value={draft.bank_account_number ?? ""}
                 onChange={(e) => setField("bank_account_number", e.target.value)}
-                placeholder="12345678"
+                placeholder="e.g. 12345678"
                 inputMode="numeric"
                 style={{ ...fieldInput, borderColor: fieldErrors.bank_account_number ? "var(--accent)" : "var(--line2)" }}
               />
@@ -607,7 +611,7 @@ export default function PaymentsSetupPage() {
 
               <div style={grid2}>
                 <div>
-                  <label style={fieldLabel}>First name</label>
+                  <label style={fieldLabel}>First name<span style={requiredMark}>*</span></label>
                   <input
                     value={contact.first_name ?? ""}
                     onChange={(e) => setContact(i, { first_name: e.target.value })}
@@ -618,7 +622,7 @@ export default function PaymentsSetupPage() {
                   )}
                 </div>
                 <div>
-                  <label style={fieldLabel}>Last name</label>
+                  <label style={fieldLabel}>Last name<span style={requiredMark}>*</span></label>
                   <input
                     value={contact.last_name ?? ""}
                     onChange={(e) => setContact(i, { last_name: e.target.value })}
@@ -629,7 +633,7 @@ export default function PaymentsSetupPage() {
                   )}
                 </div>
                 <div>
-                  <label style={fieldLabel}>Email</label>
+                  <label style={fieldLabel}>Email<span style={requiredMark}>*</span></label>
                   <input
                     value={contact.email ?? ""}
                     onChange={(e) => setContact(i, { email: e.target.value })}
@@ -640,7 +644,7 @@ export default function PaymentsSetupPage() {
                   )}
                 </div>
                 <div>
-                  <label style={fieldLabel}>Phone</label>
+                  <label style={fieldLabel}>Phone <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
                   <input
                     value={contact.phone ?? ""}
                     onChange={(e) => setContact(i, { phone: e.target.value })}
@@ -648,7 +652,7 @@ export default function PaymentsSetupPage() {
                   />
                 </div>
                 <div>
-                  <label style={fieldLabel}>Role</label>
+                  <label style={fieldLabel}>Role <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
                   <select
                     value={contact.contact_type}
                     onChange={(e) => setContact(i, { contact_type: e.target.value as ContactType })}
@@ -662,7 +666,7 @@ export default function PaymentsSetupPage() {
                   </select>
                 </div>
                 <div>
-                  <label style={fieldLabel}>Date of birth</label>
+                  <label style={fieldLabel}>Date of birth <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
                   <input
                     type="date"
                     value={contact.dob ?? ""}
@@ -671,7 +675,7 @@ export default function PaymentsSetupPage() {
                   />
                 </div>
                 <div>
-                  <label style={fieldLabel}>Shareholding %</label>
+                  <label style={fieldLabel}>Shareholding % <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
                   <input
                     type="number"
                     min={0}
@@ -688,7 +692,7 @@ export default function PaymentsSetupPage() {
                   />
                 </div>
                 <div>
-                  <label style={fieldLabel}>Residential address</label>
+                  <label style={fieldLabel}>Residential address <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
                   <input
                     value={contact.street_address ?? ""}
                     onChange={(e) => setContact(i, { street_address: e.target.value })}

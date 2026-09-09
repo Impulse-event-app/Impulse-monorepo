@@ -6,7 +6,7 @@ import { venueApi, type VenueCreate } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { useVenue } from "@/providers/VenueProvider";
 import { useTheme } from "@/providers/ThemeProvider";
-import { FONT_DISPLAY, FONT_MONO, card, fieldLabel, fieldInput, btnPrimary, switchTrack, switchKnob } from "@/lib/ui";
+import { FONT_DISPLAY, FONT_MONO, card, fieldLabel, fieldInput, btnPrimary, requiredMark, switchTrack, switchKnob } from "@/lib/ui";
 
 const PHOTO_BUCKET = "venue-photos";
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -213,7 +213,11 @@ export default function VenueOnboardingPage() {
       };
       const created = await venueApi.create(payload);
       setVenue(created);
-      router.replace("/dashboard");
+      // Straight into Pinch verification rather than the dashboard. It reads as
+      // part of signing up this way; left as a dashboard banner it is the kind of
+      // thing a venue never gets round to, and until it is done their takings
+      // cannot settle to their own account.
+      router.replace("/dashboard/payments-setup");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to create venue");
     } finally {
@@ -237,9 +241,10 @@ export default function VenueOnboardingPage() {
       </button>
 
       <div style={{ maxWidth: 840, margin: "0 auto", padding: "44px 32px 80px" }}>
-        <div style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--accent)", marginBottom: 12 }}>Step 1 of 1 · Set up your venue</div>
+        <div style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--accent)", marginBottom: 12 }}>Step 1 of 2 · Set up your venue</div>
         <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 38, letterSpacing: "-.02em", margin: "0 0 8px" }}>Tell us about your venue</h1>
-        <p style={{ color: "var(--muted)", fontSize: 15, margin: "0 0 36px", maxWidth: 560 }}>This is what guests see when your deals surface. You can edit any of it later.</p>
+        <p style={{ color: "var(--muted)", fontSize: 15, margin: "0 0 10px", maxWidth: 560 }}>This is what guests see when your deals surface. You can edit any of it later. Next you&rsquo;ll set up payments so your takings reach your own account.</p>
+        <p style={{ ...fieldLabel, marginBottom: 36 }}><span style={requiredMark}>*</span> Required</p>
 
         <form onSubmit={handleSubmit}>
           {error && (
@@ -276,24 +281,24 @@ export default function VenueOnboardingPage() {
             <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, marginBottom: 22 }}>The basics</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
               <div style={{ gridColumn: "1 / -1" }}>
-                <label style={fieldLabel}>Venue name</label>
-                <input value={form.name} onChange={(e) => setField("name", e.target.value)} placeholder="The Lantern Room" style={{ ...fieldInput, borderColor: fieldErrors.name ? "var(--accent)" : "var(--line2)" }} />
+                <label style={fieldLabel}>Venue name<span style={requiredMark}>*</span></label>
+                <input value={form.name} onChange={(e) => setField("name", e.target.value)} placeholder="e.g. The Lantern Room" style={{ ...fieldInput, borderColor: fieldErrors.name ? "var(--accent)" : "var(--line2)" }} />
                 {fieldErrors.name && <p style={errStyle}>{fieldErrors.name}</p>}
               </div>
               <div>
-                <label style={fieldLabel}>Category</label>
+                <label style={fieldLabel}>Category<span style={requiredMark}>*</span></label>
                 <select value={form.category} onChange={(e) => setField("category", e.target.value)} style={fieldInput}>
                   {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
                 </select>
               </div>
               <div>
-                <label style={fieldLabel}>Phone</label>
-                <input type="tel" value={form.phone} onChange={(e) => setField("phone", e.target.value)} placeholder="(02) 9331 0042" style={{ ...fieldInput, borderColor: fieldErrors.phone ? "var(--accent)" : "var(--line2)" }} />
+                <label style={fieldLabel}>Phone <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
+                <input type="tel" value={form.phone} onChange={(e) => setField("phone", e.target.value)} placeholder="e.g. (02) 9331 0042" style={{ ...fieldInput, borderColor: fieldErrors.phone ? "var(--accent)" : "var(--line2)" }} />
                 {fieldErrors.phone && <p style={errStyle}>{fieldErrors.phone}</p>}
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
-                <label style={fieldLabel}>Description</label>
-                <textarea rows={3} value={form.description} onChange={(e) => setField("description", e.target.value)} placeholder="Tell guests what makes your venue special." style={fieldInput} />
+                <label style={fieldLabel}>Description <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
+                <textarea rows={3} value={form.description} onChange={(e) => setField("description", e.target.value)} placeholder="e.g. Rooftop cocktail bar with harbour views and a late licence." style={fieldInput} />
               </div>
             </div>
           </div>
@@ -303,23 +308,23 @@ export default function VenueOnboardingPage() {
             <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, marginBottom: 22 }}>Location &amp; contact</div>
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 18 }}>
               <div>
-                <label style={fieldLabel}>Street address</label>
-                <input value={form.address} onChange={(e) => setField("address", e.target.value)} placeholder="112 Crown Street" style={{ ...fieldInput, borderColor: fieldErrors.address ? "var(--accent)" : "var(--line2)" }} />
+                <label style={fieldLabel}>Street address<span style={requiredMark}>*</span></label>
+                <input value={form.address} onChange={(e) => setField("address", e.target.value)} placeholder="e.g. 112 Crown Street" style={{ ...fieldInput, borderColor: fieldErrors.address ? "var(--accent)" : "var(--line2)" }} />
                 {fieldErrors.address && <p style={errStyle}>{fieldErrors.address}</p>}
               </div>
               <div>
-                <label style={fieldLabel}>Suburb</label>
-                <input value={form.suburb} onChange={(e) => setField("suburb", e.target.value)} placeholder="Surry Hills" style={{ ...fieldInput, borderColor: fieldErrors.suburb ? "var(--accent)" : "var(--line2)" }} />
+                <label style={fieldLabel}>Suburb<span style={requiredMark}>*</span></label>
+                <input value={form.suburb} onChange={(e) => setField("suburb", e.target.value)} placeholder="e.g. Surry Hills" style={{ ...fieldInput, borderColor: fieldErrors.suburb ? "var(--accent)" : "var(--line2)" }} />
                 {fieldErrors.suburb && <p style={errStyle}>{fieldErrors.suburb}</p>}
               </div>
               <div>
-                <label style={fieldLabel}>Email</label>
-                <input type="email" value={form.email} onChange={(e) => setField("email", e.target.value)} placeholder="hello@venue.com.au" style={{ ...fieldInput, borderColor: fieldErrors.email ? "var(--accent)" : "var(--line2)" }} />
+                <label style={fieldLabel}>Email <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
+                <input type="email" value={form.email} onChange={(e) => setField("email", e.target.value)} placeholder="e.g. hello@venue.com.au" style={{ ...fieldInput, borderColor: fieldErrors.email ? "var(--accent)" : "var(--line2)" }} />
                 {fieldErrors.email && <p style={errStyle}>{fieldErrors.email}</p>}
               </div>
               <div>
-                <label style={fieldLabel}>Website</label>
-                <input type="url" value={form.website} onChange={(e) => setField("website", e.target.value)} placeholder="myvenue.com.au" style={fieldInput} />
+                <label style={fieldLabel}>Website <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
+                <input type="url" value={form.website} onChange={(e) => setField("website", e.target.value)} placeholder="e.g. myvenue.com.au" style={fieldInput} />
               </div>
             </div>
           </div>

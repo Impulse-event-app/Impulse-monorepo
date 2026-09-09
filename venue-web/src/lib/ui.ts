@@ -38,6 +38,12 @@ export const fieldInput: CSSProperties = {
   fontFamily: FONT_BODY,
 };
 
+/** Accent asterisk marking a required field, used inside a fieldLabel. */
+export const requiredMark: CSSProperties = {
+  color: "var(--accent)",
+  marginLeft: 3,
+};
+
 /** Small mono eyebrow (accent-coloured section kicker). */
 export const eyebrow: CSSProperties = {
   fontFamily: FONT_MONO,

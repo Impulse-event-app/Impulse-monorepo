@@ -123,8 +123,9 @@ function trimPct(value: number): string {
 }
 
 /** Nudges a venue through Pinch verification from the page they actually open.
- *  Silent for venues that never started onboarding — that is every venue
- *  predating this flow, and they charge through the shared merchant as before. */
+ *  Hidden only once the merchant is active. Note that acting on this prompt is
+ *  what switches the publish gate on for a venue: until Pinch approves them,
+ *  deals can be drafted but not published. */
 function PaymentsSetupBanner({
   compliance,
   onOpen,
@@ -139,22 +140,21 @@ function PaymentsSetupBanner({
   const rejected = compliance.submission_status === "rejected";
   if (approved) return null;
 
-  // Deliberately silent for venues that have not started onboarding. Nudging one
-  // of the existing venues into creating a merchant would switch on the publish
-  // gate for them, turning a venue that publishes freely today into one that
-  // cannot until Pinch approves it. They reach setup via the sidebar when we are
-  // ready to migrate them; drop this line to prompt everyone.
-  if (!started) return null;
-
-  const tone = rejected ? "danger" : "info";
+  const tone = rejected ? "danger" : started ? "info" : "soft";
   const { badge, dot } = toneBadge(tone);
 
-  const heading = rejected ? "Pinch needs something corrected" : "Verification in progress";
+  const heading = rejected
+    ? "Pinch needs something corrected"
+    : started
+      ? "Verification in progress"
+      : "Set up payments to get paid directly";
 
   const detail = rejected
     ? compliance.compliance_notes ??
       "One of your documents could not be accepted. Replace it and it goes back for review automatically."
-    : "Your deals can be drafted now and published as soon as Pinch approves you.";
+    : started
+      ? "Your deals can be drafted now and published as soon as Pinch approves you."
+      : "Pinch needs to verify your business before takings can settle to your bank account. Takes about 10 minutes, plus their review.";
 
   return (
     <div
@@ -171,7 +171,7 @@ function PaymentsSetupBanner({
     >
       <span style={badge}>
         <span style={dot} />
-        {rejected ? "Action needed" : "Pending"}
+        {rejected ? "Action needed" : started ? "Pending" : "Not started"}
       </span>
       <div style={{ flex: 1, minWidth: 220 }}>
         <div style={{ fontWeight: 600, fontSize: 14 }}>{heading}</div>
@@ -183,7 +183,7 @@ function PaymentsSetupBanner({
         )}
       </div>
       <button onClick={onOpen} style={{ ...btnPrimary, padding: "11px 18px", borderRadius: 11 }}>
-        View status
+        {started ? "View status" : "Start setup"}
       </button>
     </div>
   );
