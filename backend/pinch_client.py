@@ -70,12 +70,27 @@ def _access_token() -> str:
         return _token["value"]
 
 
-def _headers(merchant_id: str) -> dict:
+def _headers(merchant_id: Optional[str] = None) -> dict:
+    """Standard JSON headers. merchant_id=None omits Current-Merchant, which is
+    how the platform-level calls (creating a managed merchant, listing them) are
+    attributed to the master account rather than to a sub-merchant."""
+    headers = {
+        "Authorization": f"Bearer {_access_token()}",
+        "pinch-version": PINCH_VERSION,
+        "Content-Type": "application/json",
+    }
+    if merchant_id:
+        headers["Current-Merchant"] = merchant_id
+    return headers
+
+
+def _headers_multipart(merchant_id: str) -> dict:
+    """Same, minus Content-Type — httpx must set it itself so it can append the
+    multipart boundary. Setting it here produces a body Pinch cannot parse."""
     return {
         "Authorization": f"Bearer {_access_token()}",
         "pinch-version": PINCH_VERSION,
         "Current-Merchant": merchant_id,
-        "Content-Type": "application/json",
     }
 
 
@@ -196,3 +211,101 @@ def create_refund(input: dict, merchant_id: str) -> dict:
     nothing in the app calls this.
     """
     return _post("/refunds", input, merchant_id)
+
+
+# ── Managed merchants (onboarding a venue as its own sub-merchant) ───────────
+#
+# Field names below are frozen against a live sandbox probe, not the docs — the
+# guide at docs/managed-merchant-onboarding is stale (its POST /merchants/upload-document
+# 404s) and the API reference's create schema misspells legalStreetAddress as
+# "legalSreetAddress", which Pinch silently drops rather than rejecting.
+
+
+def create_managed_merchant(input: dict) -> dict:
+    """
+    POST /merchants/managed — create a sub-merchant under the master account.
+
+    Sent with master credentials and NO Current-Merchant header; every call made
+    on the new merchant's behalf afterwards must carry it.
+
+    input requires: companyName, companyEmail, bankAccountRoutingNumber (6-digit
+    BSB), bankAccountNumber (3-9 digits), contacts (>=1), ipAddress, userAgent.
+    Contacts require email, contactType (owner|director|shareholder|executive)
+    and isPrimaryContact; firstName, lastName, phone, dob and `ownership`
+    (a percentage, which does round-trip despite being undocumented on the way in)
+    are optional. The ABN goes in companyRegistrationNumber.
+
+    Returns the merchant: `id` (mch_XXX), `contacts` each with an `id` (con_XXX)
+    needed to attach identity documents, and a `compliance` object.
+    """
+    return _post("/merchants/managed", input, None)
+
+
+def list_managed_merchants() -> list:
+    """GET /merchants/managed — every sub-merchant under the master account."""
+    url = f"{PINCH_BASE_URL}/merchants/managed"
+    resp = httpx.get(url, headers=_headers(None), timeout=_TIMEOUT)
+    if resp.status_code < 200 or resp.status_code >= 300:
+        raise PinchError(resp.status_code, resp.text)
+    return resp.json()
+
+
+def get_managed_merchant(merchant_id: str) -> Optional[dict]:
+    """
+    The one sub-merchant, or None. Pinch exposes no GET /merchants/{id}, so this
+    lists them all and filters — fine at our scale, and the only way to read a
+    merchant's live compliance state back.
+    """
+    for merchant in list_managed_merchants():
+        if merchant.get("id") == merchant_id:
+            return merchant
+    return None
+
+
+def upload_merchant_document(
+    merchant_id: str,
+    document_type: str,
+    filename: str,
+    content: bytes,
+    content_type: str,
+    contact_id: Optional[str] = None,
+) -> dict:
+    """
+    POST /merchants/documents — one compliance document, multipart, one file per call.
+
+    Form fields are PascalCase: File, DocumentType, and ContactId (which attaches
+    an identity-document to a specific director/UBO — without it the document is
+    filed against the merchant generally and Pinch cannot tell whose ID it is).
+
+    document_type: identity-document | financial-document | business-registration
+    | additional-verification. Max 20MB.
+
+    Returns {"id": "doc_XXX", "documentType": ..., "filename": ...}.
+
+    NOTE: `content` is the caller's raw file bytes. Nothing in here logs it, the
+    filename, or the response beyond the document id — these are identity documents.
+    """
+    data = {"DocumentType": document_type}
+    if contact_id:
+        data["ContactId"] = contact_id
+    resp = httpx.post(
+        f"{PINCH_BASE_URL}/merchants/documents",
+        files={"File": (filename, content, content_type)},
+        data=data,
+        headers=_headers_multipart(merchant_id),
+        timeout=_TIMEOUT,
+    )
+    if resp.status_code < 200 or resp.status_code >= 300:
+        raise PinchError(resp.status_code, resp.text)
+    return resp.json()
+
+
+def create_webhook(input: dict, merchant_id: str) -> dict:
+    """
+    POST /webhooks — subscribe to events for one sub-merchant.
+    input: uri, eventTypes (list), format ("camelCase" or PascalCase by default).
+
+    Returns id (wbk_XXX), uri, eventTypes and `secret` (whsec_XXX) — the HMAC key
+    for verifying deliveries to that uri. Store the secret; Pinch will not show it again.
+    """
+    return _post("/webhooks", input, merchant_id)

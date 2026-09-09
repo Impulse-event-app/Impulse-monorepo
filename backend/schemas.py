@@ -92,6 +92,9 @@ class VenueResponse(BaseModel):
     avg_rating: float
     total_ratings: int
     created_at: datetime
+    pinch_merchant_id: Optional[str] = None
+    pinch_submission_status: Optional[str] = None
+    pinch_merchant_status: Optional[str] = None
 
 
 # ── Deal ──────────────────────────────────────────────────────────────────────
@@ -650,3 +653,107 @@ class VenueEnquiryCreate(BaseModel):
     # Honeypot. No human sees this field; naive bots fill every input they find,
     # so anything here means the submission is not a person.
     website: Optional[str] = Field(default=None, max_length=200)
+
+
+# ── Pinch managed merchant onboarding ─────────────────────────────────────────
+#
+# The onboarding draft is stored as free-form JSON on the venue so a half-finished
+# form survives a device change, but the pieces that become a Pinch payload are
+# typed here so a malformed draft fails at submit rather than at Pinch.
+
+DOCUMENT_TYPES = (
+    "identity-document", "financial-document",
+    "business-registration", "additional-verification",
+)
+
+
+class MerchantContactInput(BaseModel):
+    """A director, owner or UBO. Pinch requires email, contactType and
+    isPrimaryContact; the rest materially improves the odds of passing review."""
+
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: str
+    phone: Optional[str] = None
+    contact_type: Literal["owner", "director", "shareholder", "executive"]
+    is_primary_contact: bool = False
+    is_ubo: bool = False
+    ownership: Optional[float] = Field(default=None, ge=0, le=100)
+    dob: Optional[str] = None                       # ISO yyyy-mm-dd
+    street_address: Optional[str] = None
+    suburb: Optional[str] = None
+    state: Optional[str] = None
+    postcode: Optional[str] = None
+    country: Optional[str] = "AU"
+
+
+class OnboardingDraft(BaseModel):
+    """Every step's fields, all optional — this is saved partially filled."""
+
+    # Business details
+    company_name: Optional[str] = None
+    legal_entity_name: Optional[str] = None
+    company_email: Optional[str] = None
+    company_phone: Optional[str] = None
+    company_website_url: Optional[str] = None
+    abn: Optional[str] = None
+    nature_of_business: Optional[str] = None
+    organisation_type: Optional[str] = None
+    legal_street_address: Optional[str] = None
+    legal_suburb: Optional[str] = None
+    legal_state: Optional[str] = None
+    legal_postcode: Optional[str] = None
+    legal_country: Optional[str] = "AU"
+
+    # Bank
+    bank_account_name: Optional[str] = None
+    bank_bsb: Optional[str] = None
+    bank_account_number: Optional[str] = None       # write-only; never read back
+
+    # Declarations
+    afsl_held: Optional[bool] = None
+    afsl_number: Optional[str] = None
+    austrac_registered: Optional[bool] = None
+    shares_held_in_trust: Optional[bool] = None
+
+    # People
+    contacts: List[MerchantContactInput] = Field(default_factory=list)
+
+    completed_steps: List[str] = Field(default_factory=list)
+
+
+class OnboardingDraftRead(OnboardingDraft):
+    """What a GET returns. Overrides bank_account_number to a masked stand-in so
+    the real number cannot be read back out of the draft it was saved into."""
+
+    bank_account_number: Optional[str] = None       # always None on read
+    bank_account_last3: Optional[str] = None
+
+
+class MerchantDocumentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    document_type: str
+    pinch_contact_id: Optional[str]
+    label: str
+    created_at: datetime
+
+
+class MerchantComplianceResponse(BaseModel):
+    """Venue-facing onboarding state: what Pinch says, plus what is still missing."""
+
+    venue_id: str
+    pinch_merchant_id: Optional[str] = None
+    compliance_status: Optional[str] = None
+    submission_status: Optional[str] = None
+    merchant_status: Optional[str] = None
+    compliance_notes: Optional[str] = None
+    updated_at: Optional[datetime] = None
+    live_enabled: bool = False
+    transactions_enabled: bool = False
+    settlements_enabled: bool = False
+    can_publish_deals: bool = True
+    contacts: List[Dict] = Field(default_factory=list)
+    documents: List[MerchantDocumentResponse] = Field(default_factory=list)
+    outstanding: List[str] = Field(default_factory=list)

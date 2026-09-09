@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from auth import get_current_user
 from database import get_db
 from models import Deal, Venue
+from routers.merchants import can_publish_deals
 from schemas import DealCreate, DealResponse, DealUpdate, DealWithVenueResponse
 
 router = APIRouter()
@@ -22,6 +23,23 @@ def _assert_deal_owner(deal: Deal, user: dict, db: Session) -> None:
     venue = db.query(Venue).filter(Venue.id == deal.venue_id).first()
     if not venue or venue.owner_id != user["sub"]:
         raise HTTPException(status_code=403, detail="Not authorized for this deal")
+
+
+def _assert_can_publish(venue: Venue) -> None:
+    """A published deal takes deposits, so it needs somewhere for the money to land.
+
+    Only applies to venues that have started Pinch onboarding. A venue with no
+    pinch_merchant_id has never been onboarded and still charges through the
+    single hardcoded merchant exactly as before — gating those would break every
+    venue that predates this flow. Drafting is never blocked, only going live.
+    """
+    if can_publish_deals(venue):
+        return
+    raise HTTPException(
+        status_code=409,
+        detail="Your payment account is still being verified by Pinch. "
+               "You can keep editing this deal and publish it once you're approved.",
+    )
 
 
 @router.get("", response_model=List[DealWithVenueResponse])
@@ -61,10 +79,17 @@ def create_deal(
         raise HTTPException(status_code=404, detail="Venue not found")
     if venue.owner_id != user["sub"]:
         raise HTTPException(status_code=403, detail="Not authorized for this venue")
+    fields = body.model_dump()
+    # DealCreate defaults is_active to True, so refusing here would stop a
+    # pending venue from creating a deal at all. Save it as a draft instead —
+    # the venue can publish it themselves once Pinch clears them. Toggling it
+    # live later goes through update_deal, which does refuse.
+    if fields.get("is_active") and not can_publish_deals(venue):
+        fields["is_active"] = False
 
     deal_price = round(body.original_price * (1 - body.discount_pct / 100), 2)
     deal = Deal(
-        **body.model_dump(),
+        **fields,
         deal_price=deal_price,
         spots_remaining=body.total_spots,
     )
@@ -98,6 +123,9 @@ def update_deal(
     _assert_deal_owner(deal, user, db)
 
     updates = body.model_dump(exclude_unset=True)
+    if updates.get("is_active"):
+        _assert_can_publish(db.query(Venue).filter(Venue.id == deal.venue_id).first())
+
     # Recompute deal_price if pricing fields are being changed
     if "original_price" in updates or "discount_pct" in updates:
         new_original = updates.get("original_price", deal.original_price)

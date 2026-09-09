@@ -3,20 +3,31 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { bookingApi, venueApi, type ApiError, type Booking, type DealPerformanceItem, type Deal, type StatsResponse } from "@/lib/api";
+import { bookingApi, merchantApi, venueApi, type ApiError, type Booking, type DealPerformanceItem, type Deal, type MerchantCompliance, type StatsResponse } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useVenue } from "@/providers/VenueProvider";
 import { formatCurrency } from "@/lib/utils";
-import { FONT_DISPLAY, FONT_MONO, card, btnPrimary, btnGhost, eyebrow } from "@/lib/ui";
+import { FONT_DISPLAY, FONT_MONO, card, btnPrimary, btnGhost, eyebrow, toneBadge } from "@/lib/ui";
 
 export default function DashboardPage() {
-  const { venue, loading } = useVenue();
+  const { venue, loading, error, refetch } = useVenue();
   const router = useRouter();
 
-  // If venue not configured yet, send to onboarding
-  if (!loading && !venue) {
-    router.replace("/dashboard/onboarding");
-    return null;
+  // If venue not configured yet, send to onboarding. Navigation is a side effect:
+  // calling router.replace during render updates the Router while this component
+  // is still rendering, which React rejects. Same shape as RequireAuth.
+  //
+  // Gated on `error` because a 401 or a dropped connection also leaves `venue`
+  // null — and redirecting then tells an owner who has a venue that they don't,
+  // pointing them at a form that would create a second one.
+  useEffect(() => {
+    if (!loading && !venue && !error) {
+      router.replace("/dashboard/onboarding");
+    }
+  }, [loading, venue, error, router]);
+
+  if (error) {
+    return <VenueLoadError error={error} onRetry={refetch} />;
   }
 
   if (loading || !venue) {
@@ -111,6 +122,74 @@ function trimPct(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
+/** Nudges a venue through Pinch verification from the page they actually open.
+ *  Silent for venues that never started onboarding — that is every venue
+ *  predating this flow, and they charge through the shared merchant as before. */
+function PaymentsSetupBanner({
+  compliance,
+  onOpen,
+}: {
+  compliance: MerchantCompliance | undefined;
+  onOpen: () => void;
+}) {
+  if (!compliance) return null;
+
+  const started = !!compliance.pinch_merchant_id;
+  const approved = compliance.merchant_status === "active";
+  const rejected = compliance.submission_status === "rejected";
+  if (approved) return null;
+
+  // Deliberately silent for venues that have not started onboarding. Nudging one
+  // of the existing venues into creating a merchant would switch on the publish
+  // gate for them, turning a venue that publishes freely today into one that
+  // cannot until Pinch approves it. They reach setup via the sidebar when we are
+  // ready to migrate them; drop this line to prompt everyone.
+  if (!started) return null;
+
+  const tone = rejected ? "danger" : "info";
+  const { badge, dot } = toneBadge(tone);
+
+  const heading = rejected ? "Pinch needs something corrected" : "Verification in progress";
+
+  const detail = rejected
+    ? compliance.compliance_notes ??
+      "One of your documents could not be accepted. Replace it and it goes back for review automatically."
+    : "Your deals can be drafted now and published as soon as Pinch approves you.";
+
+  return (
+    <div
+      style={{
+        ...card,
+        padding: 20,
+        marginBottom: 16,
+        display: "flex",
+        alignItems: "center",
+        gap: 16,
+        flexWrap: "wrap",
+        borderColor: rejected ? "color-mix(in oklab, var(--bad) 35%, var(--line2))" : "var(--line)",
+      }}
+    >
+      <span style={badge}>
+        <span style={dot} />
+        {rejected ? "Action needed" : "Pending"}
+      </span>
+      <div style={{ flex: 1, minWidth: 220 }}>
+        <div style={{ fontWeight: 600, fontSize: 14 }}>{heading}</div>
+        <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 3, lineHeight: 1.5 }}>{detail}</div>
+        {compliance.outstanding.length > 0 && (
+          <div style={{ fontFamily: FONT_MONO, fontSize: 11, color: "var(--faint)", marginTop: 6 }}>
+            {compliance.outstanding.length} item{compliance.outstanding.length === 1 ? "" : "s"} outstanding
+          </div>
+        )}
+      </div>
+      <button onClick={onOpen} style={{ ...btnPrimary, padding: "11px 18px", borderRadius: 11 }}>
+        View status
+      </button>
+    </div>
+  );
+}
+
+
 function DashboardContent({ venueId, venueName }: { venueId: string; venueName: string }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -147,6 +226,12 @@ function DashboardContent({ venueId, venueName }: { venueId: string; venueName: 
     refetchInterval: 60_000,
   });
 
+  const { data: compliance } = useQuery<MerchantCompliance>({
+    queryKey: ["merchant-status", venueId],
+    queryFn: () => merchantApi.status(venueId),
+    refetchInterval: 60_000,
+  });
+
   const pctFilled =
     stats && stats.total_spots > 0 ? Math.round((stats.spots_filled / stats.total_spots) * 100) : 0;
 
@@ -180,6 +265,8 @@ function DashboardContent({ venueId, venueName }: { venueId: string; venueName: 
           </button>
         </div>
       </div>
+
+      <PaymentsSetupBanner compliance={compliance} onOpen={() => router.push("/dashboard/payments-setup")} />
 
       {/* Stat cards */}
       <div className="dash-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 16 }}>

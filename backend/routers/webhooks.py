@@ -1,13 +1,18 @@
+import hashlib
+import hmac
 import json
 import logging
 import os
+import time
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Request
 from sqlalchemy import or_
 
 import settlements
 from database import SessionLocal
-from models import Booking
+from mailer import MailNotConfigured, MailSendFailed, is_configured, send_email
+from models import Booking, User, Venue
 from pinch_client import PinchError
 
 router = APIRouter()
@@ -115,4 +120,176 @@ async def pinch_webhook(request: Request, background_tasks: BackgroundTasks):
 
     logger.info("Pinch webhook payload: %s", json.dumps(payload))
     background_tasks.add_task(_process_event, payload)
+    return {"received": True}
+
+
+# ── Compliance (managed merchant onboarding) ─────────────────────────────────
+#
+# The compliance-updated payload carries no merchant id, only a submission id, so
+# the venue cannot be recovered from the body. Each managed merchant is instead
+# registered with its own webhook uri ending in that venue's id, and its own
+# whsec_ signing secret, so the URL identifies the venue and the signature proves
+# the caller is Pinch.
+
+# Pinch's .NET SDK uses five minutes; matching it bounds replay of a captured POST.
+_SIGNATURE_TOLERANCE_SECONDS = 300
+
+
+def _verify_signature(header: str, raw_body: bytes, secret: str) -> bool:
+    """Check `pinch-signature: t=<unix>,v2=<hmac>` against HMAC-SHA256 of
+    "{t}.{raw body}". Compared with compare_digest so a wrong signature cannot be
+    recovered a byte at a time by timing the response."""
+    if not header or not secret:
+        return False
+    parts = dict(
+        piece.split("=", 1) for piece in header.split(",") if "=" in piece
+    )
+    timestamp, provided = parts.get("t", "").strip(), parts.get("v2", "").strip()
+    if not timestamp or not provided:
+        return False
+    try:
+        if abs(time.time() - int(timestamp)) > _SIGNATURE_TOLERANCE_SECONDS:
+            return False
+    except ValueError:
+        return False
+    expected = hmac.new(
+        secret.encode(), f"{timestamp}.".encode() + raw_body, hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, provided)
+
+
+def _get(data: dict, *names):
+    """Pinch delivers PascalCase by default and camelCase when asked, and the two
+    are mixed across their docs — so read a key by any of its spellings."""
+    for name in names:
+        if name in data:
+            return data[name]
+    return None
+
+
+# Only these two are worth an email. pending/in-progress/in-review are noise —
+# the venue already knows they submitted, and the page shows live status.
+_NOTIFIABLE_STATUSES = ("approved", "rejected")
+
+
+def _notify_compliance_outcome(db, venue: Venue, status: str, notes) -> None:
+    """Tell the venue their verification finished.
+
+    Deliberately best-effort: a failed send must not fail the webhook, or Pinch
+    retries an update we have already applied. Unlike a venue enquiry there is
+    nothing lost by a missed email — the status is on the page either way — so
+    this logs and moves on rather than raising the way contact.py does.
+    """
+    if status not in _NOTIFIABLE_STATUSES:
+        return
+
+    owner = db.query(User).filter(User.id == venue.owner_id).first()
+    recipient = (owner.email if owner else None) or venue.email
+    if not recipient:
+        logger.warning("No email on file for venue %s; compliance outcome not sent", venue.id)
+        return
+    if not is_configured():
+        logger.warning("SMTP not configured; compliance outcome for venue %s not sent", venue.id)
+        return
+
+    if status == "approved":
+        subject = f"{venue.name} is verified — you can publish deals"
+        body = (
+            f"Good news — Pinch has verified {venue.name}.\n\n"
+            "Your deals can now go live, and takings will settle to your own "
+            "bank account.\n\n"
+            "Publish a deal: https://impulseapp.au/dashboard/deals\n"
+        )
+    else:
+        detail = f"\n\nWhat they said:\n{notes}\n" if notes else "\n"
+        body = (
+            f"Pinch could not verify {venue.name} yet.{detail}\n"
+            "This is usually a document that needs re-taking — most often a "
+            "licence photographed in black and white, or only one side of it.\n\n"
+            "Upload a replacement here: "
+            "https://impulseapp.au/dashboard/payments-setup\n"
+        )
+        subject = f"Action needed to verify {venue.name}"
+
+    try:
+        send_email([recipient], subject, body)
+        logger.info("Compliance outcome (%s) emailed for venue %s", status, venue.id)
+    except (MailNotConfigured, MailSendFailed, ValueError) as e:
+        logger.error("Compliance outcome email failed for venue %s: %s", venue.id, e)
+
+
+def _process_compliance(venue_id: str, payload: dict) -> None:
+    """Write the new compliance state. Runs after the 200 has been returned."""
+    data = _get(payload, "Data", "data") or {}
+    submission = _get(data, "ComplianceSubmission", "complianceSubmission") or {}
+    metadata = _get(payload, "Metadata", "metadata") or {}
+
+    submission_status = (_get(submission, "SubmissionStatus", "submissionStatus")
+                         or _get(metadata, "Status", "status"))
+    merchant_status = (_get(submission, "MerchantStatus", "merchantStatus")
+                       or _get(metadata, "MerchantStatus", "merchantStatus"))
+    notes = _get(submission, "Notes", "notes")
+
+    db = SessionLocal()
+    try:
+        venue = db.query(Venue).filter(Venue.id == venue_id).first()
+        if not venue:
+            logger.warning("Compliance webhook for unknown venue %s", venue_id)
+            return
+        previous_status = venue.pinch_submission_status
+        if submission_status:
+            venue.pinch_submission_status = str(submission_status)
+        if merchant_status:
+            venue.pinch_merchant_status = str(merchant_status)
+        if notes:
+            venue.pinch_compliance_notes = str(notes)
+        venue.pinch_compliance_updated_at = datetime.now(timezone.utc)
+        db.commit()
+        logger.info("Compliance updated for venue %s: submission=%s merchant=%s",
+                    venue_id, submission_status, merchant_status)
+
+        # Only on a real transition — Pinch emits compliance-updated on every
+        # document upload too, and nobody needs an email for each one.
+        if submission_status and str(submission_status) != previous_status:
+            _notify_compliance_outcome(db, venue, str(submission_status), notes)
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to apply compliance update for venue %s", venue_id)
+    finally:
+        db.close()
+
+
+@router.post("/pinch/compliance/{venue_id}")
+async def pinch_compliance_webhook(
+    venue_id: str, request: Request, background_tasks: BackgroundTasks
+):
+    """
+    compliance-updated receiver for one managed merchant.
+
+    Always answers 200, including when the signature fails — a 401 would tell an
+    attacker probing the endpoint whether a guess was close. The payload carries
+    only statuses and reviewer notes (no document contents and no ID numbers), so
+    logging it in full is safe and matches the existing handler.
+    """
+    raw = await request.body()
+
+    db = SessionLocal()
+    try:
+        venue = db.query(Venue).filter(Venue.id == venue_id).first()
+        secret = venue.pinch_webhook_secret if venue else None
+    finally:
+        db.close()
+
+    if not _verify_signature(request.headers.get("pinch-signature", ""), raw, secret or ""):
+        logger.warning("Rejected compliance webhook for venue %s: bad or missing signature", venue_id)
+        return {"received": True}
+
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        logger.warning("Compliance webhook for venue %s with non-JSON body", venue_id)
+        return {"received": True}
+
+    logger.info("Compliance webhook payload for venue %s: %s", venue_id, json.dumps(payload))
+    background_tasks.add_task(_process_compliance, venue_id, payload)
     return {"received": True}
