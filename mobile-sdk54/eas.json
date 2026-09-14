@@ -24,7 +24,8 @@
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
-      }
+      },
+      "credentialsSource": "local"
     }
   },
   "submit": {
