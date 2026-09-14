@@ -195,6 +195,15 @@ export async function patchMe(updates: UserProfileUpdate): Promise<UserProfile> 
   });
 }
 
+/**
+ * Permanently delete the signed-in user's account: profile, saved cards and
+ * sign-in identity. Past bookings are kept, anonymised, for accounting.
+ * Throws ApiError(409) if the account owns a venue.
+ */
+export async function deleteMe(): Promise<void> {
+  await request<void>('/users/me', { method: 'DELETE' });
+}
+
 // ── deals ────────────────────────────────────────────────────
 
 export type DealFilters = {

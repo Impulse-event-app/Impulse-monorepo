@@ -15,11 +15,23 @@
           "locationWhenInUsePermission": "Impulse uses your location to surface drops within a few suburbs — never in the background, only while you're looking."
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F1F1F4",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 120,
+          "dark": {
+            "backgroundColor": "#0A0A0A",
+            "image": "./assets/splash-icon.png"
+          }
+        }
+      ]
     ],
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.impulse.app",
@@ -28,7 +40,7 @@
     "android": {
       "package": "com.impulse.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#C80815",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"

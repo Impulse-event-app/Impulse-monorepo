@@ -1,140 +1,134 @@
 import { useEffect } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { money, apiDealToDrop, venuePhotoUrl, dropCoords } from '../../../src/data';
 import { VenueMap } from '../../../src/VenueMap';
-import { fontDisplay, fontUI, useApp } from '../../../src/theme';
+import { fontMono, fontUI, useApp } from '../../../src/theme';
 import { logInteraction } from '../../../src/api';
+import { useRequireAuth } from '../../../src/auth';
 import {
+  BackButton,
   Btn,
   CountdownPill,
+  EmptyState,
+  FloatingFooter,
+  Label,
+  Live,
   MetaLine,
   Placeholder,
   PriceBlock,
   RatingDot,
+  ReadableColumn,
+  ScreenTitle,
+  unitLabel,
 } from '../../../src/components';
-import { ChevronBack } from '../../../src/icons';
-
-function PushHead({ onBack, floating }: { onBack: () => void; floating?: boolean }) {
-  const { T } = useApp();
-  const insets = useSafeAreaInsets();
-  const bg = floating ? 'rgba(15,14,13,0.5)' : T.chipBg;
-  const ink = floating ? '#fff' : T.text;
-  return (
-    <Pressable
-      onPress={onBack}
-      style={{
-        position: 'absolute', top: insets.top + 4, left: 16, zIndex: 10,
-        width: 40, height: 40, borderRadius: 999, backgroundColor: bg,
-        alignItems: 'center', justifyContent: 'center',
-      }}
-    >
-      <ChevronBack size={11} color={ink} />
-    </Pressable>
-  );
-}
 
 export default function DetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { T, apiDeals } = useApp();
+  const { T, apiDeals, signedIn } = useApp();
   const router = useRouter();
+  const requireAuth = useRequireAuth();
   const insets = useSafeAreaInsets();
 
   const apiDeal = id ? apiDeals[id] ?? null : null;
   const d = apiDeal ? apiDealToDrop(apiDeal) : null;
 
-  // Log a "view" interaction once when the screen mounts
+  // Log a "view" interaction once when the screen mounts (signed-in only —
+  // the endpoint needs an account, and guests aren't tracked).
   useEffect(() => {
-    if (apiDeal?.venue_id) {
+    if (signedIn && apiDeal?.venue_id) {
       logInteraction(apiDeal.venue_id, 'view').catch(() => {/* fire-and-forget */});
     }
-  }, [apiDeal?.venue_id]);
+  }, [apiDeal?.venue_id, signedIn]);
+
+  const head = (
+    <View
+      pointerEvents="box-none"
+      style={{ position: 'absolute', top: insets.top + 4, left: 16, right: 16, zIndex: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+    >
+      <BackButton onPress={() => router.back()} />
+      {d?.target ? <CountdownPill d={d} /> : null}
+    </View>
+  );
 
   if (!d) {
     return (
-      <View style={{ flex: 1, backgroundColor: T.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <PushHead onBack={() => router.back()} />
-        <Text style={{ fontFamily: fontUI(400), fontSize: 16, color: T.muted }}>Drop not found</Text>
+      <View style={{ flex: 1, backgroundColor: T.bg, justifyContent: 'center' }}>
+        {head}
+        <EmptyState title="This drop has gone." body="It may have sold out or ended." />
       </View>
     );
   }
 
+  const coords = dropCoords(d);
+  const facts = [
+    ['What you get', d.gets],
+    ['Where', d.addr],
+  ].filter(([, v]) => !!v);
+
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View>
-          <Placeholder label={d.cat + ' · venue photo'} uri={venuePhotoUrl(d)} style={{ height: 300 }} />
-          <PushHead onBack={() => router.back()} floating />
-          {d.target ? (
-            <View style={{ position: 'absolute', top: insets.top + 4, right: 16 }}>
-              <CountdownPill d={d} />
-            </View>
-          ) : null}
-        </View>
+        <Placeholder label={`${d.cat} · venue photo`} uri={venuePhotoUrl(d)} style={{ height: 300 }} />
 
-        <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 140 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: fontDisplay(700), fontSize: 28, color: T.text, letterSpacing: -0.84 }}>{d.venue}</Text>
-              <MetaLine d={d} style={{ marginTop: 5, fontSize: 14.5 }} />
+        <ReadableColumn style={{ paddingHorizontal: 16, paddingTop: 24, paddingBottom: 150 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <ScreenTitle>{d.venue}</ScreenTitle>
+              <MetaLine d={d} style={{ marginTop: 6, fontSize: 15 }} />
             </View>
-            <RatingDot d={d} />
+            <View style={{ paddingTop: 8 }}>
+              <RatingDot d={d} size={15} />
+            </View>
           </View>
 
-          <View style={[{ marginTop: 20, paddingHorizontal: 18, paddingVertical: 16, backgroundColor: T.surface, borderRadius: 18 }, T.shadow]}>
+          <View style={{ marginTop: 24, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: T.line, gap: 12 }}>
             <PriceBlock d={d} big />
-            <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: T.line, flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: d.status === 'now' ? T.accent : T.faint }} />
-              <Text style={{ fontFamily: fontUI(400), fontSize: 14, color: T.muted }}>{d.window}</Text>
-            </View>
+            <Live d={d} />
           </View>
 
-          <Text style={{ marginTop: 22, fontFamily: fontUI(400), fontSize: 16, lineHeight: 25, color: T.text }}>{d.blurb}</Text>
+          {!!d.blurb && (
+            <Text style={{ marginTop: 24, ...fontUI(400), fontSize: 17, lineHeight: 25, letterSpacing: -0.19, color: T.text }}>
+              {d.blurb}
+            </Text>
+          )}
 
-          <View style={{ marginTop: 18, borderRadius: 16, overflow: 'hidden', backgroundColor: T.line, gap: 1 }}>
-            {[
-              ['What you get', d.gets],
-              ['Where', d.addr],
-            ].map(([k, v]) => (
-              <View key={k} style={{ backgroundColor: T.surface, paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', justifyContent: 'space-between', gap: 16 }}>
-                <Text style={{ fontFamily: fontUI(400), fontSize: 14, color: T.muted }}>{k}</Text>
-                <Text style={{ fontFamily: fontUI(400), fontSize: 14.5, color: T.text, textAlign: 'right', flex: 1 }}>{v}</Text>
+          <View style={{ marginTop: 28, gap: 16 }}>
+            {facts.map(([k, v]) => (
+              <View key={k} accessible accessibilityLabel={`${k}: ${v}`}>
+                <Label>{k}</Label>
+                <Text style={{ ...fontUI(400), fontSize: 17, lineHeight: 23, letterSpacing: -0.19, color: T.text, marginTop: 4 }}>{v}</Text>
               </View>
             ))}
           </View>
 
-          {(() => {
-            const coords = dropCoords(d);
-            return coords ? (
-              <VenueMap latitude={coords.latitude} longitude={coords.longitude} style={{ marginTop: 14 }} />
-            ) : (
-              <Placeholder label="map" style={{ height: 120, borderRadius: 16, marginTop: 14 }} />
-            );
-          })()}
-        </View>
+          {coords ? (
+            <VenueMap latitude={coords.latitude} longitude={coords.longitude} style={{ marginTop: 28 }} />
+          ) : (
+            <Placeholder label="Map" style={{ height: 130, borderRadius: 10, marginTop: 28 }} />
+          )}
+        </ReadableColumn>
       </ScrollView>
 
-      {/* sticky claim bar */}
-      <View
-        style={{
-          position: 'absolute', left: 0, right: 0, bottom: 0,
-          paddingHorizontal: 20, paddingTop: 14, paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 24,
-          backgroundColor: T.bg, borderTopWidth: 0.5, borderTopColor: T.line,
-          flexDirection: 'row', alignItems: 'center', gap: 16,
-        }}
-      >
-        <View>
-          <Text style={{ fontFamily: fontDisplay(600), fontSize: 22, color: T.text }}>
-            {money(d.now)}
-            <Text style={{ fontFamily: fontUI(500), fontSize: 12, color: T.muted }}>{d.unit}</Text>
-          </Text>
-          <Text style={{ fontFamily: fontUI(400), fontSize: 12, color: T.faint, textDecorationLine: 'line-through' }}>usually {money(d.usual)}</Text>
+      {head}
+
+      {/* booking bar */}
+      <FloatingFooter row gap={16}>
+        <View accessible accessibilityLabel={`${money(d.now)} ${unitLabel(d.unit)}`}>
+          <Text style={{ ...fontMono(600), fontSize: 22, letterSpacing: -0.4, color: T.text }}>{money(d.now)}</Text>
+          <Text style={{ ...fontUI(400), fontSize: 12.5, color: T.muted }}>{unitLabel(d.unit)}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Btn full onPress={() => router.push(`/(user)/claim/${d.id}`)}>Claim slot</Btn>
+          <Btn
+            full
+            onPress={() => requireAuth(() => router.push(`/(user)/claim/${d.id}`))}
+            accessibilityHint={signedIn ? undefined : 'You’ll be asked to sign in first.'}
+          >
+            Book now
+          </Btn>
         </View>
-      </View>
+      </FloatingFooter>
     </View>
   );
 }

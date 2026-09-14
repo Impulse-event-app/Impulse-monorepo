@@ -58,7 +58,7 @@ export function VenueMap({
   }, [dark]);
 
   return (
-    <View style={[{ height, borderRadius: 16, overflow: 'hidden' }, style]}>
+    <View style={[{ height, borderRadius: 10, overflow: 'hidden' }, style]}>
       {React.createElement('div', { ref: containerRef, style: { width: '100%', height: '100%' } })}
     </View>
   );

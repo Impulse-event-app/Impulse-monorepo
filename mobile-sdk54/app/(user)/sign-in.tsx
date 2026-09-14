@@ -3,84 +3,44 @@
 // app; the reload is handled by app/index.tsx (not here), which routes the
 // now-signed-in user to /onboarding. The inline methods (phone, email, and
 // native Google/Apple) call afterAuth() below to move on without a reload.
+//
+// Guests can skip this ("Look around first" / "Not now"). When a guest hits
+// something that needs an account, useRequireAuth() opens this screen with
+// `next` (where they were) and `back=1` (return by going back), so signing in
+// drops them right where they left off.
 import React, { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'expo-router';
-import {
-  Animated,
-  Easing,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fontDisplay, fontMono, fontUI, useApp } from '../../src/theme';
-import { Btn, Logo, PulseMark } from '../../src/components';
-import { AppleLogo, GoogleLogo, MailGlyph, PhoneGlyph } from '../../src/icons';
-import { fetchUserProfile, isOnboarded, markOnboarded, sendPhoneOtp, signInWithApple, signInWithGoogle, signInWithEmail, signUpWithEmail, syncUserProfile, verifyPhoneOtp } from '../../src/auth';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import { fontUI, useApp } from '../../src/theme';
+import { BackButton, Btn, CodeInput, ErrorText, Field, Radar, TextBtn, Wordmark } from '../../src/components';
+import { GoogleLogo, MailGlyph, PhoneGlyph } from '../../src/icons';
+import {
+  fetchUserProfile, isOnboarded, markIntroSeen, markOnboarded, sendPhoneOtp, signInWithApple, signInWithGoogle,
+  signInWithEmail, signUpWithEmail, syncUserProfile, verifyPhoneOtp,
+} from '../../src/auth';
 import { supabase } from '../../src/supabase';
 import { Lede, Panel, usePagerWidth } from '../../src/onboardingUI';
+import { HeroMotion, HeroWord } from '../../src/HeroMotion';
 
-function PulseRings() {
+function GoogleBtn({ onPress, loading }: { onPress: () => void; loading?: boolean }) {
   const { T } = useApp();
-  const vals = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
-  useEffect(() => {
-    // react-native-web's Animated.loop won't reliably restart a sequence-with-
-    // delay (the rings played once, then froze as a dot). Drive each ring with
-    // a timing that resets and re-runs itself in its completion callback — this
-    // loops identically on web and native. JS driver on web (no native module),
-    // native driver on iOS/Android.
-    const useNativeDriver = Platform.OS !== 'web';
-    let cancelled = false;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    const runRing = (v: Animated.Value) => {
-      if (cancelled) return;
-      v.setValue(0);
-      Animated.timing(v, { toValue: 1, duration: 2600, easing: Easing.out(Easing.ease), useNativeDriver })
-        .start(({ finished }) => { if (finished && !cancelled) runRing(v); });
-    };
-    // Stagger the three rings so they radiate one after another.
-    vals.forEach((v, i) => { timers.push(setTimeout(() => runRing(v), i * 860)); });
-    return () => { cancelled = true; timers.forEach(clearTimeout); };
-  }, [vals]);
-  return (
-    <View style={{ width: 150, height: 150, alignItems: 'center', justifyContent: 'center' }}>
-      {vals.map((v, i) => (
-        <Animated.View
-          key={i}
-          style={{
-            position: 'absolute', width: 150, height: 150, borderRadius: 75, borderWidth: 1.5, borderColor: T.accent,
-            opacity: v.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.9, 0.12, 0] }),
-            transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.37, 1] }) }],
-          }}
-        />
-      ))}
-      <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: T.accent }} />
-    </View>
-  );
-}
-
-function SocialBtn({ kind, onPress, loading }: { kind: 'apple' | 'google'; onPress: () => void; loading?: boolean }) {
-  const { T } = useApp();
-  const apple = kind === 'apple';
-  const bg = apple ? (T.dark ? '#fff' : '#000') : T.surface;
-  const fg = apple ? (T.dark ? '#000' : '#fff') : T.text;
   return (
     <Pressable
       onPress={onPress}
       disabled={loading}
-      style={{
-        width: '100%', height: 54, borderRadius: 16, backgroundColor: bg,
-        borderWidth: apple ? 0 : 1.5, borderColor: T.line2,
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!loading }}
+      style={({ pressed }) => ({
+        width: '100%', minHeight: 52, paddingVertical: 8, borderRadius: 26,
+        backgroundColor: pressed ? T.fill : 'transparent', borderWidth: 1, borderColor: T.line2,
         flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-        opacity: loading ? 0.6 : 1,
-      }}
+        opacity: loading ? 0.5 : 1,
+      })}
     >
-      {apple ? <AppleLogo size={18} color={fg} /> : <GoogleLogo size={18} />}
-      <Text style={{ fontFamily: fontUI(600), fontSize: 16.5, color: fg }}>Continue with {apple ? 'Apple' : 'Google'}</Text>
+      <GoogleLogo size={17} />
+      <Text style={{ ...fontUI(500), fontSize: 17, letterSpacing: -0.19, color: T.text }}>Continue with Google</Text>
     </Pressable>
   );
 }
@@ -91,10 +51,13 @@ export default function SignIn() {
   const { T, setProfile } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { next, back } = useLocalSearchParams<{ next?: string; back?: string }>();
   const scrollRef = useRef<ScrollView>(null);
   const [W, onPagerLayout] = usePagerWidth();
-  // Which panel we're on, so a viewport change can put us back on it.
-  const [panel, setPanel] = useState(0);
+  // Which panel we're on, so a viewport change can put us back on it. Arriving
+  // with a destination means the user asked for something that needs an
+  // account — skip the brand hero and go straight to the options.
+  const [panel, setPanel] = useState(next ? AUTH_PANEL : 0);
 
   const [phoneView, setPhoneView] = useState<'buttons' | 'phone' | 'otp' | 'email'>('buttons');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -107,16 +70,31 @@ export default function SignIn() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
+  // Signed in: return to where the user came from, or the feed.
+  const leave = () => {
+    if (back === '1' && router.canGoBack()) router.back();
+    else router.replace(next || '/(user)/home');
+  };
+
+  // Guest: carry on without an account.
+  const browse = () => {
+    markIntroSeen();
+    if (router.canGoBack()) router.back();
+    else router.replace('/(user)/home');
+  };
+
   // If someone lands here already signed in (e.g. tapped Back), send them on.
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) return;
-      router.replace(isOnboarded(session) ? '/(user)/home' : '/(user)/onboarding');
+      if (isOnboarded(session)) leave();
+      else router.replace('/(user)/onboarding');
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const goToAuth = () => {
+    markIntroSeen();
     setPanel(AUTH_PANEL);
     scrollRef.current?.scrollTo({ x: AUTH_PANEL * W, animated: true });
   };
@@ -129,14 +107,16 @@ export default function SignIn() {
     scrollRef.current?.scrollTo({ x: panel * W, animated: false });
   }, [W, panel]);
 
-  // Where to go once signed in: the app if they've onboarded before, else the
-  // onboarding flow. Web OAuth doesn't reach here (it reloads → app/index.tsx).
+  // Where to go once signed in: back to what they were doing if they've
+  // onboarded before, else the onboarding flow. Web OAuth doesn't reach here
+  // (it reloads → app/index.tsx).
   const afterAuth = async () => {
+    markIntroSeen();
     const { data: { session } } = await supabase.auth.getSession();
-    if (session && isOnboarded(session)) { router.replace('/(user)/home'); return; }
+    if (session && isOnboarded(session)) { leave(); return; }
     const existing = await fetchUserProfile().catch(() => null);
     const onboarded = !!(existing && (existing.home_suburb || (existing.preferred_acts?.length ?? 0) > 0));
-    if (onboarded) { await markOnboarded(); router.replace('/(user)/home'); return; }
+    if (onboarded) { await markOnboarded(); leave(); return; }
     router.replace('/(user)/onboarding');
   };
 
@@ -176,7 +156,7 @@ export default function SignIn() {
     withAuth(async () => {
       const user = await verifyPhoneOtp(phoneNumber, otpCode);
       if (user) { setPhoneNumber(''); setOtpCode(''); await afterAuth(); }
-    }).catch((e) => setAuthError(e.message ?? 'Invalid code. Please try again.'));
+    }).catch((e) => setAuthError(e.message ?? 'That code didn’t work. Try again.'));
 
   const handleEmailAuth = () =>
     withAuth(async () => {
@@ -190,6 +170,7 @@ export default function SignIn() {
       // Sign-up → create the account, save their name, then onboard.
       const user = await signUpWithEmail(email, password);
       if (!user) return;
+      markIntroSeen();
       const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
       if (fullName) {
         setProfile((p) => ({ ...p, name: fullName }));
@@ -198,6 +179,18 @@ export default function SignIn() {
       setEmail(''); setPassword(''); setFirstName(''); setLastName('');
       router.replace('/(user)/onboarding');
     }).catch((e) => setAuthError(e.message ?? 'Authentication failed. Check your details.'));
+
+  const backTo = (to: 'buttons' | 'phone', clearCode = false) => (
+    <View style={{ paddingHorizontal: 16, marginBottom: 30 }}>
+      <BackButton
+        onPress={() => {
+          setPhoneView(to);
+          setAuthError(null);
+          if (clearCode) setOtpCode('');
+        }}
+      />
+    </View>
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
@@ -213,189 +206,200 @@ export default function SignIn() {
         {/* hero */}
         <Panel
           width={W}
-          top={insets.top + 8}
-          footer={<Btn full onPress={goToAuth}>Get started</Btn>}
+          scroll={false}
+          inactive={panel !== 0}
+          footer={
+            <>
+              <Btn full onPress={goToAuth}>Get started</Btn>
+              <TextBtn onPress={browse}>Look around first</TextBtn>
+            </>
+          }
         >
-          <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 8, justifyContent: 'space-between' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
-              <PulseMark size={28} radius={8} />
-              <Logo size={20} />
-            </View>
-            <View style={{ alignItems: 'center', flex: 1, justifyContent: 'center', paddingVertical: 30 }}>
-              <PulseRings />
-            </View>
-            <View style={{ paddingBottom: 8 }}>
-              <Text style={{ fontFamily: fontDisplay(700), fontSize: 52, lineHeight: 51, letterSpacing: -2, color: T.text }}>Plans,{'\n'}on impulse.</Text>
-              <Text style={{ marginTop: 16, fontFamily: fontUI(400), fontSize: 16.5, lineHeight: 24, color: T.muted, maxWidth: 300 }}>
-                Last-minute things to do in Sydney, with the price already worked out.
+          <HeroMotion>
+            <View style={{ paddingHorizontal: 22, paddingBottom: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+                <Radar size={30} decorative />
+                <Wordmark size={20} />
+              </View>
+              <Text style={{ ...fontUI(600), fontSize: 34, lineHeight: 38, letterSpacing: -1.02, color: T.text }}>Tonight, it's</Text>
+              <HeroWord style={{ ...fontUI(600), fontSize: 34, lineHeight: 38, letterSpacing: -1.02 }} />
+              <Text style={{ marginTop: 14, ...fontUI(400), fontSize: 17, lineHeight: 25, letterSpacing: -0.19, color: T.muted, maxWidth: 320 }}>
+                Openings at Sydney venues, with the price already set.
               </Text>
             </View>
-          </View>
+          </HeroMotion>
         </Panel>
 
         {/* sign in */}
         <Panel
           width={W}
-          top={insets.top + 24}
+          top={insets.top + 4}
+          inactive={panel !== AUTH_PANEL}
           footer={
-            <Text style={{ fontFamily: fontUI(400), fontSize: 12, lineHeight: 17, color: T.faint, textAlign: 'center' }}>
-              By continuing you agree to our <Text style={{ color: T.muted }}>Terms</Text> and <Text style={{ color: T.muted }}>Privacy Policy</Text>.
+            <Text style={{ ...fontUI(400), fontSize: 13, lineHeight: 18, color: T.muted, textAlign: 'center' }}>
+              By continuing you agree to the{' '}
+              <Text accessibilityRole="link" onPress={() => router.push('/(user)/legal/terms')} style={{ color: T.text, textDecorationLine: 'underline' }}>
+                Terms
+              </Text>
+              {' '}and{' '}
+              <Text accessibilityRole="link" onPress={() => router.push('/(user)/legal/privacy')} style={{ color: T.text, textDecorationLine: 'underline' }}>
+                Privacy Policy
+              </Text>
+              .
             </Text>
           }
         >
           {phoneView === 'buttons' && (
             <>
-              <Lede kicker="Welcome in" title="Get in." body="One tap and you're set. We'll only ever use your number to hold your slots." />
-              <View style={{ paddingHorizontal: 24, paddingTop: 34, gap: 11 }}>
-                {/* expo-apple-authentication is iOS/tvOS only — no Apple Sign In on Android or web. */}
-                {Platform.OS === 'ios' && <SocialBtn kind="apple" onPress={handleApple} loading={authLoading} />}
-                <SocialBtn kind="google" onPress={handleGoogle} loading={authLoading} />
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 8 }}>
+              {/* A way out: nothing in the feed needs an account until you book. */}
+              <View style={{ minHeight: 70, alignItems: 'flex-end', justifyContent: 'center', paddingHorizontal: 12 }}>
+                <TextBtn onPress={browse} color={T.accent} weight={500} style={{ paddingHorizontal: 8 }}>Not now</TextBtn>
+              </View>
+              <Lede title="Sign in." body={next ? 'Sign in to keep going. It takes one tap.' : "One tap and you're in."} />
+              <View style={{ paddingHorizontal: 22, paddingTop: 34, gap: 11 }}>
+                {/* expo-apple-authentication is iOS/tvOS only — no Apple Sign In on Android or web.
+                    The system button follows Apple's branding rules and localises itself. */}
+                {Platform.OS === 'ios' && (
+                  <View pointerEvents={authLoading ? 'none' : 'auto'} style={{ opacity: authLoading ? 0.5 : 1 }}>
+                    <AppleAuthentication.AppleAuthenticationButton
+                      buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                      buttonStyle={
+                        T.dark
+                          ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                          : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+                      }
+                      cornerRadius={26}
+                      style={{ width: '100%', height: 52 }}
+                      onPress={handleApple}
+                    />
+                  </View>
+                )}
+                <GoogleBtn onPress={handleGoogle} loading={authLoading} />
+                <View
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginVertical: 8 }}
+                >
                   <View style={{ flex: 1, height: 1, backgroundColor: T.line }} />
-                  <Text style={{ fontFamily: fontMono(400), fontSize: 11, color: T.faint, letterSpacing: 0.7 }}>OR</Text>
+                  <Text style={{ ...fontUI(400), fontSize: 13, color: T.muted }}>or</Text>
                   <View style={{ flex: 1, height: 1, backgroundColor: T.line }} />
                 </View>
                 <Btn full variant="secondary" onPress={() => { setAuthError(null); setPhoneView('phone'); }} disabled={authLoading}>
                   <PhoneGlyph size={17} color={T.text} />
-                  <Text style={{ fontFamily: fontUI(600), fontSize: 17, color: T.text }}>Continue with phone</Text>
+                  <Text style={{ ...fontUI(500), fontSize: 17, letterSpacing: -0.19, color: T.text }}>Continue with phone</Text>
                 </Btn>
                 <Btn full variant="secondary" onPress={() => { setAuthError(null); setEmailMode('signin'); setPhoneView('email'); }} disabled={authLoading}>
                   <MailGlyph size={17} color={T.text} />
-                  <Text style={{ fontFamily: fontUI(600), fontSize: 17, color: T.text }}>Continue with email</Text>
+                  <Text style={{ ...fontUI(500), fontSize: 17, letterSpacing: -0.19, color: T.text }}>Continue with email</Text>
                 </Btn>
-                {authError ? (
-                  <Text style={{ fontFamily: fontUI(400), fontSize: 13.5, color: '#FF5A4D', textAlign: 'center' }}>{authError}</Text>
-                ) : null}
+                {authError ? <ErrorText center>{authError}</ErrorText> : null}
               </View>
             </>
           )}
 
           {phoneView === 'phone' && (
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-              <Lede kicker="Phone number" title="What's your number?" body="We'll send a one-time code to verify it's you." />
-              <View style={{ paddingHorizontal: 24, paddingTop: 30, gap: 14 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14 }}>
-                  <Text style={{ fontFamily: fontUI(500), fontSize: 16, color: T.muted, marginRight: 6 }}>+</Text>
-                  <TextInput
-                    value={phoneNumber}
-                    onChangeText={setPhoneNumber}
-                    placeholder="61 412 345 678"
-                    placeholderTextColor={T.faint}
-                    keyboardType="phone-pad"
-                    autoFocus
-                    style={{ flex: 1, fontFamily: fontUI(400), fontSize: 17, color: T.text }}
-                  />
-                </View>
-                {authError ? (
-                  <Text style={{ fontFamily: fontUI(400), fontSize: 13.5, color: '#FF5A4D' }}>{authError}</Text>
-                ) : null}
+              {backTo('buttons')}
+              <Lede title="What's your number?" body="We text a six-digit code to check it's you." />
+              <View style={{ paddingHorizontal: 22, paddingTop: 30, gap: 14 }}>
+                <Field
+                  prefix="+"
+                  value={phoneNumber}
+                  onChangeText={setPhoneNumber}
+                  placeholder="61 412 345 678"
+                  accessibilityLabel="Phone number, with country code"
+                  keyboardType="phone-pad"
+                  textContentType="telephoneNumber"
+                  autoComplete="tel"
+                  autoFocus
+                />
+                {authError ? <ErrorText>{authError}</ErrorText> : null}
                 <Btn full onPress={handleSendOtp} disabled={phoneNumber.length < 8 || authLoading}>
                   {authLoading ? 'Sending…' : 'Send code'}
                 </Btn>
-                <Pressable onPress={() => { setPhoneView('buttons'); setAuthError(null); }} style={{ alignItems: 'center', paddingVertical: 6 }}>
-                  <Text style={{ fontFamily: fontUI(400), fontSize: 15, color: T.muted }}>Back</Text>
-                </Pressable>
               </View>
             </KeyboardAvoidingView>
           )}
 
           {phoneView === 'otp' && (
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-              <Lede kicker="Verification" title="Enter the code." body={`Sent to +${phoneNumber}. Check your messages.`} />
-              <View style={{ paddingHorizontal: 24, paddingTop: 30, gap: 14 }}>
-                <TextInput
-                  value={otpCode}
-                  onChangeText={(t) => setOtpCode(t.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="123456"
-                  placeholderTextColor={T.faint}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  autoFocus
-                  style={{
-                    fontFamily: fontMono(700), fontSize: 32, letterSpacing: 8,
-                    color: T.text, textAlign: 'center',
-                    backgroundColor: T.surface, borderRadius: 14,
-                    paddingVertical: 18,
-                  }}
-                />
-                {authError ? (
-                  <Text style={{ fontFamily: fontUI(400), fontSize: 13.5, color: '#FF5A4D', textAlign: 'center' }}>{authError}</Text>
-                ) : null}
+              {backTo('phone', true)}
+              <Lede title="Enter the code." body={`Sent to +${phoneNumber}. It can take a moment to arrive.`} />
+              <View style={{ paddingHorizontal: 22, paddingTop: 30, gap: 16 }}>
+                <CodeInput value={otpCode} onChange={setOtpCode} autoFocus />
+                {authError ? <ErrorText center>{authError}</ErrorText> : null}
                 <Btn full onPress={handleVerifyOtp} disabled={otpCode.length < 6 || authLoading}>
-                  {authLoading ? 'Verifying…' : 'Verify'}
+                  {authLoading ? 'Checking…' : 'Verify'}
                 </Btn>
-                <Pressable onPress={() => { setPhoneView('phone'); setOtpCode(''); setAuthError(null); }} style={{ alignItems: 'center', paddingVertical: 6 }}>
-                  <Text style={{ fontFamily: fontUI(400), fontSize: 15, color: T.muted }}>Resend / change number</Text>
-                </Pressable>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 24 }}>
+                  <TextBtn size={15} onPress={handleSendOtp} disabled={authLoading}>Send a new code</TextBtn>
+                  <TextBtn size={15} onPress={() => { setPhoneView('phone'); setOtpCode(''); setAuthError(null); }}>Change number</TextBtn>
+                </View>
               </View>
             </KeyboardAvoidingView>
           )}
 
           {phoneView === 'email' && (
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+              {backTo('buttons')}
               <Lede
-                kicker={emailMode === 'signin' ? 'Welcome back' : 'Create account'}
                 title={emailMode === 'signin' ? 'Sign in.' : 'Join Impulse.'}
-                body={emailMode === 'signin' ? 'Enter your email and password.' : 'Pick an email and a password to get started.'}
+                body={emailMode === 'signin' ? 'Enter your email and password.' : 'Pick an email and a password.'}
               />
-              <View style={{ paddingHorizontal: 24, paddingTop: 30, gap: 12 }}>
+              <View style={{ paddingHorizontal: 22, paddingTop: 30, gap: 12 }}>
                 {emailMode === 'signup' && (
-                  <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <TextInput
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                    <Field
+                      containerStyle={{ flex: 1, minWidth: 140 }}
                       value={firstName}
                       onChangeText={setFirstName}
                       placeholder="First name"
-                      placeholderTextColor={T.faint}
+                      textContentType="givenName"
+                      autoComplete="given-name"
                       autoCapitalize="words"
                       autoCorrect={false}
                       autoFocus
-                      style={{ flex: 1, fontFamily: fontUI(400), fontSize: 17, color: T.text, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14 }}
                     />
-                    <TextInput
+                    <Field
+                      containerStyle={{ flex: 1, minWidth: 140 }}
                       value={lastName}
                       onChangeText={setLastName}
                       placeholder="Last name"
-                      placeholderTextColor={T.faint}
+                      textContentType="familyName"
+                      autoComplete="family-name"
                       autoCapitalize="words"
                       autoCorrect={false}
-                      style={{ flex: 1, fontFamily: fontUI(400), fontSize: 17, color: T.text, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14 }}
                     />
                   </View>
                 )}
-                <TextInput
+                <Field
                   value={email}
                   onChangeText={setEmail}
                   placeholder="you@example.com"
-                  placeholderTextColor={T.faint}
+                  accessibilityLabel="Email"
                   keyboardType="email-address"
+                  textContentType="emailAddress"
                   autoCapitalize="none"
                   autoCorrect={false}
+                  autoComplete="email"
                   autoFocus={emailMode === 'signin'}
-                  style={{ fontFamily: fontUI(400), fontSize: 17, color: T.text, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14 }}
                 />
-                <TextInput
+                <Field
                   value={password}
                   onChangeText={setPassword}
                   placeholder="Password"
-                  placeholderTextColor={T.faint}
                   secureTextEntry
+                  textContentType={emailMode === 'signin' ? 'password' : 'newPassword'}
                   autoCapitalize="none"
-                  style={{ fontFamily: fontUI(400), fontSize: 17, color: T.text, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 14 }}
+                  autoComplete={emailMode === 'signin' ? 'current-password' : 'new-password'}
                 />
-                {authError ? (
-                  <Text style={{ fontFamily: fontUI(400), fontSize: 13.5, color: '#FF5A4D' }}>{authError}</Text>
-                ) : null}
+                {authError ? <ErrorText>{authError}</ErrorText> : null}
                 <Btn full onPress={handleEmailAuth} disabled={!email || password.length < 6 || (emailMode === 'signup' && (!firstName.trim() || !lastName.trim())) || authLoading}>
                   {authLoading ? 'Please wait…' : emailMode === 'signin' ? 'Sign in' : 'Create account'}
                 </Btn>
-                <Pressable onPress={() => { setEmailMode(emailMode === 'signin' ? 'signup' : 'signin'); setAuthError(null); }} style={{ alignItems: 'center', paddingVertical: 4 }}>
-                  <Text style={{ fontFamily: fontUI(400), fontSize: 15, color: T.muted }}>
-                    {emailMode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-                  </Text>
-                </Pressable>
-                <Pressable onPress={() => { setPhoneView('buttons'); setAuthError(null); }} style={{ alignItems: 'center', paddingVertical: 4 }}>
-                  <Text style={{ fontFamily: fontUI(400), fontSize: 15, color: T.faint }}>Back</Text>
-                </Pressable>
+                <TextBtn size={15} onPress={() => { setEmailMode(emailMode === 'signin' ? 'signup' : 'signin'); setAuthError(null); }}>
+                  {emailMode === 'signin' ? 'No account? Sign up' : 'Have an account? Sign in'}
+                </TextBtn>
               </View>
             </KeyboardAvoidingView>
           )}

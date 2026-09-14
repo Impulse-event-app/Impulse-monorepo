@@ -1,11 +1,9 @@
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
-import { View } from 'react-native';
+import { useColorScheme, View } from 'react-native';
 import { tokens } from '../src/theme';
 import { supabase } from '../src/supabase';
-import { isOnboarded } from '../src/auth';
-
-const T = tokens(true);
+import { hasSeenIntro, isOnboarded } from '../src/auth';
 
 // Root route: no landing screen — send the user straight into the app. Also the
 // web OAuth landing page: signInWithGoogle() on web redirects back here with a
@@ -15,17 +13,21 @@ const T = tokens(true);
 // the brief moment that takes.
 export default function Index() {
   const router = useRouter();
+  const T = tokens(useColorScheme() !== 'light');
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      // No session → sign-in. Signed in but not onboarded → onboarding.
-      // Signed in and onboarded → straight to the app.
-      if (!session) {
-        router.replace('/(user)/sign-in');
-      } else {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        // Signed in but not onboarded → onboarding; otherwise straight in.
         router.replace(isOnboarded(session) ? '/(user)/home' : '/(user)/onboarding');
+        return;
       }
-    });
+      // Guests can browse. The brand intro (with sign-in) shows once, on first
+      // launch; after that the app opens on the feed.
+      router.replace((await hasSeenIntro()) ? '/(user)/home' : '/(user)/sign-in');
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return <View style={{ flex: 1, backgroundColor: T.bg }} />;

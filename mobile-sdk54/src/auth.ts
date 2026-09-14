@@ -9,10 +9,13 @@
 //            (production), plus "http://localhost:8081/**" for local web dev.
 //   Phone  → Auth > Providers > Phone  → enable, configure Twilio / MessageBird
 //
+import { useCallback } from 'react';
 import { Platform } from 'react-native';
+import { usePathname, useRouter } from 'expo-router';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
-import { ApiError, UserProfileUpdate, getMe, patchMe } from './api';
+import { ApiError, UserProfileUpdate, deleteMe, getMe, patchMe } from './api';
+import { persistGet, persistSet } from './persist';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
@@ -128,10 +131,46 @@ export async function markOnboarded() {
   await supabase.auth.updateUser({ data: { onboarded: true } }).catch(() => {/* best effort */});
 }
 
+// ── Guest browsing ───────────────────────────────────────────
+// The brand intro (sign-in hero) shows on first launch only. After that a
+// guest opens straight onto the feed and signs in when something needs it.
+const INTRO_SEEN_KEY = 'impulse.introSeen';
+
+export async function hasSeenIntro(): Promise<boolean> {
+  return (await persistGet(INTRO_SEEN_KEY)) === '1';
+}
+
+export function markIntroSeen() {
+  return persistSet(INTRO_SEEN_KEY, '1');
+}
+
+/**
+ * Returns `requireAuth(then)`: runs `then` if there's a session, otherwise
+ * opens sign-in on top of the current screen and comes back here afterwards.
+ * Use at the point of need (Book, Start a huddle), not on screen entry.
+ */
+export function useRequireAuth() {
+  const router = useRouter();
+  const pathname = usePathname();
+  return useCallback(async (then: () => void) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) { then(); return; }
+    router.push({ pathname: '/(user)/sign-in', params: { next: pathname, back: '1' } });
+  }, [router, pathname]);
+}
+
 // ── Sign out ─────────────────────────────────────────────────
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
+}
+
+// ── Delete account ───────────────────────────────────────────
+// The server removes the account (and the sign-in identity), so there is no
+// session left to revoke remotely — just clear it on this device.
+export async function deleteAccount() {
+  await deleteMe();
+  await supabase.auth.signOut({ scope: 'local' }).catch(() => {/* already gone */});
 }
 
 // ── Fetch profile from the backend API ───────────────────────

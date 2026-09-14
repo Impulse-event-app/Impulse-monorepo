@@ -1,16 +1,32 @@
 import { useEffect, useState } from 'react';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { money, apiDealToDrop, apiBookingToPlan } from '../../../src/data';
-import { fontDisplay, fontUI, useApp } from '../../../src/theme';
+import { fontMono, fontUI, useApp } from '../../../src/theme';
 import {
   createBooking, getMe, payBooking, listPaymentMethods, describeCard,
   ApiError, ApiBooking, PaymentMethod,
 } from '../../../src/api';
-import { Btn, Chip, Stepper } from '../../../src/components';
-import { ChevronBack } from '../../../src/icons';
+import {
+  BackButton,
+  Btn,
+  Chip,
+  EmptyState,
+  FloatingFooter,
+  Group,
+  Label,
+  Radio,
+  ReadableColumn,
+  Row,
+  ScreenTitle,
+  Stepper,
+  Switch,
+  unitLabel,
+} from '../../../src/components';
+import { Plus, RowIcons } from '../../../src/icons';
 import { PinchCardField } from '../../../src/PinchCardField';
+import { hapticError, hapticSuccess } from '../../../src/haptics';
 
 // Mirrors the server's deposit formula: 20% of the discounted total,
 // floored at $1.00, clamped to the total.
@@ -47,12 +63,22 @@ export default function ClaimScreen() {
     listPaymentMethods().then(setSavedCards).catch(() => setSavedCards([]));
   }, []);
 
+  // While a slot is held, on-screen Back steps from payment to the booking
+  // form. Disable the iOS edge swipe then, so the two can't disagree.
+  const navigation = useNavigation();
+  useEffect(() => {
+    navigation.setOptions({ gestureEnabled: !pendingBooking });
+  }, [navigation, pendingBooking]);
+
   const defaultCard = savedCards?.find((c) => c.is_default) ?? savedCards?.[0] ?? null;
 
   if (!d || !apiDeal) {
     return (
-      <View style={{ flex: 1, backgroundColor: T.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ fontFamily: fontUI(400), fontSize: 16, color: T.muted }}>Drop not found</Text>
+      <View style={{ flex: 1, backgroundColor: T.bg, justifyContent: 'center' }}>
+        <View style={{ position: 'absolute', top: insets.top + 4, left: 16 }}>
+          <BackButton onPress={() => router.back()} />
+        </View>
+        <EmptyState title="This drop has gone." body="It may have sold out or ended." />
       </View>
     );
   }
@@ -72,6 +98,7 @@ export default function ClaimScreen() {
       });
       setPendingBooking(booking);
     } catch (err) {
+      hapticError();
       const message =
         err instanceof ApiError
           ? err.message
@@ -83,6 +110,7 @@ export default function ClaimScreen() {
   };
 
   const finishPayment = async (paid: ApiBooking) => {
+    hapticSuccess();
     addPlan(apiBookingToPlan(paid));
     router.replace(
       `/(user)/confirm?code=${encodeURIComponent(paid.confirmation_code ?? '')}&balance=${paid.balance_amount_cents ?? balanceCents}`,
@@ -90,6 +118,7 @@ export default function ClaimScreen() {
   };
 
   const onPaymentError = (err: unknown) => {
+    hapticError();
     const message =
       err instanceof ApiError ? err.message : 'Something went wrong. Please try again.';
     Alert.alert('Payment failed', message);
@@ -105,6 +134,7 @@ export default function ClaimScreen() {
       // A saved card the server won't charge (expired, detached, never
       // authorised) comes back 409 — drop straight to the card form.
       if (err instanceof ApiError && err.status === 409) {
+        hapticError();
         setUseNewCard(true);
         Alert.alert('Card unavailable', err.message);
       } else {
@@ -137,138 +167,124 @@ export default function ClaimScreen() {
     }
   };
 
+  const line = (k: string, v: string) => (
+    <View
+      key={k}
+      accessible
+      accessibilityLabel={`${k}, ${v}`}
+      style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', columnGap: 14, paddingVertical: 12 }}
+    >
+      <Text style={{ ...fontUI(400), fontSize: 15, letterSpacing: -0.15, color: T.muted }}>{k}</Text>
+      <Text style={{ ...fontMono(400), fontSize: 15, letterSpacing: -0.15, color: T.text }}>{v}</Text>
+    </View>
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      <Pressable
-        onPress={() => (pendingBooking ? setPendingBooking(null) : router.back())}
-        style={{ position: 'absolute', top: insets.top + 4, left: 16, zIndex: 10, width: 40, height: 40, borderRadius: 999, backgroundColor: T.chipBg, alignItems: 'center', justifyContent: 'center' }}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingTop: insets.top + 60, paddingHorizontal: 16, paddingBottom: 170 }}
       >
-        <ChevronBack size={11} color={T.text} />
-      </Pressable>
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: insets.top + 56, paddingHorizontal: 22, paddingBottom: 140 }}>
-        <Text style={{ fontFamily: fontDisplay(700), fontSize: 28, color: T.text, letterSpacing: -0.84 }}>
-          {pendingBooking ? 'Secure your slot' : 'Claim your slot'}
-        </Text>
-        <Text style={{ fontFamily: fontUI(400), fontSize: 15, color: T.muted, marginTop: 6 }}>{d.venue} · {d.suburb}</Text>
-
-        {!pendingBooking ? (
-          <>
-            <View style={{ marginTop: 30 }}>
-              <Text style={{ fontFamily: fontUI(600), fontSize: 17, color: T.text }}>How many?</Text>
-              <Text style={{ fontFamily: fontUI(400), fontSize: 13.5, color: T.faint, marginTop: 2, marginBottom: 16 }}>{d.gets}</Text>
-              <Stepper value={party} onChange={setParty} max={d.cap} />
-            </View>
-
-            <View style={{ marginTop: 34 }}>
-              <Text style={{ fontFamily: fontUI(600), fontSize: 17, color: T.text, marginBottom: 14 }}>Pick a time</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9 }}>
-                {times.map((t) => (
-                  <Chip key={t} active={time === t} onPress={() => setTime(t)}>{t}</Chip>
-                ))}
-              </View>
-            </View>
-          </>
-        ) : (
-          <View style={{ marginTop: 26 }}>
-            {savedCards === null ? (
-              <ActivityIndicator color={T.accent} style={{ height: 48 }} />
-            ) : defaultCard && !useNewCard ? (
-              <>
-                <Text style={{ fontFamily: fontUI(600), fontSize: 17, color: T.text, marginBottom: 12 }}>Pay with</Text>
-                <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: T.surface, borderRadius: 16, borderWidth: 1, borderColor: T.accent }]}>
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: T.accent }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: fontUI(600), fontSize: 15, color: T.text }}>
-                      {describeCard(defaultCard)}
-                    </Text>
-                    {!!defaultCard.expiry_date && (
-                      <Text style={{ fontFamily: fontUI(400), fontSize: 12.5, color: T.faint, marginTop: 2 }}>
-                        Expires {defaultCard.expiry_date}
-                      </Text>
-                    )}
-                  </View>
-                </View>
-                <Pressable onPress={() => setUseNewCard(true)} style={{ paddingVertical: 14 }}>
-                  <Text style={{ fontFamily: fontUI(600), fontSize: 14, color: T.accent }}>
-                    Use a different card
-                  </Text>
-                </Pressable>
-              </>
-            ) : (
-              <>
-                <Text style={{ fontFamily: fontUI(600), fontSize: 17, color: T.text, marginBottom: 12 }}>Card details</Text>
-                <PinchCardField
-                  depositLabel={fmtCents(depositCents)}
-                  colors={{ bg: T.bg, text: T.text, muted: T.muted, line: T.line, accent: T.accent, surface: T.surface }}
-                  onToken={({ token, cardHolderName }) => onCardToken(token, cardHolderName)}
-                  onError={(message) => Alert.alert('Card error', message)}
-                />
-                <Pressable
-                  onPress={() => setSaveCard((v) => !v)}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 16 }}
-                >
-                  <View style={{ width: 20, height: 20, borderRadius: 6, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: saveCard ? T.accent : T.line2, backgroundColor: saveCard ? T.accent : 'transparent' }}>
-                    {saveCard && (
-                      <Text style={{ fontFamily: fontUI(700), fontSize: 12, color: T.accentInk }}>✓</Text>
-                    )}
-                  </View>
-                  <Text style={{ flex: 1, fontFamily: fontUI(400), fontSize: 14, color: T.muted }}>
-                    Save this card for next time. You can remove it any time in your profile.
-                  </Text>
-                </Pressable>
-                {defaultCard && (
-                  <Pressable onPress={() => setUseNewCard(false)} style={{ paddingBottom: 6 }}>
-                    <Text style={{ fontFamily: fontUI(600), fontSize: 14, color: T.accent }}>
-                      Use {describeCard(defaultCard)} instead
-                    </Text>
-                  </Pressable>
-                )}
-              </>
-            )}
-          </View>
-        )}
-
-        <View style={[{ marginTop: 36, paddingHorizontal: 18, paddingVertical: 16, backgroundColor: T.surface, borderRadius: 18 }, T.shadow]}>
-          {[
-            ["Tonight's price", `${money(d.now)}${d.unit}`],
-            [perPerson ? `${party} × people` : 'Slot', perPerson ? `× ${party}` : '1'],
-            ['Pay now (deposit)', `${fmtCents(depositCents)} + card fee`],
-            ['Pay at code scan', fmtCents(balanceCents)],
-          ].map(([k, v]) => (
-            <View key={k} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
-              <Text style={{ fontFamily: fontUI(400), fontSize: 14.5, color: T.muted }}>{k}</Text>
-              <Text style={{ fontFamily: fontUI(400), fontSize: 14.5, color: T.text }}>{v}</Text>
-            </View>
-          ))}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingTop: 12, borderTopWidth: 1, borderTopColor: T.line }}>
-            <Text style={{ fontFamily: fontUI(600), fontSize: 16, color: T.text }}>Total</Text>
-            <Text style={{ fontFamily: fontDisplay(700), fontSize: 26, color: T.text }}>{money(total)}</Text>
-          </View>
-          <Text style={{ fontFamily: fontUI(400), fontSize: 12.5, color: T.faint, marginTop: 10, lineHeight: 18 }}>
-            The {fmtCents(depositCents)} deposit (plus card processing fee) is non-refundable. The remaining {fmtCents(balanceCents)} is charged to your card when your code is scanned at the venue.
+        <ReadableColumn>
+          <ScreenTitle>{pendingBooking ? 'Pay the deposit' : 'Your booking'}</ScreenTitle>
+          <Text style={{ ...fontUI(400), fontSize: 17, letterSpacing: -0.19, color: T.muted, marginTop: 7 }}>
+            {d.venue}{d.suburb ? ` · ${d.suburb}` : ''}
           </Text>
-        </View>
+
+          {!pendingBooking ? (
+            <>
+              <View style={{ marginTop: 36 }}>
+                <Text accessibilityRole="header" style={{ ...fontUI(500), fontSize: 17, letterSpacing: -0.19, color: T.text }}>How many?</Text>
+                <Label style={{ marginTop: 4, marginBottom: 18 }}>{d.gets}</Label>
+                <Stepper value={party} onChange={setParty} max={d.cap} label="People" />
+              </View>
+
+              <View style={{ marginTop: 36 }}>
+                <Text accessibilityRole="header" style={{ ...fontUI(500), fontSize: 17, letterSpacing: -0.19, color: T.text, marginBottom: 14 }}>Pick a time</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 8, rowGap: 10 }}>
+                  {times.map((t) => (
+                    <Chip key={t} active={time === t} onPress={() => setTime(t)}>{t}</Chip>
+                  ))}
+                </View>
+              </View>
+            </>
+          ) : savedCards === null ? (
+            <ActivityIndicator color={T.accent} style={{ height: 80 }} accessibilityLabel="Loading saved cards" />
+          ) : defaultCard && !useNewCard ? (
+            <Group label="Pay with">
+              <Row
+                icon={RowIcons.card(T.muted)}
+                label={describeCard(defaultCard)}
+                sublabel={defaultCard.expiry_date ? `Expires ${defaultCard.expiry_date}` : undefined}
+                trailing={<Radio on />}
+              />
+              <Row icon={<Plus size={13} color={T.accent} />} label="Use a different card" accent chevron={false} onPress={() => setUseNewCard(true)} />
+            </Group>
+          ) : (
+            <View style={{ marginTop: 32 }}>
+              <Label style={{ marginHorizontal: 16, marginBottom: 7 }}>Card details</Label>
+              <PinchCardField
+                depositLabel={fmtCents(depositCents)}
+                colors={{ bg: T.bg, text: T.text, muted: T.muted, line: T.line, accent: T.accent, surface: T.surface, fill: T.fill }}
+                onToken={({ token, cardHolderName }) => onCardToken(token, cardHolderName)}
+                onError={(message) => { hapticError(); Alert.alert('Card error', message); }}
+              />
+              <Group style={{ marginTop: 16 }} inset={16}>
+                <Row
+                  label="Save this card"
+                  sublabel="Remove it any time in You."
+                  trailing={<Switch on={saveCard} onChange={setSaveCard} accessibilityLabel="Save this card" />}
+                />
+                {defaultCard && (
+                  <Row label={`Use ${describeCard(defaultCard)}`} accent chevron={false} onPress={() => setUseNewCard(false)} />
+                )}
+              </Group>
+            </View>
+          )}
+
+          <View style={{ marginTop: 40 }}>
+            {line("Tonight's price", `${money(d.now)} ${unitLabel(d.unit)}`)}
+            {line(perPerson ? 'People' : 'Slot', perPerson ? `× ${party}` : '× 1')}
+            {line('Pay now', `${fmtCents(depositCents)} + card fee`)}
+            {line('Pay at the venue', fmtCents(balanceCents))}
+            <View
+              accessible
+              accessibilityLabel={`Total, ${money(total)}`}
+              style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingTop: 14, marginTop: 2, borderTopWidth: 1, borderTopColor: T.line }}
+            >
+              <Text style={{ ...fontUI(500), fontSize: 17, letterSpacing: -0.19, color: T.text }}>Total</Text>
+              <Text style={{ ...fontMono(600), fontSize: 28, letterSpacing: -0.56, color: T.text }}>{money(total)}</Text>
+            </View>
+            <Label style={{ marginTop: 14, lineHeight: 18 }}>
+              The {fmtCents(depositCents)} deposit and card fee are non-refundable. {fmtCents(balanceCents)} is charged when your code is scanned at the venue.
+            </Label>
+          </View>
+        </ReadableColumn>
       </ScrollView>
 
+      <View style={{ position: 'absolute', top: insets.top + 4, left: 16, zIndex: 22 }}>
+        <BackButton onPress={() => (pendingBooking ? setPendingBooking(null) : router.back())} />
+      </View>
+
       {!pendingBooking && (
-        <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 22, paddingTop: 14, paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 24, backgroundColor: T.bg, borderTopWidth: 0.5, borderTopColor: T.line }}>
+        <FloatingFooter>
           {loading ? (
-            <ActivityIndicator color={T.accent} style={{ height: 48 }} />
+            <ActivityIndicator color={T.accent} style={{ height: 52 }} accessibilityLabel="Reserving your slot" />
           ) : (
             <Btn full onPress={onReserve}>Continue to payment</Btn>
           )}
-        </View>
+        </FloatingFooter>
       )}
       {/* The card form carries its own pay button; the saved-card path needs one. */}
       {pendingBooking && (loading || (defaultCard && !useNewCard)) && (
-        <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 22, paddingTop: 14, paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 24, backgroundColor: T.bg, borderTopWidth: 0.5, borderTopColor: T.line }}>
+        <FloatingFooter>
           {loading ? (
-            <ActivityIndicator color={T.accent} style={{ height: 48 }} />
+            <ActivityIndicator color={T.accent} style={{ height: 52 }} accessibilityLabel="Processing payment" />
           ) : (
-            <Btn full onPress={onPayWithSavedCard}>Pay {fmtCents(depositCents)} deposit</Btn>
+            <Btn full onPress={onPayWithSavedCard}>{`Pay ${fmtCents(depositCents)} deposit`}</Btn>
           )}
-        </View>
+        </FloatingFooter>
       )}
     </View>
   );

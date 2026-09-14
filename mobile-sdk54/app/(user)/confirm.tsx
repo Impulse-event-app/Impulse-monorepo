@@ -1,8 +1,13 @@
+import { useEffect, useRef } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ScrollView, Text, View } from 'react-native';
+import { Animated, Platform, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fontDisplay, fontMono, fontUI, useApp } from '../../src/theme';
-import { Btn, PulseMark } from '../../src/components';
+import { fontUI, useApp } from '../../src/theme';
+import {
+  Btn, CodeDisplay, EASE, EmptyState, FloatingFooter, Label, Radar, ReadableColumn, ScreenTitle, useReduceMotion,
+} from '../../src/components';
+import { Check } from '../../src/icons';
+import { hapticSuccess } from '../../src/haptics';
 
 export default function ConfirmScreen() {
   const { code, balance } = useLocalSearchParams<{ code: string; balance?: string }>();
@@ -10,12 +15,31 @@ export default function ConfirmScreen() {
   const { T, plans } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReduceMotion();
   const plan = plans.find((p) => p.code === code) || plans[0] || null;
+
+  const pop = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(pop, { toValue: 1, duration: 350, easing: EASE, useNativeDriver: Platform.OS !== 'web' }).start();
+  }, [pop]);
+
+  // One success tap when a fresh booking lands here (not when reopened from Plans).
+  const buzzed = useRef(false);
+  useEffect(() => {
+    if (plan && balance !== undefined && !buzzed.current) {
+      buzzed.current = true;
+      hapticSuccess();
+    }
+  }, [plan, balance]);
 
   if (!plan) {
     return (
-      <View style={{ flex: 1, backgroundColor: T.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ fontFamily: fontUI(400), fontSize: 16, color: T.muted }}>No plan found</Text>
+      <View style={{ flex: 1, backgroundColor: T.bg, justifyContent: 'center' }}>
+        <EmptyState
+          title="No booking found."
+          body="It may still be confirming. Check Plans in a moment."
+          action={<Btn onPress={() => router.replace('/(user)/home')}>Back to tonight</Btn>}
+        />
       </View>
     );
   }
@@ -26,49 +50,62 @@ export default function ConfirmScreen() {
     <View style={{ flex: 1, backgroundColor: T.bg }}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: insets.top + 30, paddingHorizontal: 24, paddingBottom: 160, alignItems: 'center' }}
+        contentContainerStyle={{ paddingTop: insets.top + 36, paddingHorizontal: 24, paddingBottom: 180 }}
       >
-        <PulseMark size={64} radius={17} />
-        <Text style={{ marginTop: 20, fontFamily: fontDisplay(700), fontSize: 32, color: T.text, letterSpacing: -0.96 }}>
-          {verified ? 'Verified.' : "You're on."}
-        </Text>
-        <Text style={{ fontFamily: fontUI(400), fontSize: 16, color: T.muted, marginTop: 8, lineHeight: 23, textAlign: 'center' }}>
-          {plan.venue} · {plan.time} · {plan.party} {plan.party === 1 ? 'person' : 'people'}
-        </Text>
-
-        <View style={[{ marginTop: 28, paddingVertical: 30, paddingHorizontal: 24, backgroundColor: T.surface, borderRadius: 24, alignItems: 'center', gap: 14, alignSelf: 'stretch' }, T.shadow]}>
-          {verified ? (
-            <>
-              <View style={{ width: 56, height: 56, borderRadius: 999, backgroundColor: T.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 26, color: T.accent }}>✓</Text>
-              </View>
-              <Text style={{ fontFamily: fontUI(600), fontSize: 17, color: T.text }}>Code verified at the venue</Text>
-              <Text style={{ fontFamily: fontUI(400), fontSize: 13.5, color: T.muted, maxWidth: 260, lineHeight: 20, textAlign: 'center' }}>
-                {plan.paymentNote ?? 'Enjoy your night!'}
-              </Text>
-            </>
-          ) : (
-            <>
-              <Text style={{ fontFamily: fontMono(400), fontSize: 11.5, letterSpacing: 1.6, textTransform: 'uppercase', color: T.faint }}>Your code</Text>
-              <Text style={{ fontFamily: fontMono(700), fontSize: 52, color: T.text, letterSpacing: 10, marginLeft: 10 }}>{plan.code}</Text>
-              <Text style={{ fontFamily: fontUI(400), fontSize: 13.5, color: T.faint, maxWidth: 240, lineHeight: 20, textAlign: 'center' }}>
-                Give this code at the door at {plan.venue}. Your slot's held for 20 minutes.
-              </Text>
-            </>
-          )}
-        </View>
-
-        {!verified && balanceCents !== null && balanceCents > 0 && (
-          <Text style={{ fontFamily: fontUI(400), fontSize: 13.5, color: T.muted, marginTop: 18, lineHeight: 20, textAlign: 'center', maxWidth: 280 }}>
-            Your card will be charged ${(balanceCents / 100).toFixed(2)} when your code is scanned at the venue.
+        <ReadableColumn style={{ alignItems: 'center' }}>
+          <Animated.View
+            style={{
+              opacity: pop,
+              transform: reduceMotion ? [] : [{ scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }],
+            }}
+          >
+            <Radar size={60} kind="sweep" decorative />
+          </Animated.View>
+          <ScreenTitle style={{ marginTop: 22, textAlign: 'center' }}>{verified ? 'Verified.' : "You're booked."}</ScreenTitle>
+          <Text style={{ ...fontUI(400), fontSize: 17, lineHeight: 25, letterSpacing: -0.19, color: T.muted, marginTop: 8, textAlign: 'center' }}>
+            {plan.venue} · {plan.time} · {plan.party} {plan.party === 1 ? 'person' : 'people'}
           </Text>
-        )}
+
+          <View
+            style={{
+              marginTop: 32, padding: 22, alignSelf: 'stretch', backgroundColor: T.surface, borderRadius: 10,
+              borderWidth: 1, borderColor: T.line, alignItems: 'center', gap: 18,
+            }}
+          >
+            {verified ? (
+              <>
+                <View
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                  style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: T.accentSoft, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Check size={24} color={T.accent} />
+                </View>
+                <Text style={{ ...fontUI(500), fontSize: 17, letterSpacing: -0.19, color: T.text, textAlign: 'center' }}>Code checked at the door.</Text>
+                <Label style={{ maxWidth: 320, lineHeight: 19, textAlign: 'center' }}>{plan.paymentNote ?? 'Enjoy the night.'}</Label>
+              </>
+            ) : (
+              <>
+                <CodeDisplay code={plan.code} size="lg" label="Your door code" />
+                <Label style={{ maxWidth: 320, lineHeight: 19, textAlign: 'center' }}>
+                  Show this at the door at {plan.venue}. Held for twenty minutes.
+                </Label>
+              </>
+            )}
+          </View>
+
+          {!verified && balanceCents !== null && balanceCents > 0 && (
+            <Label style={{ marginTop: 18, lineHeight: 19, textAlign: 'center', maxWidth: 320 }}>
+              ${(balanceCents / 100).toFixed(2)} is charged to your card when the code is scanned.
+            </Label>
+          )}
+        </ReadableColumn>
       </ScrollView>
 
-      <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 22, paddingTop: 14, paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 24, backgroundColor: T.bg, borderTopWidth: 0.5, borderTopColor: T.line, gap: 10 }}>
+      <FloatingFooter>
         <Btn full onPress={() => router.replace('/(user)/plans')}>View in plans</Btn>
         <Btn full variant="ghost" onPress={() => router.replace('/(user)/home')}>Back to tonight</Btn>
-      </View>
+      </FloatingFooter>
     </View>
   );
 }

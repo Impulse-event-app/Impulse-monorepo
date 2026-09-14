@@ -5,7 +5,8 @@
 // CaptureJs — never to our server.
 
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, TextInput, TextInputProps, View } from 'react-native';
+import type { PinchColors } from './PinchCardField';
 
 const CAPTUREJS_SRC = 'https://cdn.getpinch.com.au/capturejs/pinch.capture.v2.js';
 const CAPTUREJS_INTEGRITY = 'sha384-hglYFSKC4AMA/rAQOGB3OiA8u5ri5F4qNMGgw4I+fggDSlTmPyREcj1J+VGnkAX8';
@@ -15,9 +16,9 @@ const PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_PINCH_PUBLISHABLE_KEY ?? '';
 export type PinchTokenResult = { token: string; cardHolderName: string };
 
 type Props = {
-  /** e.g. "$4.90" — shown on the pay button */
+  /** A money amount (e.g. "$4.90") reads "Pay $4.90 deposit"; any other text is used as-is. */
   depositLabel: string;
-  colors: { bg: string; text: string; muted: string; line: string; accent: string; surface: string };
+  colors: PinchColors;
   onToken: (result: PinchTokenResult) => void;
   onError: (message: string) => void;
 };
@@ -27,6 +28,10 @@ type PinchGlobal = {
     createToken: (fields: Record<string, string>) => Promise<{ token?: string; errors?: unknown }>;
   };
 };
+
+function payButtonLabel(depositLabel: string) {
+  return depositLabel.trim().startsWith('$') ? `Pay ${depositLabel} deposit` : depositLabel;
+}
 
 /** Pull a readable message out of a CaptureJs rejection ({ hasError, errors }). */
 function extractPinchError(e: unknown): string {
@@ -68,6 +73,26 @@ function loadCaptureJs(): Promise<void> {
   return captureJsPromise;
 }
 
+/** Brand v2 input: 52pt, radius 10, quiet fill, accent border on focus. */
+function CardInput({ c, ...rest }: TextInputProps & { c: PinchColors }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <TextInput
+      placeholderTextColor={c.muted}
+      {...rest}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      style={{
+        height: 52, paddingHorizontal: 14, fontSize: 17, letterSpacing: -0.2, color: c.text,
+        fontVariant: ['tabular-nums'], backgroundColor: c.fill ?? c.surface, borderRadius: 10,
+        borderWidth: 1, borderColor: focused ? c.accent : 'transparent',
+        // react-native-web: drop the browser focus ring; the border shows focus instead.
+        ...({ outlineStyle: 'none' } as object),
+      }}
+    />
+  );
+}
+
 export function PinchCardField({ depositLabel, colors: c, onToken, onError }: Props) {
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -86,17 +111,7 @@ export function PinchCardField({ depositLabel, colors: c, onToken, onError }: Pr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const inputStyle = {
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    fontSize: 16,
-    color: c.text,
-    backgroundColor: c.surface,
-    borderWidth: 1,
-    borderColor: c.line,
-    borderRadius: 12,
-  } as const;
-  const labelStyle = { fontSize: 13, color: c.muted, marginTop: 12, marginBottom: 5 } as const;
+  const labelStyle = { fontSize: 13, letterSpacing: -0.05, color: c.muted, marginTop: 14, marginBottom: 7, marginHorizontal: 4 } as const;
 
   const submit = async () => {
     setError('');
@@ -140,39 +155,38 @@ export function PinchCardField({ depositLabel, colors: c, onToken, onError }: Pr
 
   return (
     <View>
-      <Text style={labelStyle}>Name on card</Text>
-      <TextInput value={cardHolderName} onChangeText={setCardHolderName} placeholder="Jane Smith"
-        placeholderTextColor={c.muted} autoComplete="cc-name" style={inputStyle} />
+      <Text style={[labelStyle, { marginTop: 0 }]}>Name on card</Text>
+      <CardInput c={c} value={cardHolderName} onChangeText={setCardHolderName} placeholder="Jordan Lee" autoComplete="cc-name" />
       <Text style={labelStyle}>Card number</Text>
-      <TextInput value={cardNumber} onChangeText={setCardNumber} placeholder="4111 1111 1111 1111"
-        placeholderTextColor={c.muted} inputMode="numeric" autoComplete="cc-number" style={inputStyle} />
-      <View style={{ flexDirection: 'row', gap: 10 }}>
+      <CardInput c={c} value={cardNumber} onChangeText={setCardNumber} placeholder="4111 1111 1111 1111" inputMode="numeric" autoComplete="cc-number" />
+      <View style={{ flexDirection: 'row', gap: 8 }}>
         <View style={{ flex: 1 }}>
-          <Text style={labelStyle}>Expiry month</Text>
-          <TextInput value={expiryMonth} onChangeText={setExpiryMonth} placeholder="MM" maxLength={2}
-            placeholderTextColor={c.muted} inputMode="numeric" style={inputStyle} />
+          <Text style={labelStyle}>Month</Text>
+          <CardInput c={c} value={expiryMonth} onChangeText={setExpiryMonth} placeholder="MM" maxLength={2} inputMode="numeric" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={labelStyle}>Expiry year</Text>
-          <TextInput value={expiryYear} onChangeText={setExpiryYear} placeholder="YYYY" maxLength={4}
-            placeholderTextColor={c.muted} inputMode="numeric" style={inputStyle} />
+          <Text style={labelStyle}>Year</Text>
+          <CardInput c={c} value={expiryYear} onChangeText={setExpiryYear} placeholder="YYYY" maxLength={4} inputMode="numeric" />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={labelStyle}>CVC</Text>
-          <TextInput value={cvc} onChangeText={setCvc} placeholder="123" maxLength={4}
-            placeholderTextColor={c.muted} inputMode="numeric" style={inputStyle} />
+          <CardInput c={c} value={cvc} onChangeText={setCvc} placeholder="123" maxLength={4} inputMode="numeric" />
         </View>
       </View>
       <Pressable
         onPress={submit}
         disabled={busy}
-        style={{ marginTop: 18, paddingVertical: 14, borderRadius: 999, backgroundColor: c.accent, alignItems: 'center', opacity: busy ? 0.5 : 1 }}
+        accessibilityRole="button"
+        style={({ pressed }) => ({
+          marginTop: 20, height: 52, borderRadius: 26, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center',
+          opacity: busy ? 0.35 : 1, transform: pressed && !busy ? [{ scale: 0.985 }] : undefined,
+        })}
       >
         {busy
           ? <ActivityIndicator color="#fff" />
-          : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>Pay {depositLabel} deposit</Text>}
+          : <Text style={{ color: '#fff', fontSize: 17, letterSpacing: -0.2, fontWeight: '500', fontVariant: ['tabular-nums'] }}>{payButtonLabel(depositLabel)}</Text>}
       </Pressable>
-      {!!error && <Text style={{ color: '#e5484d', fontSize: 13, marginTop: 10 }}>{error}</Text>}
+      {!!error && <Text style={{ color: c.accent, fontSize: 15, lineHeight: 21, marginTop: 10, marginHorizontal: 4 }}>{error}</Text>}
     </View>
   );
 }

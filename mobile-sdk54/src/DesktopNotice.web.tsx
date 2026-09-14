@@ -5,10 +5,13 @@
 // across, then let them continue.
 //
 // Mounted once in app/_layout.tsx, above the router, so it covers every route.
+// There's no AppProvider up here, so this reads tokens directly and only uses
+// components that don't need the theme context (Radar).
 import React, { useEffect, useState } from 'react';
 import { Pressable, Text, View, useWindowDimensions } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
-import { fontDisplay, fontMono, fontUI, tokens } from './theme';
+import { fontMono, fontUI, tokens } from './theme';
+import { Radar } from './components';
 import { persistGet, persistSet } from './persist';
 
 const DISMISS_KEY = 'impulse.desktopNotice.dismissed';
@@ -37,7 +40,7 @@ export function DesktopNotice() {
 
   if (dismissed !== false || !isDesktop(width)) return null;
 
-  const t = tokens(true); // Root layout has no AppProvider; the app chrome is dark.
+  const t = tokens(true); // The app ground is dark by default.
 
   function dismiss() {
     setDismissed(true);
@@ -60,69 +63,61 @@ export function DesktopNotice() {
         alignItems: 'center',
         justifyContent: 'center',
         padding: 24,
-        backgroundColor: 'rgba(10,9,8,0.88)',
+        backgroundColor: 'rgba(10,10,10,0.88)',
       }}
     >
       <View
         style={{
           width: '100%',
-          maxWidth: 460,
+          maxWidth: 440,
           padding: 36,
-          borderRadius: 22,
+          borderRadius: 14,
           backgroundColor: t.surface,
           borderWidth: 1,
-          borderColor: t.line2,
+          borderColor: t.line,
           alignItems: 'center',
-          ...(t.shadow as object),
         }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 18 }}>
-          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: t.accent }} />
-          <Text style={{ fontFamily: fontMono(400), fontSize: 11, letterSpacing: 1.6, color: t.faint }}>
-            IMPULSE
-          </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 24 }}>
+          <Radar size={30} />
+          <Text style={{ ...fontUI(600), fontSize: 20, letterSpacing: -0.66, color: t.text }}>Impulse</Text>
         </View>
 
         <Text
           style={{
-            fontFamily: fontDisplay(700), fontSize: 26, lineHeight: 32,
+            ...fontUI(600), fontSize: 26, lineHeight: 31, letterSpacing: -0.57,
             color: t.text, textAlign: 'center', marginBottom: 10,
           }}
         >
-          Best experienced on your phone
+          Best on your phone.
         </Text>
 
         <Text
           style={{
-            fontFamily: fontUI(400), fontSize: 14.5, lineHeight: 21,
+            ...fontUI(400), fontSize: 17, lineHeight: 25, letterSpacing: -0.19,
             color: t.muted, textAlign: 'center', marginBottom: 26,
           }}
         >
-          Impulse is built for a phone screen — live drops, huddles with friends,
-          and scanning your ticket at the door. Scan this code to pick up where
-          you left off.
+          Impulse is built for a phone: live drops, huddles with friends and your code at the door. Scan to pick up where you left off.
         </Text>
 
-        <View style={{ padding: 14, borderRadius: 16, backgroundColor: '#FFFFFF', marginBottom: 14 }}>
-          <QRCode value={url} size={148} backgroundColor="#FFFFFF" color="#0F0E0D" />
+        <View style={{ padding: 14, borderRadius: 14, backgroundColor: '#FFFFFF', marginBottom: 14 }}>
+          <QRCode value={url} size={148} backgroundColor="#FFFFFF" color="#0A0A0A" />
         </View>
 
-        <Text
-          numberOfLines={1}
-          style={{ fontFamily: fontMono(400), fontSize: 11, color: t.faint, marginBottom: 26 }}
-        >
+        <Text numberOfLines={1} style={{ ...fontMono(400, 13), fontSize: 13, color: t.muted, marginBottom: 26 }}>
           {url.replace(/^https?:\/\//, '')}
         </Text>
 
         <Pressable
           onPress={dismiss}
-          style={{
-            paddingVertical: 13, paddingHorizontal: 24, borderRadius: 12,
-            borderWidth: 1, borderColor: t.line2, backgroundColor: t.surface2,
-          }}
+          style={({ pressed }) => ({
+            height: 44, paddingHorizontal: 20, borderRadius: 22, justifyContent: 'center',
+            borderWidth: 1, borderColor: t.line2, backgroundColor: pressed ? t.fill : 'transparent',
+          })}
         >
-          <Text style={{ fontFamily: fontUI(600), fontSize: 14, color: t.text }}>
-            Continue on desktop anyway
+          <Text style={{ ...fontUI(500), fontSize: 15, letterSpacing: -0.12, color: t.text }}>
+            Continue on desktop
           </Text>
         </Pressable>
       </View>

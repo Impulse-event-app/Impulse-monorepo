@@ -15,15 +15,30 @@ const PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_PINCH_PUBLISHABLE_KEY ?? '';
 
 export type PinchTokenResult = { token: string; cardHolderName: string };
 
+export type PinchColors = {
+  bg: string;
+  text: string;
+  muted: string;
+  line: string;
+  accent: string;
+  surface: string;
+  /** input fill (brand v2 quiet control fill); falls back to surface */
+  fill?: string;
+};
+
 type Props = {
-  /** e.g. "$4.90" — shown on the pay button */
+  /** A money amount (e.g. "$4.90") reads "Pay $4.90 deposit"; any other text is used as-is. */
   depositLabel: string;
-  colors: { bg: string; text: string; muted: string; line: string; accent: string; surface: string };
+  colors: PinchColors;
   onToken: (result: PinchTokenResult) => void;
   onError: (message: string) => void;
 };
 
-function buildHtml(depositLabel: string, c: Props['colors']): string {
+export function payButtonLabel(depositLabel: string) {
+  return depositLabel.trim().startsWith('$') ? `Pay ${depositLabel} deposit` : depositLabel;
+}
+
+function buildHtml(depositLabel: string, c: PinchColors): string {
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -31,31 +46,37 @@ function buildHtml(depositLabel: string, c: Props['colors']): string {
 <script src="${CAPTUREJS_SRC}" integrity="${CAPTUREJS_INTEGRITY}" crossorigin="anonymous"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-  body { background: ${c.bg}; font-family: -apple-system, system-ui, sans-serif; padding: 2px; }
-  label { display: block; font-size: 13px; color: ${c.muted}; margin: 12px 0 5px; }
-  input { width: 100%; padding: 12px 14px; font-size: 16px; color: ${c.text};
-          background: ${c.surface}; border: 1px solid ${c.line}; border-radius: 12px; outline: none; }
+  body { background: transparent; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, Roboto, sans-serif;
+         -webkit-font-smoothing: antialiased; padding: 2px; }
+  label { display: block; font-size: 13px; letter-spacing: -0.05px; color: ${c.muted}; margin: 14px 4px 7px; }
+  label:first-child { margin-top: 0; }
+  input { width: 100%; height: 52px; padding: 0 14px; font: inherit; font-size: 17px; letter-spacing: -0.2px;
+          font-variant-numeric: tabular-nums; color: ${c.text}; background: ${c.fill ?? c.surface};
+          border: 1px solid transparent; border-radius: 10px; outline: none; -webkit-appearance: none; }
+  input::placeholder { color: ${c.muted}; opacity: 0.7; }
   input:focus { border-color: ${c.accent}; }
-  .row { display: flex; gap: 10px; }
-  .row > div { flex: 1; }
-  button { width: 100%; margin-top: 18px; padding: 14px; font-size: 16px; font-weight: 600;
-           color: #fff; background: ${c.accent}; border: none; border-radius: 999px; }
-  button:disabled { opacity: 0.5; }
-  #err { color: #e5484d; font-size: 13px; margin-top: 10px; min-height: 16px; }
+  .row { display: flex; gap: 8px; }
+  .row > div { flex: 1; min-width: 0; }
+  button { width: 100%; height: 52px; margin-top: 20px; font: inherit; font-size: 17px; font-weight: 500; letter-spacing: -0.2px;
+           font-variant-numeric: tabular-nums; color: #fff; background: ${c.accent}; border: none; border-radius: 26px;
+           transition: transform .15s cubic-bezier(.32,.72,0,1); }
+  button:active { transform: scale(.985); filter: brightness(.9); }
+  button:disabled { opacity: 0.35; }
+  #err { color: ${c.accent}; font-size: 15px; line-height: 21px; margin: 10px 4px 0; min-height: 16px; }
 </style>
 </head>
 <body>
   <label>Name on card</label>
-  <input id="cardHolderName" autocomplete="cc-name" placeholder="Jane Smith">
+  <input id="cardHolderName" autocomplete="cc-name" placeholder="Jordan Lee">
   <label>Card number</label>
   <input id="cardNumber" inputmode="numeric" autocomplete="cc-number" placeholder="4111 1111 1111 1111">
   <div class="row">
     <div>
-      <label>Expiry month</label>
+      <label>Month</label>
       <input id="expiryMonth" inputmode="numeric" autocomplete="cc-exp-month" placeholder="MM" maxlength="2">
     </div>
     <div>
-      <label>Expiry year</label>
+      <label>Year</label>
       <input id="expiryYear" inputmode="numeric" autocomplete="cc-exp-year" placeholder="YYYY" maxlength="4">
     </div>
     <div>
@@ -63,7 +84,7 @@ function buildHtml(depositLabel: string, c: Props['colors']): string {
       <input id="cvc" inputmode="numeric" autocomplete="cc-csc" placeholder="123" maxlength="4">
     </div>
   </div>
-  <button id="pay">Pay ${depositLabel} deposit</button>
+  <button id="pay">${payButtonLabel(depositLabel)}</button>
   <div id="err"></div>
 <script>
   var post = function (msg) { window.ReactNativeWebView.postMessage(JSON.stringify(msg)); };
@@ -118,13 +139,18 @@ function buildHtml(depositLabel: string, c: Props['colors']): string {
 }
 
 export function PinchCardField({ depositLabel, colors, onToken, onError }: Props) {
-  const html = useMemo(() => buildHtml(depositLabel, colors), [depositLabel, colors]);
+  // Key on the colour values, not the object identity, so a re-render with an
+  // equal palette doesn't reload the WebView and wipe what the user typed.
+  const colorKey = JSON.stringify(colors);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const html = useMemo(() => buildHtml(depositLabel, colors), [depositLabel, colorKey]);
 
   return (
     <WebView
       originWhitelist={['*']}
       source={{ html, baseUrl: 'https://app.impulse.local' }}
-      style={{ height: 360, backgroundColor: 'transparent' }}
+      style={{ height: 380, backgroundColor: 'transparent' }}
+      containerStyle={{ backgroundColor: 'transparent' }}
       scrollEnabled={false}
       javaScriptEnabled
       onMessage={(event) => {

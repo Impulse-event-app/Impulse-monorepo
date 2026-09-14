@@ -9,27 +9,18 @@ import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ACCESSIBILITY_OPTIONS, CATEGORIES, SYDNEY_SUBURBS } from '../../src/data';
-import { fontDisplay, fontMono, fontUI, useApp } from '../../src/theme';
-import { Btn } from '../../src/components';
-import { GlyphBell, GlyphPin, Search } from '../../src/icons';
+import { fontMono, fontUI, useApp } from '../../src/theme';
+import { Btn, Chip, Group, Label, Row, TextBtn } from '../../src/components';
+import { Close, GlyphAccess, GlyphBell, GlyphCard, GlyphPin, Search } from '../../src/icons';
 import { isOnboarded, markOnboarded, syncUserProfile } from '../../src/auth';
 import { requestLocationAccess, requestNotificationAccess, syncPushToken } from '../../src/permissions';
 import { supabase } from '../../src/supabase';
-import { Lede, Panel, usePagerWidth } from '../../src/onboardingUI';
+import { GlyphPlate, Lede, PageDots, Panel, usePagerWidth } from '../../src/onboardingUI';
 import { useWallet, WalletPanel } from '../../src/wallet';
 
 const SUBURBS = ['Sydney CBD', 'Surry Hills', 'Newtown', 'Bondi', 'Marrickville', 'Enmore', 'Darlinghurst', 'Redfern', 'Chippendale', 'Glebe', 'Paddington', 'Manly'];
 const ACTIVITIES = CATEGORIES.filter((c) => c !== 'All');
 const STEPS = 7; // location, notifications, age, suburb, accessibility, activities, card
-
-function PermIcon({ children }: { children: React.ReactNode }) {
-  const { T } = useApp();
-  return (
-    <View style={{ width: 116, height: 116, borderRadius: 30, backgroundColor: T.accentSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 30 }}>
-      {children}
-    </View>
-  );
-}
 
 export default function Onboarding() {
   const { T, setProfile } = useApp();
@@ -69,10 +60,10 @@ export default function Onboarding() {
   };
   const next = () => goTo(page + 1);
 
-  // Re-anchor on viewport change (mobile web: keyboard, URL bar, rotation).
-  // Pages resize with the window, so a stale scroll offset would leave the
-  // current step half off-screen — and scrollEnabled={false} means the user
-  // can't swipe back onto it.
+  // Re-anchor on viewport change (mobile web: keyboard, URL bar; iPad:
+  // rotation, Split View). Pages resize with the window, so a stale scroll
+  // offset would leave the current step half off-screen — and
+  // scrollEnabled={false} means the user can't swipe back onto it.
   useEffect(() => {
     scrollRef.current?.scrollTo({ x: page * W, animated: false });
   }, [W, page]);
@@ -103,9 +94,12 @@ export default function Onboarding() {
   };
 
   const complete = async () => {
-    if (suburb || acts.length) {
-      setProfile((p) => ({ ...p, suburb: suburb || p.suburb, acts: acts.length ? acts : p.acts }));
-    }
+    setProfile((p) => ({
+      ...p,
+      suburb: suburb || p.suburb,
+      acts: acts.length ? acts : p.acts,
+      notifications: notifEnabled,
+    }));
     // Fire-and-forget profile sync to public.users
     syncUserProfile({
       suburb: suburb ?? undefined,
@@ -122,29 +116,31 @@ export default function Onboarding() {
   const toggleAct = (a: string) => setActs((p) => (p.includes(a) ? p.filter((x) => x !== a) : [...p, a]));
   const toggleAccess = (a: string) => setAccess((p) => (p.includes(a) ? p.filter((x) => x !== a) : [...p, a]));
 
-  const skipLink = (label: string, onPress: () => void) => (
-    <Pressable onPress={onPress} style={{ paddingVertical: 6, alignItems: 'center' }}>
-      <Text style={{ fontFamily: fontUI(400), fontSize: 15, color: T.muted }}>{label}</Text>
-    </Pressable>
-  );
-
   if (!ready) {
     return <View style={{ flex: 1, backgroundColor: T.bg }} />;
   }
 
+  const top = insets.top + 44;
+  const matches = query.trim()
+    ? SYDNEY_SUBURBS.filter((s) => s.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 6)
+    : [];
+
+  // A centred permission-style step: glass plate, title, body.
+  const centred = (glyph: React.ReactNode, title: string, body: string, extra?: React.ReactNode) => (
+    <View style={{ flex: 1, justifyContent: 'center', paddingTop: top }}>
+      <View style={{ paddingHorizontal: 22 }}>
+        <GlyphPlate>{glyph}</GlyphPlate>
+      </View>
+      <Lede title={title} body={body} />
+      {extra}
+    </View>
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      {/* Progress dots — one per step, read-only (no tap-to-jump) so no step
-          can be skipped from the header. */}
-      <View style={{ position: 'absolute', top: insets.top + 6, left: 0, right: 0, zIndex: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 22 }}>
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          {[...Array(STEPS)].map((_, i) => {
-            const active = i === page;
-            return (
-              <View key={i} style={{ width: active ? 22 : 7, height: 7, borderRadius: 4, backgroundColor: active ? T.accent : T.line2 }} />
-            );
-          })}
-        </View>
+      {/* Progress — read-only, so no step can be skipped from the header. */}
+      <View style={{ position: 'absolute', top: insets.top + 14, left: 22, right: 22, zIndex: 20 }}>
+        <PageDots count={STEPS} index={page} />
       </View>
 
       <ScrollView
@@ -159,134 +155,122 @@ export default function Onboarding() {
         {/* 0 — location */}
         <Panel
           width={W}
+          inactive={page !== 0}
           footer={
             <>
-              <Btn full onPress={allowLocation} disabled={permBusy}>
-                {permBusy ? 'Asking…' : 'Allow location'}
-              </Btn>
-              {skipLink('Not now', next)}
+              <Btn full onPress={allowLocation} disabled={permBusy}>{permBusy ? 'Asking…' : 'Allow location'}</Btn>
+              <TextBtn onPress={next}>Not now</TextBtn>
             </>
           }
         >
-          <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
-            <PermIcon><GlyphPin color={T.accent} /></PermIcon>
-            <Text style={{ fontFamily: fontMono(400), fontSize: 11.5, letterSpacing: 1.4, textTransform: 'uppercase', color: T.accent, marginBottom: 12 }}>Find your area</Text>
-            <Text style={{ fontFamily: fontDisplay(700), fontSize: 30, lineHeight: 33, letterSpacing: -0.9, color: T.text }}>What's on near you</Text>
-            <Text style={{ marginTop: 13, fontFamily: fontUI(400), fontSize: 16.5, lineHeight: 25, color: T.muted, maxWidth: 320 }}>
-              Impulse uses your location to surface drops within a few suburbs — never in the background, only while you're looking.
-            </Text>
-          </View>
+          {centred(
+            <GlyphPin color={T.accent} />,
+            "What's on near you",
+            "We use your location while you're looking. Never in the background.",
+          )}
         </Panel>
 
         {/* 1 — notifications */}
         <Panel
           width={W}
+          inactive={page !== 1}
           footer={
             <>
-              <Btn full onPress={allowNotifications} disabled={permBusy}>
-                {permBusy ? 'Asking…' : 'Turn on notifications'}
-              </Btn>
-              {skipLink('Not now', next)}
+              <Btn full onPress={allowNotifications} disabled={permBusy}>{permBusy ? 'Asking…' : 'Turn on notifications'}</Btn>
+              <TextBtn onPress={next}>Not now</TextBtn>
             </>
           }
         >
-          <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
-            <PermIcon><GlyphBell color={T.accent} /></PermIcon>
-            <Text style={{ fontFamily: fontMono(400), fontSize: 11.5, letterSpacing: 1.4, textTransform: 'uppercase', color: T.accent, marginBottom: 12 }}>Stay in the loop</Text>
-            <Text style={{ fontFamily: fontDisplay(700), fontSize: 30, lineHeight: 33, letterSpacing: -0.9, color: T.text }}>Get the drop</Text>
-            <Text style={{ marginTop: 13, fontFamily: fontUI(400), fontSize: 16.5, lineHeight: 25, color: T.muted, maxWidth: 320 }}>
-              A nudge when something good opens up near you tonight. No daily blast, no noise — just the ones worth leaving the house for.
-            </Text>
-          </View>
+          {centred(
+            <GlyphBell color={T.accent} />,
+            'One nudge, not a daily blast',
+            'A notification when something opens up nearby tonight.',
+          )}
         </Panel>
 
         {/* 2 — age */}
         <Panel
           width={W}
+          inactive={page !== 2}
           footer={
             <>
               <Btn full onPress={() => { setAgeBracket(18); next(); }}>Yes, I'm 18 or over</Btn>
-              {skipLink("I'm under 18", () => {
-                setAgeDeclined(true);
-                setAgeBracket(null);
-                setTimeout(next, 650);
-              })}
+              <TextBtn
+                onPress={() => {
+                  setAgeDeclined(true);
+                  setAgeBracket(null);
+                  setTimeout(next, 650);
+                }}
+              >
+                I'm under 18
+              </TextBtn>
             </>
           }
         >
-          <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
-            <PermIcon>
-              <Text style={{ fontFamily: fontDisplay(700), fontSize: 46, letterSpacing: -1.8, color: T.accent }}>
-                18<Text style={{ fontSize: 28 }}>+</Text>
-              </Text>
-            </PermIcon>
-            <Text style={{ fontFamily: fontMono(400), fontSize: 11.5, letterSpacing: 1.4, textTransform: 'uppercase', color: T.accent, marginBottom: 12 }}>Quick one</Text>
-            <Text style={{ fontFamily: fontDisplay(700), fontSize: 30, lineHeight: 33, letterSpacing: -0.9, color: T.text }}>Are you 18 or over?</Text>
-            <Text style={{ marginTop: 13, fontFamily: fontUI(400), fontSize: 16.5, lineHeight: 25, color: T.muted, maxWidth: 320 }}>
-              Some venues serve alcohol, so we check once. We'll still show you the all-ages stuff either way.
-            </Text>
-            {ageDeclined && (
-              <View style={{ marginTop: 18, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: T.accentSoft, borderRadius: 12, maxWidth: 320 }}>
-                <Text style={{ fontFamily: fontUI(400), fontSize: 14, color: T.text }}>No worries — we'll hide 18+ venues and show you everything else.</Text>
+          {centred(
+            <Text
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+              maxFontSizeMultiplier={1}
+              style={{ ...fontMono(600), fontSize: 40, letterSpacing: -1.2, color: T.accent }}
+            >
+              18+
+            </Text>,
+            'Are you 18 or over?',
+            'Some venues serve alcohol, so we check once.',
+            ageDeclined ? (
+              <View
+                accessibilityLiveRegion="polite"
+                style={{ marginTop: 18, marginHorizontal: 22, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: T.surface, borderRadius: 14, borderWidth: 1, borderColor: T.line, maxWidth: 360 }}
+              >
+                <Text style={{ ...fontUI(400), fontSize: 15, color: T.text }}>We'll hide venues that serve alcohol.</Text>
               </View>
-            )}
-          </View>
+            ) : undefined,
+          )}
         </Panel>
 
         {/* 3 — suburb */}
         <Panel
           width={W}
-          top={insets.top + 24}
+          top={top + 18}
+          inactive={page !== 3}
           footer={<Btn full onPress={next} disabled={!suburb}>{suburb ? `Set to ${suburb}` : 'Pick your suburb'}</Btn>}
         >
-          <Lede kicker="Home base" title="Where do you call home?" body="We'll sort drops by what's closest. Change it any time." />
-          <View style={{ paddingHorizontal: 22, paddingTop: 20 }}>
-            <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 12, marginBottom: 16 }, T.shadow]}>
-              <Search size={17} color={T.muted} />
+          <Lede title="Where do you start from?" body="We sort by what's closest. Change it any time." />
+          <View style={{ paddingHorizontal: 22, paddingTop: 22 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: T.fill, borderRadius: 8, paddingHorizontal: 14, minHeight: 44, marginBottom: 18 }}>
+              <Search size={16} color={T.muted} />
               <TextInput
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Search Sydney suburbs"
-                placeholderTextColor={T.faint}
+                placeholder="Search suburbs"
+                placeholderTextColor={T.muted}
+                accessibilityLabel="Search suburbs"
                 autoCorrect={false}
-                style={{ flex: 1, fontFamily: fontUI(400), fontSize: 15, color: T.text, padding: 0 }}
+                returnKeyType="search"
+                style={{ flex: 1, alignSelf: 'stretch', paddingVertical: 10, ...fontUI(400), fontSize: 16, letterSpacing: -0.18, color: T.text }}
               />
               {query.length > 0 && (
-                <Pressable onPress={() => setQuery('')} hitSlop={8}>
-                  <Text style={{ fontFamily: fontUI(400), fontSize: 15, color: T.muted }}>✕</Text>
+                <Pressable onPress={() => setQuery('')} hitSlop={16} accessibilityRole="button" accessibilityLabel="Clear search">
+                  <Close size={12} color={T.muted} />
                 </Pressable>
               )}
             </View>
             {query.trim().length > 0 && (
-              <View style={[{ backgroundColor: T.surface, borderRadius: 14, marginBottom: 16, overflow: 'hidden' }, T.shadow]}>
-                {SYDNEY_SUBURBS
-                  .filter((s) => s.toLowerCase().includes(query.trim().toLowerCase()))
-                  .slice(0, 6)
-                  .map((s, i, arr) => (
-                    <Pressable
-                      key={s}
-                      onPress={() => { setSuburb(s); setQuery(''); }}
-                      style={{ paddingHorizontal: 15, paddingVertical: 13, borderBottomWidth: i < arr.length - 1 ? 1 : 0, borderBottomColor: T.line }}
-                    >
-                      <Text style={{ fontFamily: fontUI(500), fontSize: 15, color: T.text }}>{s}</Text>
-                    </Pressable>
-                  ))}
-                {SYDNEY_SUBURBS.filter((s) => s.toLowerCase().includes(query.trim().toLowerCase())).length === 0 && (
-                  <Text style={{ fontFamily: fontUI(400), fontSize: 14, color: T.muted, paddingHorizontal: 15, paddingVertical: 13 }}>
-                    No matching suburb — try a nearby one
-                  </Text>
+              <Group style={{ marginTop: 0, marginBottom: 18 }} inset={16}>
+                {matches.length ? (
+                  matches.map((s) => (
+                    <Row key={s} label={s} chevron={false} onPress={() => { setSuburb(s); setQuery(''); }} />
+                  ))
+                ) : (
+                  <Row label={<Label>No match. Try a nearby suburb.</Label>} />
                 )}
-              </View>
+              </Group>
             )}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9 }}>
-              {(suburb && !SUBURBS.includes(suburb) ? [suburb, ...SUBURBS] : SUBURBS).map((s) => {
-                const on = suburb === s;
-                return (
-                  <Pressable key={s} onPress={() => setSuburb(s)} style={{ height: 36, paddingHorizontal: 16, borderRadius: 999, backgroundColor: on ? T.chipOn : T.chipBg, justifyContent: 'center' }}>
-                    <Text style={{ fontFamily: fontUI(500), fontSize: 14.5, color: on ? T.chipOnInk : T.chipText }}>{s}</Text>
-                  </Pressable>
-                );
-              })}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 8, rowGap: 10 }}>
+              {(suburb && !SUBURBS.includes(suburb) ? [suburb, ...SUBURBS] : SUBURBS).map((s) => (
+                <Chip key={s} active={suburb === s} onPress={() => setSuburb(s)}>{s}</Chip>
+              ))}
             </View>
           </View>
         </Panel>
@@ -294,62 +278,43 @@ export default function Onboarding() {
         {/* 4 — accessibility */}
         <Panel
           width={W}
-          top={insets.top + 24}
+          top={top + 18}
+          inactive={page !== 4}
           footer={
             <>
-              <Btn full onPress={next}>{access.length === 0 ? 'None of these — continue' : `Continue — ${access.length} selected`}</Btn>
-              {skipLink('Skip', next)}
+              <Btn full onPress={next}>{access.length === 0 ? 'None of these' : `Continue · ${access.length} selected`}</Btn>
+              <TextBtn onPress={next}>Skip</TextBtn>
             </>
           }
         >
-          <Lede
-            kicker="Access needs"
-            title="Any accessibility requirements?"
-            body="Pick anything that applies. We'll highlight venues that support your needs. This stays private and you can change it later."
-          />
-          <View style={{ paddingHorizontal: 22, paddingTop: 22, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-            {ACCESSIBILITY_OPTIONS.map((a) => {
-              const on = access.includes(a);
-              return (
-                <Pressable
-                  key={a}
-                  onPress={() => toggleAccess(a)}
-                  style={{ paddingHorizontal: 16, paddingVertical: 11, borderRadius: 14, backgroundColor: on ? T.accent : T.chipBg, flexDirection: 'row', alignItems: 'center', gap: 8 }}
-                >
-                  <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: on ? T.accentInk : T.faint }} />
-                  <Text style={{ fontFamily: fontUI(500), fontSize: 15.5, letterSpacing: -0.16, color: on ? T.accentInk : T.text }}>{a}</Text>
-                </Pressable>
-              );
-            })}
+          <View style={{ paddingHorizontal: 22 }}>
+            <GlyphPlate><GlyphAccess color={T.accent} /></GlyphPlate>
+          </View>
+          <Lede title="Any access needs?" body="Pick what applies. We point out venues that support it. This stays private." />
+          <View style={{ paddingHorizontal: 22, paddingTop: 24, flexDirection: 'row', flexWrap: 'wrap', columnGap: 9, rowGap: 10 }}>
+            {ACCESSIBILITY_OPTIONS.map((a) => (
+              <Chip key={a} active={access.includes(a)} onPress={() => toggleAccess(a)}>{a}</Chip>
+            ))}
           </View>
         </Panel>
 
         {/* 5 — activities */}
         <Panel
           width={W}
-          top={insets.top + 24}
+          top={top + 18}
+          inactive={page !== 5}
           footer={
             <>
-              <Btn full onPress={next} disabled={acts.length === 0}>{acts.length === 0 ? 'Pick a few' : `Continue — ${acts.length} picked`}</Btn>
-              {skipLink('Skip — show me everything', next)}
+              <Btn full onPress={next} disabled={acts.length === 0}>{acts.length === 0 ? 'Pick a few' : `Done · ${acts.length} picked`}</Btn>
+              <TextBtn onPress={next}>Show me everything</TextBtn>
             </>
           }
         >
-          <Lede kicker="Almost there" title="What are you into?" body="We'll bump these to the top. You can change it later." />
-          <View style={{ paddingHorizontal: 22, paddingTop: 22, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-            {ACTIVITIES.map((a) => {
-              const on = acts.includes(a);
-              return (
-                <Pressable
-                  key={a}
-                  onPress={() => toggleAct(a)}
-                  style={{ paddingHorizontal: 16, paddingVertical: 11, borderRadius: 14, backgroundColor: on ? T.accent : T.chipBg, flexDirection: 'row', alignItems: 'center', gap: 8 }}
-                >
-                  <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: on ? T.accentInk : T.faint }} />
-                  <Text style={{ fontFamily: fontUI(500), fontSize: 15.5, letterSpacing: -0.16, color: on ? T.accentInk : T.text }}>{a}</Text>
-                </Pressable>
-              );
-            })}
+          <Lede title="What are you into?" body="We put these first. Change it later." />
+          <View style={{ paddingHorizontal: 22, paddingTop: 24, flexDirection: 'row', flexWrap: 'wrap', columnGap: 9, rowGap: 10 }}>
+            {ACTIVITIES.map((a) => (
+              <Chip key={a} active={acts.includes(a)} onPress={() => toggleAct(a)}>{a}</Chip>
+            ))}
           </View>
         </Panel>
 
@@ -358,19 +323,19 @@ export default function Onboarding() {
             Skipping loses nothing — checkout still offers "save this card". */}
         <Panel
           width={W}
-          top={insets.top + 24}
+          top={top + 18}
+          inactive={page !== 6}
           footer={
             <>
               {hasSavedCard && <Btn full onPress={complete}>Done</Btn>}
-              {skipLink(hasSavedCard ? 'Not now' : 'Skip — I\'ll add one when I book', complete)}
+              <TextBtn onPress={complete}>{hasSavedCard ? 'Not now' : "Skip. I'll add one when I book"}</TextBtn>
             </>
           }
         >
-          <Lede
-            kicker="Last bit"
-            title="Book in one tap"
-            body="Save a card now and claiming a drop is a single tap. Your card is held securely by our payment provider — Impulse never sees the number."
-          />
+          <View style={{ paddingHorizontal: 22 }}>
+            <GlyphPlate><GlyphCard color={T.accent} /></GlyphPlate>
+          </View>
+          <Lede title="Book in one tap." body="Save a card and booking takes one tap. Impulse never sees the number." />
           <View style={{ paddingHorizontal: 22, paddingTop: 24 }}>
             <WalletPanel wallet={wallet} depositLabel="Save card" />
           </View>

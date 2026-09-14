@@ -2,22 +2,47 @@
 // we render MapLibre GL with CARTO's free vector basemaps (no API key, just
 // attribution — same CARTO family as the app's old raster tiles, with proper
 // light/dark styles). Pins come from dropCoords() — exact venue coordinates
-// when the backend has them, otherwise the deal's suburb centre. The deal list
-// sits below, so even if WebGL/styles fail the tab is never empty.
+// when the backend has them, otherwise the deal's suburb centre.
 import React, { useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, money } from './data';
-import { fontDisplay, fontUI, useApp } from './theme';
-import { DropCardCompact } from './components';
-import { Filter, Search } from './icons';
+import { useApp } from './theme';
+import { Glass, Touchable } from './components';
+import { Filter } from './icons';
 
 const STYLE_LIGHT = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
 const STYLE_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
-const MAP_HEIGHT = 340;
+
+/**
+ * Brand v2 price pin as a DOM element: red pill, white tabular label, pointer.
+ * The outer element is left unstyled because MapLibre positions it (absolute +
+ * transform); styling it directly would override that and stretch it full-width.
+ */
+function pinElement(label: string, accent: string): HTMLElement {
+  const el = document.createElement('div');
+  el.style.cursor = 'pointer';
+  const pill = document.createElement('div');
+  pill.textContent = label;
+  Object.assign(pill.style, {
+    position: 'relative', display: 'inline-block', height: '26px', padding: '0 11px',
+    borderRadius: '999px', background: accent, color: '#FFFFFF', whiteSpace: 'nowrap',
+    // line-height lives in the shorthand: a separate lineHeight would be reset by `font`.
+    font: '600 13px/26px -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
+    fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em',
+  } as Partial<CSSStyleDeclaration>);
+  const tip = document.createElement('div');
+  Object.assign(tip.style, {
+    position: 'absolute', left: '50%', bottom: '-6px', marginLeft: '-5px', width: '0', height: '0',
+    borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: `7px solid ${accent}`,
+  } as Partial<CSSStyleDeclaration>);
+  pill.appendChild(tip);
+  el.appendChild(pill);
+  return el;
+}
 
 export default function MapScreenWeb() {
   const { T, dark, filters, drops } = useApp();
@@ -31,7 +56,22 @@ export default function MapScreenWeb() {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
 
-  // Create the map once. A tap on empty map clears the selection.
+  // MapLibre's controls are plain DOM, outside RN styling. Keep the attribution
+  // collapsed to its (i) button and lift it clear of the floating tab bar.
+  useEffect(() => {
+    const id = 'impulse-map-controls';
+    if (document.getElementById(id)) return;
+    const style = document.createElement('style');
+    style.id = id;
+    style.textContent = `
+      .maplibregl-ctrl-bottom-right { bottom: 104px !important; right: 6px !important; }
+      .maplibregl-ctrl-attrib.maplibregl-compact { background: rgba(46,46,48,.6) !important; color: #98989D; }
+      .maplibregl-ctrl-attrib.maplibregl-compact a { color: #F5F5F7; }
+    `;
+    document.head.appendChild(style);
+  }, []);
+
+  // Create the map once.
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     mapRef.current = new maplibregl.Map({
@@ -41,7 +81,10 @@ export default function MapScreenWeb() {
       zoom: 11.5,
       attributionControl: { compact: true },
     });
-    mapRef.current.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    // MapLibre opens the compact attribution on load; start it collapsed.
+    mapRef.current.once('idle', () => {
+      containerRef.current?.querySelector('.maplibregl-compact-show')?.classList.remove('maplibregl-compact-show');
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -51,8 +94,8 @@ export default function MapScreenWeb() {
     mapRef.current?.setStyle(dark ? STYLE_DARK : STYLE_LIGHT);
   }, [dark]);
 
-  // Plot a discount pin per mappable deal. Rebuilt whenever the data, the
-  // selection, or the active filters change so pin styling stays in sync.
+  // Plot a price pin per mappable deal. Rebuilt whenever the data or the
+  // active filters change so pins stay in sync.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -63,16 +106,12 @@ export default function MapScreenWeb() {
     matched.forEach((d) => {
       const c = dropCoords(d);
       if (!c) return;
-      const marker = new maplibregl.Marker({ color: T.accent })
+      const el = pinElement(money(d.now), T.accent);
+      el.title = `${d.venue} · ${d.suburb || 'Sydney'}`;
+      el.addEventListener('click', () => router.push(`/(user)/event/${d.id}`));
+      const marker = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -7] })
         .setLngLat([c.longitude, c.latitude])
-        .setPopup(
-          new maplibregl.Popup({ offset: 20, closeButton: false }).setHTML(
-            `<strong>${d.venue}</strong><br/>${money(d.now)} · ${d.suburb || 'Sydney'}`,
-          ),
-        )
         .addTo(map);
-      marker.getElement().style.cursor = 'pointer';
-      marker.getElement().addEventListener('click', () => router.push(`/(user)/event/${d.id}`));
       markersRef.current.push(marker);
       bounds.extend([c.longitude, c.latitude]);
     });
@@ -80,9 +119,9 @@ export default function MapScreenWeb() {
     if (markersRef.current.length === 1) {
       map.jumpTo({ center: bounds.getCenter(), zoom: 14 });
     } else if (markersRef.current.length > 1) {
-      map.fitBounds(bounds, { padding: 48, maxZoom: 14, duration: 0 });
+      map.fitBounds(bounds, { padding: { top: insets.top + 80, bottom: 140, left: 48, right: 48 }, maxZoom: 14, duration: 0 });
     }
-  }, [matched, T.accent, router]);
+  }, [matched, T.accent, router, insets.top]);
 
   // Tear the map down on unmount so a remount re-initialises cleanly.
   useEffect(() => {
@@ -94,29 +133,30 @@ export default function MapScreenWeb() {
     };
   }, []);
 
-  // Sit the selected card just above the floating tab bar.
-  const barTop = (insets.bottom > 0 ? insets.bottom : 16) + 56;
-
   return (
     <View style={{ flex: 1, backgroundColor: T.mapBg }}>
-      {/* interactive map (Leaflet renders into this real DOM node) */}
       {React.createElement('div', {
         ref: containerRef,
         style: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' },
       })}
 
-      {/* top search + filter row */}
-      <View style={{ position: 'absolute', top: insets.top + 4, left: 18, right: 18, flexDirection: 'row', gap: 9 }}>
-        <View style={[{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: T.surface, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 12 }, T.shadow]}>
-          <Search size={17} color={T.muted} />
-          <Text style={{ fontFamily: fontUI(400), fontSize: 15, color: T.muted }}>Search Sydney</Text>
-        </View>
-        <Pressable
+      {/* filter button (mirrors MapTopBar in MapScreen.tsx) */}
+      <View style={{ position: 'absolute', top: insets.top + 4, right: 16, flexDirection: 'row', zIndex: 8 }}>
+        <Touchable
           onPress={() => router.push('/(user)/filters')}
-          style={[{ width: 48, borderRadius: 14, backgroundColor: activeCount ? T.accent : T.surface, alignItems: 'center', justifyContent: 'center' }, T.shadow]}
+          scale={0.96}
+          accessibilityLabel={activeCount ? `Filters, ${activeCount} on` : 'Filters'}
         >
-          <Filter size={18} color={activeCount ? T.accentInk : T.text} />
-        </Pressable>
+          {activeCount ? (
+            <View style={{ width: 48, height: 44, borderRadius: 10, backgroundColor: T.accent, alignItems: 'center', justifyContent: 'center' }}>
+              <Filter size={17} color={T.accentInk} />
+            </View>
+          ) : (
+            <Glass radius={10} style={{ width: 48, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+              <Filter size={17} color={T.text} />
+            </Glass>
+          )}
+        </Touchable>
       </View>
     </View>
   );

@@ -4,13 +4,15 @@
 // Raw card details never pass through here. PinchCardField tokenises inside a
 // WebView and hands back a token; only that token reaches addPaymentMethod().
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, View } from 'react-native';
 import {
   addPaymentMethod, deletePaymentMethod, listPaymentMethods, describeCard, getMe,
   ApiError, PaymentMethod,
 } from './api';
 import { supabase } from './supabase';
-import { fontUI, useApp } from './theme';
+import { useApp } from './theme';
+import { Group, Row, TextBtn } from './components';
+import { Plus, RowIcons } from './icons';
 import { PinchCardField } from './PinchCardField';
 
 export function useWallet() {
@@ -85,7 +87,7 @@ export function useWallet() {
   return { cards, busy, signedIn, add, remove, refresh };
 }
 
-/** One saved card. `onRemove` omitted → read-only display. */
+/** One saved card, as a grouped-list row. `onRemove` omitted → read-only display. */
 export function CardRow({
   card, onRemove, disabled,
 }: {
@@ -94,33 +96,32 @@ export function CardRow({
   disabled?: boolean;
 }) {
   const { T } = useApp();
+  const sub = [card.expiry_date && `Expires ${card.expiry_date}`, card.is_default && 'Default']
+    .filter(Boolean)
+    .join(' · ') || 'Saved card';
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: T.surface, borderRadius: 14, marginBottom: 9 }}>
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: card.is_default ? T.accent : T.line2 }} />
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: fontUI(600), fontSize: 15, color: T.text }}>{describeCard(card)}</Text>
-        <Text style={{ fontFamily: fontUI(400), fontSize: 12.5, color: T.faint, marginTop: 2 }}>
-          {[card.expiry_date && `Expires ${card.expiry_date}`, card.is_default && 'Default']
-            .filter(Boolean)
-            .join(' · ') || 'Saved card'}
-        </Text>
-      </View>
-      {onRemove && (
-        <Pressable
-          disabled={disabled}
-          onPress={() =>
-            Alert.alert('Remove card?', `${describeCard(card)} will be removed from your account.`, [
-              { text: 'Keep', style: 'cancel' },
-              { text: 'Remove', style: 'destructive', onPress: onRemove },
-            ])
-          }
-          hitSlop={8}
-          style={{ paddingHorizontal: 6, paddingVertical: 4, opacity: disabled ? 0.4 : 1 }}
-        >
-          <Text style={{ fontFamily: fontUI(600), fontSize: 13.5, color: T.muted }}>Remove</Text>
-        </Pressable>
-      )}
-    </View>
+    <Row
+      icon={RowIcons.card(T.muted)}
+      label={describeCard(card)}
+      sublabel={sub}
+      trailing={
+        onRemove ? (
+          <TextBtn
+            size={15}
+            color={T.accent}
+            disabled={disabled}
+            onPress={() =>
+              Alert.alert('Remove card?', `${describeCard(card)} will be removed from your account.`, [
+                { text: 'Keep', style: 'cancel' },
+                { text: 'Remove', style: 'destructive', onPress: onRemove },
+              ])
+            }
+          >
+            Remove
+          </TextBtn>
+        ) : undefined
+      }
+    />
   );
 }
 
@@ -147,15 +148,22 @@ export function WalletPanel({
 
   return (
     <View>
-      {cards.map((c) => (
-        <CardRow key={c.id} card={c} disabled={busy} onRemove={() => remove(c)} />
-      ))}
+      {cards.length > 0 && (
+        <Group style={{ marginTop: 0 }} label="Saved cards">
+          {cards.map((c) => (
+            <CardRow key={c.id} card={c} disabled={busy} onRemove={() => remove(c)} />
+          ))}
+          {!showForm && (
+            <Row icon={<Plus size={13} color={T.accent} />} label="Add a card" accent chevron={false} onPress={() => setAdding(true)} />
+          )}
+        </Group>
+      )}
 
-      {showForm ? (
-        <View style={{ marginTop: cards.length ? 8 : 0 }}>
+      {showForm && (
+        <View style={{ marginTop: cards.length ? 20 : 0 }}>
           <PinchCardField
             depositLabel={depositLabel}
-            colors={{ bg: T.bg, text: T.text, muted: T.muted, line: T.line, accent: T.accent, surface: T.surface }}
+            colors={{ bg: T.bg, text: T.text, muted: T.muted, line: T.line, accent: T.accent, surface: T.surface, fill: T.fill }}
             onToken={async ({ token, cardHolderName }) => {
               if (await add(token, cardHolderName)) {
                 setAdding(false);
@@ -164,19 +172,8 @@ export function WalletPanel({
             }}
             onError={(message) => Alert.alert('Card error', message)}
           />
-          {cards.length > 0 && (
-            <Pressable onPress={() => setAdding(false)} style={{ paddingVertical: 12, alignItems: 'center' }}>
-              <Text style={{ fontFamily: fontUI(500), fontSize: 14, color: T.muted }}>Cancel</Text>
-            </Pressable>
-          )}
+          {cards.length > 0 && <TextBtn onPress={() => setAdding(false)}>Cancel</TextBtn>}
         </View>
-      ) : (
-        <Pressable
-          onPress={() => setAdding(true)}
-          style={{ paddingVertical: 14, alignItems: 'center', borderRadius: 14, borderWidth: 1, borderColor: T.line2, borderStyle: 'dashed', marginTop: 4 }}
-        >
-          <Text style={{ fontFamily: fontUI(600), fontSize: 14.5, color: T.accent }}>+ Add another card</Text>
-        </Pressable>
       )}
 
       {busy && <ActivityIndicator color={T.accent} style={{ marginTop: 12 }} />}
