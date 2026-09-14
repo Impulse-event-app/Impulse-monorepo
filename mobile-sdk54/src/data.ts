@@ -55,7 +55,11 @@ export const ACCESSIBILITY_OPTIONS = [
 ];
 
 // ── helpers ──────────────────────────────────────────────────
-export const money = (n: number) => '$' + n;
+/** "$30" for whole dollars, "$27.30" otherwise — never "$27.3" or float noise. */
+export const money = (n: number) => {
+  const cents = Math.round(n * 100);
+  return cents % 100 === 0 ? `$${cents / 100}` : `$${(cents / 100).toFixed(2)}`;
+};
 export const pct = (now: number, usual: number) => Math.round((1 - now / usual) * 100);
 
 // live countdown to a target timestamp

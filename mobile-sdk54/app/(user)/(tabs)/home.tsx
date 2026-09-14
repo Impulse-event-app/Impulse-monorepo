@@ -257,7 +257,8 @@ export default function HomeScreen() {
               pointerEvents="none"
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
-              style={{ position: 'absolute', top: 12, right: 12 }}
+              // Bottom-right of the photo (inset 8, 162pt tall): the top right is the discount badge's.
+              style={{ position: 'absolute', top: 130, right: 18 }}
             >
               {rank >= 0 ? (
                 <View style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: T.accent, alignItems: 'center', justifyContent: 'center' }}>

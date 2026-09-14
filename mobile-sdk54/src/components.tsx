@@ -661,7 +661,28 @@ export function DiscountChip({ now, usual }: { now: number; usual: number }) {
   );
 }
 
-export function PriceBlock({ d, big }: { d: Drop; big?: boolean }) {
+/** Large discount badge for the top-right corner of a photo ("−30%"). Solid, so it reads over any image. */
+export function DiscountBadge({ now, usual }: { now: number; usual: number }) {
+  const T = useTheme();
+  const p = pct(now, usual);
+  if (!(p > 0)) return null;
+  return (
+    <View
+      accessible
+      accessibilityLabel={`${p} percent off`}
+      style={{
+        minHeight: 32, paddingHorizontal: 11, paddingVertical: 4, borderRadius: 10,
+        backgroundColor: T.accent, justifyContent: 'center',
+        shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 3,
+      }}
+    >
+      <Text maxFontSizeMultiplier={1.3} style={{ ...fontMono(600, 17), fontSize: 17, color: T.accentInk }}>−{p}%</Text>
+    </View>
+  );
+}
+
+/** Price, unit and usual price. `hideDiscount` when a DiscountBadge already shows it. */
+export function PriceBlock({ d, big, hideDiscount }: { d: Drop; big?: boolean; hideDiscount?: boolean }) {
   const T = useTheme();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 9, rowGap: 6 }}>
@@ -671,7 +692,7 @@ export function PriceBlock({ d, big }: { d: Drop; big?: boolean }) {
       <Text style={{ ...fontUI(400), fontSize: big ? 15 : 13.5, color: T.muted, letterSpacing: big ? -0.12 : -0.05 }}>
         {unitLabel(d.unit)}, usually {money(d.usual)}
       </Text>
-      <DiscountChip now={d.now} usual={d.usual} />
+      {hideDiscount ? null : <DiscountChip now={d.now} usual={d.usual} />}
     </View>
   );
 }
@@ -779,7 +800,84 @@ export function FadeIn({ delay = 0, children, style }: { delay?: number; childre
   );
 }
 
-// ── venue card (image-led, hairline, no shadow) ──────────────
+// ── venue cards (liquid glass) ───────────────────────────────
+/**
+ * Frosted liquid-glass card surface.
+ *
+ * `backdrop` (a photo URI): the feed's ground is near-black, so there is little
+ * behind a card to blur. Instead the card blurs its own venue photo into the
+ * glass, tinting each card with that venue's colours. The tint is strong
+ * enough to keep text readable over any photo.
+ *
+ * No backdrop: true see-through glass, for cards floating over something worth
+ * blurring (the map).
+ *
+ * A soft top sheen and a hairline edge give the specular glass look. Reduce
+ * Transparency makes it solid. Layers sit at zIndex -1 inside a zIndex 0
+ * container so web paints them under the card's static children.
+ */
+function GlassCard({
+  backdrop, radius, style, children,
+}: {
+  backdrop?: string;
+  radius: number;
+  style?: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+}) {
+  const T = useTheme();
+  const solid = useReduceTransparency();
+  // useId output contains ':' which breaks url(#…) references on web.
+  const sheenId = `cardsheen${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  const layer: StyleProp<ViewStyle> = [FILL, { zIndex: -1 }];
+  const tint = backdrop
+    ? (T.dark ? 'rgba(16,16,18,0.66)' : 'rgba(255,255,255,0.72)')
+    : (T.dark ? 'rgba(30,30,32,0.58)' : 'rgba(255,255,255,0.62)');
+
+  return (
+    <View style={[{ borderRadius: radius, overflow: 'hidden', zIndex: 0 }, style]}>
+      {solid ? (
+        <View pointerEvents="none" style={[layer, { backgroundColor: T.surface }]} />
+      ) : (
+        <>
+          {backdrop ? (
+            <Image
+              source={{ uri: backdrop }}
+              blurRadius={36}
+              resizeMode="cover"
+              accessibilityIgnoresInvertColors
+              // Oversized so the blur's soft edges fall outside the card.
+              style={[FILL, { zIndex: -1, transform: [{ scale: 1.35 }] }]}
+            />
+          ) : null}
+          {HAS_BLUR ? (
+            <BlurView pointerEvents="none" intensity={backdrop ? 24 : 48} tint={T.blurTint} style={layer} />
+          ) : null}
+          <View
+            pointerEvents="none"
+            style={[layer, { backgroundColor: HAS_BLUR || backdrop ? tint : T.glassSolid }]}
+          />
+          <View pointerEvents="none" style={layer}>
+            <Svg width="100%" height="100%" preserveAspectRatio="none">
+              <Defs>
+                <LinearGradient id={sheenId} x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset={0} stopColor="#FFFFFF" stopOpacity={T.dark ? 0.12 : 0.5} />
+                  <Stop offset={0.45} stopColor="#FFFFFF" stopOpacity={0} />
+                </LinearGradient>
+              </Defs>
+              <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${sheenId})`} />
+            </Svg>
+          </View>
+        </>
+      )}
+      {children}
+      <View
+        pointerEvents="none"
+        style={[FILL, { borderRadius: radius, borderWidth: 0.5, borderColor: solid ? T.line : T.glassEdge }]}
+      />
+    </View>
+  );
+}
+
 /** One spoken summary for a drop card, so VoiceOver reads it as a single element. */
 export function dropA11yLabel(d: Drop): string {
   const p = pct(d.now, d.usual);
@@ -797,17 +895,22 @@ export function DropCardEditorial({ d, onPress, a11yLabel, a11yHint }: { d: Drop
   const T = useTheme();
   return (
     <Touchable onPress={onPress} scale={0.99} accessibilityLabel={a11yLabel ?? dropA11yLabel(d)} accessibilityHint={a11yHint}>
-      <View style={{ backgroundColor: T.surface, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: T.line }}>
-        <View>
-          <Placeholder label={`${d.cat} · venue photo`} uri={venuePhotoUrl(d)} style={{ height: 162 }} />
-          <View style={{ position: 'absolute', top: 12, left: 12, right: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            <GlassBadge>
-              <Text maxFontSizeMultiplier={1.4} style={{ ...fontUI(500), fontSize: 12.5, color: T.text, letterSpacing: -0.05 }}>{d.cat}</Text>
-            </GlassBadge>
-            {d.target ? <CountdownPill d={d} /> : null}
+      {/* Whole card is glass, tinted by its own blurred photo; the photo sits inset. */}
+      <GlassCard backdrop={venuePhotoUrl(d)} radius={22}>
+        <View style={{ margin: 8, marginBottom: 0 }}>
+          <Placeholder label={`${d.cat} · venue photo`} uri={venuePhotoUrl(d)} radius={15} style={{ height: 162 }} />
+          <View style={{ position: 'absolute', top: 10, left: 10, right: 10, flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+            <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              <GlassBadge>
+                <Text maxFontSizeMultiplier={1.4} style={{ ...fontUI(500), fontSize: 12.5, color: T.text, letterSpacing: -0.05 }}>{d.cat}</Text>
+              </GlassBadge>
+              {d.target ? <CountdownPill d={d} /> : null}
+            </View>
+            {/* The discount is the hook: big, top right. (Voting's rank badge moves to the bottom right.) */}
+            <DiscountBadge now={d.now} usual={d.usual} />
           </View>
         </View>
-        <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 18 }}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
             <Text numberOfLines={2} style={{ flex: 1, ...fontUI(600), fontSize: 22, letterSpacing: -0.48, color: T.text }}>
               {d.venue}
@@ -816,7 +919,7 @@ export function DropCardEditorial({ d, onPress, a11yLabel, a11yHint }: { d: Drop
           </View>
           <MetaLine d={d} style={{ marginTop: 5 }} />
           <View style={{ marginTop: 16 }}>
-            <PriceBlock d={d} />
+            <PriceBlock d={d} hideDiscount />
           </View>
           {/* Deals with a countdown show it once, on the photo badge. Only deals
               without one need this row, for their time window. */}
@@ -826,7 +929,7 @@ export function DropCardEditorial({ d, onPress, a11yLabel, a11yHint }: { d: Drop
             </View>
           )}
         </View>
-      </View>
+      </GlassCard>
     </Touchable>
   );
 }
@@ -836,9 +939,10 @@ export function DropCardCompact({ d, onPress }: { d: Drop; onPress?: () => void 
   const T = useTheme();
   return (
     <Touchable onPress={onPress} scale={0.994} accessibilityLabel={dropA11yLabel(d)}>
-      <View style={{ backgroundColor: T.surface, borderRadius: 14, overflow: 'hidden', flexDirection: 'row', borderWidth: 1, borderColor: T.line }}>
-        <Placeholder label="" uri={venuePhotoUrl(d)} style={{ width: 86 }} />
-        <View style={{ paddingVertical: 13, paddingHorizontal: 15, flex: 1, minWidth: 0 }}>
+      {/* See-through glass: this card floats over the map, which blurs behind it. */}
+      <GlassCard radius={20} style={{ flexDirection: 'row' }}>
+        <Placeholder label="" uri={venuePhotoUrl(d)} radius={14} style={{ width: 80, margin: 6 }} />
+        <View style={{ paddingVertical: 13, paddingLeft: 9, paddingRight: 15, flex: 1, minWidth: 0 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
             <Text numberOfLines={2} style={{ flex: 1, ...fontUI(600), fontSize: 17, letterSpacing: -0.26, color: T.text }}>
               {d.venue}
@@ -851,7 +955,7 @@ export function DropCardCompact({ d, onPress }: { d: Drop; onPress?: () => void 
             <DiscountChip now={d.now} usual={d.usual} />
           </View>
         </View>
-      </View>
+      </GlassCard>
     </Touchable>
   );
 }
