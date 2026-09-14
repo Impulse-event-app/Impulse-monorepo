@@ -11,6 +11,7 @@ import { Drop, LatLng, SYDNEY_REGION, activeFilterCount, applyFilters, dropCoord
 import { useApp } from './theme';
 import { DropCardCompact, FadeIn, Glass, Pin, Touchable } from './components';
 import { Filter } from './icons';
+import { hapticSelection } from './haptics';
 
 // The selected-drop card stays card-sized on iPad instead of spanning the map.
 const SELECTED_CARD_MAX_WIDTH = 460;
@@ -44,7 +45,9 @@ function DropMarker({
       onPress={dim ? undefined : onPress}
       zIndex={active ? 5 : dim ? 1 : 2}
     >
-      <View style={{ opacity: dim ? 0.28 : 1, paddingTop: 10 }}>
+      {/* The pin is a picture of a button, not a button: taps must land on the
+          native marker, whose recognizer fires onPress. */}
+      <View pointerEvents="none" style={{ opacity: dim ? 0.28 : 1, paddingTop: 10 }}>
         <Pin active={active} label={label} accessibilityLabel={a11yLabel} />
       </View>
     </Marker>
@@ -88,7 +91,16 @@ export default function MapScreen() {
   const matchIds = new Set(applyFilters(located.map((x) => x.d), filters).map((d) => d.id));
   const activeCount = activeFilterCount(filters);
 
+  // On iOS a tap on a marker also reaches the map's own tap handler —
+  // react-native-maps' AIRMapManager fires the MapView's onPress for every tap,
+  // markers included — which would clear the selection in the same tap. So a
+  // map tap arriving right after a marker press is ignored. (Order-proof: if the
+  // map's handler runs first, the marker's setSel still wins.)
+  const lastMarkerPress = useRef(0);
+
   const select = (id: string) => {
+    lastMarkerPress.current = Date.now();
+    hapticSelection();
     setSel(id);
     const entry = located.find((x) => x.d.id === id);
     if (entry) {
@@ -110,7 +122,9 @@ export default function MapScreen() {
         showsPointsOfInterest={false}
         showsMyLocationButton={false}
         toolbarEnabled={false}
-        onPress={() => setSel(null)}
+        onPress={() => {
+          if (Date.now() - lastMarkerPress.current > 400) setSel(null);
+        }}
         mapPadding={{ top: insets.top + 56, right: 0, bottom: barTop, left: 0 }}
       >
         {located.map(({ d, coord }) => (

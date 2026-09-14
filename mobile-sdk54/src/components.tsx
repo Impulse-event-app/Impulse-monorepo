@@ -818,9 +818,13 @@ export function DropCardEditorial({ d, onPress, a11yLabel, a11yHint }: { d: Drop
           <View style={{ marginTop: 16 }}>
             <PriceBlock d={d} />
           </View>
-          <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: T.line }}>
-            <Live d={d} />
-          </View>
+          {/* Deals with a countdown show it once, on the photo badge. Only deals
+              without one need this row, for their time window. */}
+          {!d.target && (
+            <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: T.line }}>
+              <Live d={d} />
+            </View>
+          )}
         </View>
       </View>
     </Touchable>

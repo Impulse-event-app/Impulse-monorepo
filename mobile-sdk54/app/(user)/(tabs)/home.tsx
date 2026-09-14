@@ -395,12 +395,6 @@ export default function HomeScreen() {
         }
         trailing={
           <>
-            {!scrolled && now.length > 0 && (
-              <View accessible accessibilityLabel={`${now.length} on now`} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <LiveDot color={T.accent} blink />
-                <Text maxFontSizeMultiplier={1.3} style={{ ...fontUI(500, 13), fontSize: 13, color: T.accent }}>{now.length} on now</Text>
-              </View>
-            )}
             {signedIn ? (
               <Touchable onPress={() => router.push('/(user)/(tabs)/profile')} accessibilityLabel="Your profile" hitSlop={5} scale={0.96}>
                 <Avatar initials={initials} />
