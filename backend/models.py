@@ -202,7 +202,10 @@ class Booking(Base):
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
     deal_id = Column(UUID(as_uuid=False), ForeignKey("deals.id"), nullable=False, index=True)
-    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False, index=True)
+    # Nullable: a booking outlives its customer's account. Deleting an account
+    # sets this to NULL (ON DELETE SET NULL) so the financial record survives,
+    # anonymised — see DELETE /users/me.
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     slot_time = Column(Text, nullable=False)
     num_people = Column(Integer, nullable=False)
     total_paid = Column(Numeric(10, 2), nullable=False)
@@ -259,7 +262,8 @@ class HuddleMember(Base):
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
     huddle_id = Column(UUID(as_uuid=False), ForeignKey("huddles.id"), nullable=False, index=True)
-    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=True)   # null → guest
+    # null → guest, or a member whose account was since deleted (ON DELETE SET NULL)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     display_name = Column(Text, nullable=False)
     # Secret returned to the joining client; authenticates guests on later calls.
     member_token = Column(Text, nullable=False, unique=True)

@@ -259,7 +259,7 @@ class BookingResponse(BaseModel):
 
     id: str
     deal_id: str
-    user_id: str
+    user_id: Optional[str]             # null once the customer has deleted their account
     slot_time: str
     num_people: int
     total_paid: float

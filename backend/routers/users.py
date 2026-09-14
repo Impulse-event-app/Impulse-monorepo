@@ -1,15 +1,18 @@
 import logging
+import os
 from typing import List
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import payments
 import pinch_client
 import wallet
-from auth import get_current_user
+from auth import SUPABASE_URL, get_current_user
 from database import get_db
-from models import PaymentMethod, User
+from models import Booking, HuddleMember, PaymentMethod, User, UserVenueInteraction, Venue
 from schemas import (
     PaymentMethodCreate,
     PaymentMethodResponse,
@@ -21,6 +24,8 @@ from schemas import (
 logger = logging.getLogger("impulse.users")
 
 router = APIRouter()
+
+SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
 
 @router.get("/me", response_model=UserResponse)
@@ -52,6 +57,91 @@ def update_me(
     db.commit()
     db.refresh(row)
     return row
+
+
+# ── Account deletion ──────────────────────────────────────────────────────────
+# App Store Review 5.1.1(v): an account created in the app must be deletable in
+# the app. What goes and what stays:
+#   - gone: the profile row, saved cards (detached at Pinch too), recommender
+#     interactions, and the Supabase auth identity (so they can't sign back in)
+#   - kept, anonymised: bookings (financial records) and huddle seats (other
+#     members' group state). Their user_id is set to NULL; the huddle seat's
+#     display name is scrubbed.
+# Venue owners are refused — their venue, deals and payouts would go with them.
+
+
+def _delete_auth_user(user_id: str) -> None:
+    """Remove the Supabase auth user. Idempotent: an already-missing user is fine."""
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        logger.error("Account deletion requested but SUPABASE_SERVICE_ROLE_KEY is unset")
+        raise HTTPException(status_code=503, detail="Account deletion isn't available right now. Try again later.")
+    resp = httpx.delete(
+        f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
+        headers={
+            "apikey": SUPABASE_SERVICE_ROLE_KEY,
+            "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        },
+        timeout=15,
+    )
+    if resp.status_code == 404:
+        return
+    if resp.status_code >= 400:
+        logger.error("Deleting auth user %s failed: %s %s", user_id, resp.status_code, resp.text)
+        raise HTTPException(status_code=502, detail="Couldn't delete your account. Try again.")
+
+
+@router.delete("/me", status_code=204)
+def delete_me(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Permanently delete the caller's account. See the section comment above."""
+    uid = user["sub"]
+
+    if db.query(Venue.id).filter(Venue.owner_id == uid).first():
+        raise HTTPException(
+            status_code=409,
+            detail="This account runs a venue, so it can't be deleted here. Email support@impulse.app and we'll close it with you.",
+        )
+
+    row = db.query(User).filter(User.id == uid).first()
+
+    # 1. Detach saved cards at Pinch first. Nothing will point at them once the
+    #    user row is gone, so a failure here must stop the deletion. A source
+    #    Pinch no longer knows about (400) is already detached.
+    if row and row.pinch_payer_id:
+        for method in db.query(PaymentMethod).filter(PaymentMethod.user_id == uid).all():
+            try:
+                pinch_client.delete_source(row.pinch_payer_id, method.pinch_source_id, wallet.PINCH_MERCHANT_ID)
+            except payments.PinchError as exc:
+                if exc.status_code != 400:
+                    logger.error("Detaching source %s during account deletion failed: %s %s",
+                                 method.pinch_source_id, exc.status_code, exc.body)
+                    raise HTTPException(status_code=502, detail="Couldn't remove your saved cards. Try again.")
+
+    # 2. Anonymise what we keep, then remove what we don't — one transaction.
+    #    Unlinking explicitly (rather than relying on the FK's ON DELETE SET
+    #    NULL) means a database that hasn't had the migration applied fails
+    #    loudly on the NOT NULL constraint instead of cascading bookings away.
+    try:
+        db.query(Booking).filter(Booking.user_id == uid).update(
+            {Booking.user_id: None}, synchronize_session=False,
+        )
+        db.query(HuddleMember).filter(HuddleMember.user_id == uid).update(
+            {HuddleMember.user_id: None, HuddleMember.display_name: "Former member"}, synchronize_session=False,
+        )
+        db.query(UserVenueInteraction).filter(UserVenueInteraction.user_id == uid).delete(synchronize_session=False)
+        db.query(PaymentMethod).filter(PaymentMethod.user_id == uid).delete(synchronize_session=False)
+        db.query(User).filter(User.id == uid).delete(synchronize_session=False)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        logger.error("Account deletion for %s hit a constraint (is the keep-bookings migration applied?): %s", uid, exc)
+        raise HTTPException(status_code=503, detail="Account deletion isn't available right now. Try again later.")
+
+    # 3. Remove the sign-in identity. If this fails the data is already gone and
+    #    a retry finishes the job (every step above is a no-op the second time).
+    _delete_auth_user(uid)
 
 
 @router.put("/me/push-token", status_code=204)

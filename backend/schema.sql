@@ -197,7 +197,8 @@ create type booking_status as enum ('pending', 'confirmed', 'cancelled', 'attend
 create table if not exists public.bookings (
   id                 uuid           primary key default gen_random_uuid(),
   deal_id            uuid           not null references public.deals(id) on delete restrict,
-  user_id            uuid           not null references public.users(id) on delete cascade,
+  -- Nullable + set null: bookings outlive a deleted account, anonymised.
+  user_id            uuid           references public.users(id) on delete set null,
   slot_time          text           not null,
   num_people         integer        not null,
   total_paid         numeric(10,2)  not null,
