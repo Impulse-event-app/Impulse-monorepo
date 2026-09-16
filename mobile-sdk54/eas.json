@@ -24,10 +24,16 @@
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
-      }
+      },
+      "credentialsSource": "local"
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6811502068",
+        "appleTeamId": "546PY362R7"
+      }
+    }
   }
 }

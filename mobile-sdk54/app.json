@@ -33,13 +33,16 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.impulse.app",
+      "supportsTablet": false,
+      "bundleIdentifier": "au.impulseapp.impulse",
       "usesAppleSignIn": true,
-      "associatedDomains": ["applinks:impulse.expo.app"]
+      "associatedDomains": ["applinks:impulse.expo.app"],
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
-      "package": "com.impulse.app",
+      "package": "au.impulseapp.impulse",
       "adaptiveIcon": {
         "backgroundColor": "#C80815",
         "foregroundImage": "./assets/android-icon-foreground.png",
