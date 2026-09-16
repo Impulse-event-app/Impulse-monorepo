@@ -12,6 +12,7 @@ import { FONT_DISPLAY, FONT_MONO } from "@/lib/ui";
 
 const NAV: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: "/dashboard", label: "Dashboard", match: (p) => p === "/dashboard" },
+  { href: "/dashboard/venue", label: "Venue details", match: (p) => p === "/dashboard/venue" },
   { href: "/dashboard/deals", label: "Deals", match: (p) => p.startsWith("/dashboard/deals") },
   { href: "/dashboard/bookings", label: "Bookings", match: (p) => p.startsWith("/dashboard/bookings") },
   { href: "/dashboard/payouts", label: "Payouts", match: (p) => p.startsWith("/dashboard/payouts") },
@@ -72,6 +73,12 @@ export function Sidebar() {
           <span style={{ width: 16, height: 16, borderRadius: "50%", border: "2px solid var(--muted)", background: theme === "light" ? "var(--muted)" : "transparent" }} />
           {theme === "dark" ? "Dark" : "Light"} mode
         </button>
+        <Link
+          href="/reset-password"
+          style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", borderRadius: 10, color: "var(--muted)", fontSize: 13, fontWeight: 500 }}
+        >
+          <span style={{ fontSize: 15 }}>⚿</span> Change password
+        </Link>
         <button
           onClick={() => signOut()}
           style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", borderRadius: 10, border: "none", background: "none", color: "var(--muted)", fontSize: 13, fontWeight: 500, cursor: "pointer" }}

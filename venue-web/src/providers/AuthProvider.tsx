@@ -17,6 +17,9 @@ interface AuthContextValue {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Emails a link that lands on /reset-password signed in. */
+  sendPasswordReset: (email: string) => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -54,9 +57,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   }, []);
 
+  const sendPasswordReset = useCallback(async (email: string) => {
+    // The redirect URL must be in Supabase Auth → URL Configuration → Redirect
+    // URLs, or Supabase falls back to the Site URL.
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) throw error;
+  }, []);
+
+  const updatePassword = useCallback(async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw error;
+  }, []);
+
   return (
     <AuthContext.Provider
-      value={{ session, user: session?.user ?? null, loading, signIn, signOut }}
+      value={{
+        session,
+        user: session?.user ?? null,
+        loading,
+        signIn,
+        signOut,
+        sendPasswordReset,
+        updatePassword,
+      }}
     >
       {children}
     </AuthContext.Provider>

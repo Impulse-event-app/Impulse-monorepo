@@ -1,0 +1,10 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["CZSU9HK965.com.impulse.app"],
+        "components": [{ "/": "/huddle/join/*", "comment": "Huddle invite links open the app" }]
+      }
+    ]
+  }
+}

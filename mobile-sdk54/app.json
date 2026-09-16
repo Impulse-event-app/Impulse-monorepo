@@ -35,7 +35,8 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.impulse.app",
-      "usesAppleSignIn": true
+      "usesAppleSignIn": true,
+      "associatedDomains": ["applinks:impulse.expo.app"]
     },
     "android": {
       "package": "com.impulse.app",
@@ -45,7 +46,15 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [{ "scheme": "https", "host": "impulse.expo.app", "pathPrefix": "/huddle/join" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",

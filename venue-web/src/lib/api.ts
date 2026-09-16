@@ -110,9 +110,10 @@ export interface VenueCreate {
   accessibility_features?: string[];
 }
 
-export interface VenueUpdate extends Partial<VenueCreate> {
+/** null clears an optional field; an omitted key leaves it unchanged. */
+export type VenueUpdate = { [K in keyof VenueCreate]?: VenueCreate[K] | null } & {
   is_active?: boolean;
-}
+};
 
 export interface StatsResponse {
   active_deals: number;
