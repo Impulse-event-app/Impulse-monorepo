@@ -98,7 +98,7 @@ export default function PlansScreen() {
                   accessibilityHint="Opens the booking."
                   onPress={() => router.push(`/(user)/confirm?code=${encodeURIComponent(p.code)}`)}
                 >
-                  <View style={{ backgroundColor: T.surface, borderRadius: 10, borderWidth: 1, borderColor: T.line, padding: 16, gap: 14, opacity: p.status === 'cancelled' ? 0.6 : 1 }}>
+                  <View style={{ backgroundColor: T.surface, borderCurve: 'continuous', borderRadius: 12, borderWidth: 1, borderColor: T.line, padding: 16, gap: 14, opacity: p.status === 'cancelled' ? 0.6 : 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <Text numberOfLines={2} style={{ ...fontUI(600), fontSize: 17, letterSpacing: -0.26, color: T.text }}>

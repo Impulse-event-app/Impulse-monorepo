@@ -237,4 +237,87 @@ export function PinTriangle({ color = '#E8202C' }: IconProps) {
   );
 }
 
+// ── category glyphs (map pins) ───────────────────────────────
+// Plain path data (24×24, 1.8 stroke) so the native pin and the web map's DOM
+// pin draw identical glyphs. Keys are canonicalCat() labels; anything else
+// gets the sparkle.
+type Glyph = { stroke: string[]; fill?: string[] };
+const dot = (cx: number, cy: number, r: number) =>
+  `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`;
+
+const CATEGORY_GLYPHS: Record<string, Glyph> = {
+  Bowling: {
+    stroke: [
+      'M7.5 3c-1.3 0-2 1.1-1.6 2.4l.5 1.6C5.4 8.3 4.5 10 4.5 12.5c0 3 .9 6 1.5 8.5h3c.6-2.5 1.5-5.5 1.5-8.5 0-2.5-.9-4.2-1.9-5.5l.5-1.6C9.5 4.1 8.8 3 7.5 3z',
+      dot(16, 15.5, 5.5),
+    ],
+    fill: [dot(14.9, 13.6, 0.9), dot(17.4, 13.3, 0.9), dot(16.4, 15.9, 0.9)],
+  },
+  Karaoke: {
+    stroke: [dot(15, 9, 5), 'M11.5 12 4 19.2l.8.8 7.2-7.5', 'M11.5 5.5l7 7'],
+  },
+  'Escape rooms': {
+    stroke: ['M5 12a2 2 0 012-2h10a2 2 0 012 2v7a2 2 0 01-2 2H7a2 2 0 01-2-2z', 'M8 10V7a4 4 0 018 0v3', 'M12 14.5v2.5'],
+  },
+  'Mini golf': {
+    stroke: ['M9 20V3.5l8 3.5-8 3.5', 'M3.5 20.5c1.5-.9 4.8-1.5 8.5-1.5s7 .6 8.5 1.5'],
+    fill: [dot(16.5, 16.3, 1.4)],
+  },
+  Pool: {
+    stroke: [dot(15, 15, 6), dot(15, 15, 2.2), 'M2.5 2.5l7 7'],
+  },
+  Comedy: {
+    stroke: [dot(12, 12, 9), 'M8 14c1 1.6 2.4 2.4 4 2.4s3-.8 4-2.4'],
+    fill: [dot(9, 10, 1.1), dot(15, 10, 1.1)],
+  },
+  'Live music': {
+    stroke: ['M9 18V5.5L20 3v13', dot(6, 18, 3), dot(17, 16, 3)],
+  },
+  Darts: {
+    stroke: [dot(11, 13, 8), dot(11, 13, 4.5), 'M11 13l9-9', 'M17 4h3v3'],
+    fill: [dot(11, 13, 1.3)],
+  },
+  Bar: {
+    stroke: ['M4.5 4h15L12 12.5z', 'M7 6.8h10', 'M12 12.5V20', 'M8 20.5h8'],
+  },
+  Restaurant: {
+    stroke: ['M5 3v5.5a3 3 0 006 0V3', 'M8 3v18', 'M18 21V3c-2.2 1.2-3.5 4.2-3.5 8.5H18'],
+  },
+  Cafe: {
+    stroke: [
+      'M4 9.5h12.5V14a5 5 0 01-5 5H9a5 5 0 01-5-5z',
+      'M16.5 11h1.3a2.6 2.6 0 010 5.2h-1.8',
+      'M8 3.5v3M12 3.5v3',
+    ],
+  },
+  Arcade: {
+    stroke: ['M2.5 12a5 5 0 015-5h9a5 5 0 015 5v1a4 4 0 01-4 4H6.5a4 4 0 01-4-4z', 'M7.5 10v4M5.5 12h4'],
+    fill: [dot(15.5, 11, 1.1), dot(17.8, 13.3, 1.1)],
+  },
+};
+const FALLBACK_GLYPH: Glyph = {
+  stroke: ['M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z', 'M18.5 16v4M16.5 18h4'],
+};
+const glyphFor = (cat: string) => CATEGORY_GLYPHS[cat] ?? FALLBACK_GLYPH;
+
+export function CategoryIcon({ cat, size = 15, color = '#000' }: IconProps & { cat: string }) {
+  const g = glyphFor(cat);
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      {g.stroke.map((d, i) => <Path key={`s${i}`} d={d} />)}
+      {g.fill?.map((d, i) => <Path key={`f${i}`} d={d} fill={color} stroke="none" />)}
+    </Svg>
+  );
+}
+
+/** Same glyph as an SVG string, for DOM markers on the web map. */
+export function categoryIconSvg(cat: string, size: number, color: string): string {
+  const g = glyphFor(cat);
+  const paths = [
+    ...g.stroke.map((d) => `<path d="${d}"/>`),
+    ...(g.fill ?? []).map((d) => `<path d="${d}" fill="${color}" stroke="none"/>`),
+  ].join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+}
+
 export { Svg, Path, Circle, Rect, G };

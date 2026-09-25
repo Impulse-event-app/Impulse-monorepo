@@ -13,7 +13,7 @@ export function VenueMap({
   style?: StyleProp<ViewStyle>;
 }) {
   return (
-    <View style={[{ height, borderRadius: 10, overflow: 'hidden' }, style]} pointerEvents="none">
+    <View style={[{ height, borderCurve: 'continuous', borderRadius: 12, overflow: 'hidden' }, style]} pointerEvents="none">
       <MapView
         style={{ flex: 1 }}
         initialRegion={{ latitude, longitude, latitudeDelta: 0.012, longitudeDelta: 0.012 }}

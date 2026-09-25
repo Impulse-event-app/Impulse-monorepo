@@ -106,7 +106,7 @@ export default function DetailScreen() {
           {coords ? (
             <VenueMap latitude={coords.latitude} longitude={coords.longitude} style={{ marginTop: 28 }} />
           ) : (
-            <Placeholder label="Map" style={{ height: 130, borderRadius: 10, marginTop: 28 }} />
+            <Placeholder label="Map" style={{ height: 130, borderCurve: 'continuous', borderRadius: 12, marginTop: 28 }} />
           )}
         </ReadableColumn>
       </ScrollView>

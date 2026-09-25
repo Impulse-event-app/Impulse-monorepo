@@ -122,7 +122,7 @@ export function PageDots({ count, index, onPress }: { count: number; index: numb
           importantForAccessibility={interactive ? 'auto' : 'no-hide-descendants'}
           accessibilityRole={interactive ? 'button' : undefined}
           accessibilityLabel={`Step ${i + 1} of ${count}`}
-          style={{ width: i === index ? 20 : 6, height: 6, borderRadius: 3, backgroundColor: i === index ? T.accent : T.faint }}
+          style={{ width: i === index ? 20 : 6, height: 6, borderCurve: 'continuous', borderRadius: 3, backgroundColor: i === index ? T.accent : T.faint }}
         />
       ))}
     </View>

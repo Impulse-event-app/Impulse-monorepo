@@ -90,7 +90,7 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
         pointerEvents="box-none"
         style={{ paddingHorizontal: 14, paddingBottom: insets.bottom > 0 ? Math.max(insets.bottom - 10, 8) : 16, alignItems: 'center' }}
       >
-        <View style={[{ borderRadius: 27, width: '100%', maxWidth: TAB_BAR_MAX_WIDTH }, T.floatShadow]}>
+        <View style={[{ borderCurve: 'continuous', borderRadius: 27, width: '100%', maxWidth: TAB_BAR_MAX_WIDTH }, T.floatShadow]}>
           <Glass radius={27} style={{ height: BAR_HEIGHT, flexDirection: 'row', alignItems: 'center' }}>
             {tabWidth > 0 && (
               <Animated.View
@@ -103,7 +103,7 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
                   left: LENS_INSET,
                   width: tabWidth - LENS_INSET * 2,
                   height: BAR_HEIGHT - LENS_INSET * 2,
-                  borderRadius: (BAR_HEIGHT - LENS_INSET * 2) / 2,
+                  borderCurve: 'continuous', borderRadius: (BAR_HEIGHT - LENS_INSET * 2) / 2,
                   backgroundColor: lensFill,
                   borderWidth: 0.5,
                   borderColor: T.dark ? T.glassEdge : T.line,

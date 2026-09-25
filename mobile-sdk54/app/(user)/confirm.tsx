@@ -68,7 +68,7 @@ export default function ConfirmScreen() {
 
           <View
             style={{
-              marginTop: 32, padding: 22, alignSelf: 'stretch', backgroundColor: T.surface, borderRadius: 10,
+              marginTop: 32, padding: 22, alignSelf: 'stretch', backgroundColor: T.surface, borderCurve: 'continuous', borderRadius: 12,
               borderWidth: 1, borderColor: T.line, alignItems: 'center', gap: 18,
             }}
           >
@@ -77,7 +77,7 @@ export default function ConfirmScreen() {
                 <View
                   accessibilityElementsHidden
                   importantForAccessibility="no-hide-descendants"
-                  style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: T.accentSoft, alignItems: 'center', justifyContent: 'center' }}
+                  style={{ width: 56, height: 56, borderCurve: 'continuous', borderRadius: 28, backgroundColor: T.accentSoft, alignItems: 'center', justifyContent: 'center' }}
                 >
                   <Check size={24} color={T.accent} />
                 </View>

@@ -4,12 +4,12 @@
 // there). Keep the two in sync when the map UI changes.
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
-import { Drop, LatLng, SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, money } from './data';
-import { useApp } from './theme';
-import { DropCardCompact, FadeIn, Glass, Pin, Touchable } from './components';
+import { DEFAULT_FILTERS, Drop, LatLng, SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, money } from './data';
+import { fontUI, useApp } from './theme';
+import { DropCardCompact, FadeIn, Glass, Pin, TextBtn, Touchable } from './components';
 import { Filter } from './icons';
 import { hapticSelection } from './haptics';
 
@@ -20,14 +20,14 @@ const SELECTED_CARD_MAX_WIDTH = 460;
 // image, so we briefly enable tracksViewChanges whenever the pin's look
 // changes (selection), then disable it again to keep the map smooth.
 function DropMarker({
-  latitude, longitude, label, a11yLabel, active, dim, onPress,
+  latitude, longitude, label, cat, a11yLabel, active, onPress,
 }: {
   latitude: number;
   longitude: number;
   label: string;
+  cat: string;
   a11yLabel?: string;
   active: boolean;
-  dim: boolean;
   onPress: () => void;
 }) {
   const [track, setTrack] = useState(true);
@@ -35,20 +35,20 @@ function DropMarker({
     setTrack(true);
     const t = setTimeout(() => setTrack(false), 500);
     return () => clearTimeout(t);
-  }, [active, dim]);
+  }, [active, cat, label]);
 
   return (
     <Marker
       coordinate={{ latitude, longitude }}
       anchor={{ x: 0.5, y: 1 }}
       tracksViewChanges={track}
-      onPress={dim ? undefined : onPress}
-      zIndex={active ? 5 : dim ? 1 : 2}
+      onPress={onPress}
+      zIndex={active ? 5 : 2}
     >
       {/* The pin is a picture of a button, not a button: taps must land on the
           native marker, whose recognizer fires onPress. */}
-      <View pointerEvents="none" style={{ opacity: dim ? 0.28 : 1, paddingTop: 10 }}>
-        <Pin active={active} label={label} accessibilityLabel={a11yLabel} />
+      <View pointerEvents="none" style={{ paddingTop: 10 }}>
+        <Pin active={active} label={label} cat={cat} accessibilityLabel={a11yLabel} />
       </View>
     </Marker>
   );
@@ -62,11 +62,11 @@ export function MapTopBar({ activeCount, onFilters }: { activeCount: number; onF
     <View style={{ position: 'absolute', top: insets.top + 4, right: 16, flexDirection: 'row', zIndex: 8 }}>
       <Touchable onPress={onFilters} scale={0.96} accessibilityLabel={activeCount ? `Filters, ${activeCount} on` : 'Filters'}>
         {activeCount ? (
-          <View style={{ width: 48, height: 44, borderRadius: 10, backgroundColor: T.accent, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ width: 48, height: 44, borderCurve: 'continuous', borderRadius: 12, backgroundColor: T.accent, alignItems: 'center', justifyContent: 'center' }}>
             <Filter size={17} color={T.accentInk} />
           </View>
         ) : (
-          <Glass radius={10} style={{ width: 48, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+          <Glass radius={12} style={{ width: 48, height: 44, alignItems: 'center', justifyContent: 'center' }}>
             <Filter size={17} color={T.text} />
           </Glass>
         )}
@@ -76,7 +76,7 @@ export function MapTopBar({ activeCount, onFilters }: { activeCount: number; onF
 }
 
 export default function MapScreen() {
-  const { T, filters, drops } = useApp();
+  const { T, filters, setFilters, drops } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
@@ -87,9 +87,31 @@ export default function MapScreen() {
   const located = drops
     .map((d) => ({ d, coord: dropCoords(d) }))
     .filter((x) => x.coord != null) as { d: Drop; coord: LatLng }[];
-  const selDrop = located.find((x) => x.d.id === sel)?.d ?? null;
+  // Only deals that pass the filters get a pin (matching the list and the web
+  // map). Fading the rest left them stacked over the matches — same-suburb
+  // deals share a coordinate — so the filters looked like they did nothing.
   const matchIds = new Set(applyFilters(located.map((x) => x.d), filters).map((d) => d.id));
+  const shown = located.filter((x) => matchIds.has(x.d.id));
+  const selDrop = shown.find((x) => x.d.id === sel)?.d ?? null;
   const activeCount = activeFilterCount(filters);
+
+  // When the filters change, drop a selection they exclude (it would linger as
+  // the card) and frame the matching pins, so filtering to an area or category
+  // off-screen actually shows the results.
+  const firstFilters = useRef(true);
+  useEffect(() => {
+    if (firstFilters.current) { firstFilters.current = false; return; }
+    if (sel && !matchIds.has(sel)) setSel(null);
+    const coords = shown.map((x) => x.coord);
+    if (coords.length === 1) {
+      mapRef.current?.animateToRegion({ ...coords[0], latitudeDelta: 0.02, longitudeDelta: 0.02 }, 400);
+    } else if (coords.length > 1) {
+      mapRef.current?.fitToCoordinates(coords, {
+        edgePadding: { top: 60, right: 60, bottom: 60, left: 60 },
+        animated: true,
+      });
+    }
+  }, [filters]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // On iOS a tap on a marker also reaches the map's own tap handler —
   // react-native-maps' AIRMapManager fires the MapView's onPress for every tap,
@@ -127,21 +149,30 @@ export default function MapScreen() {
         }}
         mapPadding={{ top: insets.top + 56, right: 0, bottom: barTop, left: 0 }}
       >
-        {located.map(({ d, coord }) => (
+        {shown.map(({ d, coord }) => (
           <DropMarker
             key={d.id}
             latitude={coord.latitude}
             longitude={coord.longitude}
             label={money(d.now)}
-            a11yLabel={`${d.venue}, ${money(d.now)}`}
+            cat={d.cat}
+            a11yLabel={`${d.venue}, ${d.cat}, ${money(d.now)}`}
             active={sel === d.id}
-            dim={!matchIds.has(d.id)}
             onPress={() => select(d.id)}
           />
         ))}
       </MapView>
 
       <MapTopBar activeCount={activeCount} onFilters={() => router.push('/(user)/filters')} />
+
+      {located.length > 0 && shown.length === 0 && (
+        <View style={{ position: 'absolute', top: insets.top + 60, left: 16, right: 16, alignItems: 'center' }}>
+          <Glass radius={12} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: 14, paddingRight: 10, paddingVertical: 8 }}>
+            <Text style={{ ...fontUI(400, 14), fontSize: 14, color: T.text }}>No deals match your filters</Text>
+            <TextBtn onPress={() => setFilters(DEFAULT_FILTERS)} color={T.accent} size={15} weight={500}>Clear</TextBtn>
+          </Glass>
+        </View>
+      )}
 
       {/* selected mini card */}
       {selDrop && (

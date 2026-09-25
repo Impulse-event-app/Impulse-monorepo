@@ -221,7 +221,7 @@ export default function Onboarding() {
             ageDeclined ? (
               <View
                 accessibilityLiveRegion="polite"
-                style={{ marginTop: 18, marginHorizontal: 22, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: T.surface, borderRadius: 14, borderWidth: 1, borderColor: T.line, maxWidth: 360 }}
+                style={{ marginTop: 18, marginHorizontal: 22, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: T.surface, borderCurve: 'continuous', borderRadius: 16, borderWidth: 1, borderColor: T.line, maxWidth: 360 }}
               >
                 <Text style={{ ...fontUI(400), fontSize: 15, color: T.text }}>We'll hide venues that serve alcohol.</Text>
               </View>
@@ -238,7 +238,7 @@ export default function Onboarding() {
         >
           <Lede title="Where do you start from?" body="We sort by what's closest. Change it any time." />
           <View style={{ paddingHorizontal: 22, paddingTop: 22 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: T.fill, borderRadius: 8, paddingHorizontal: 14, minHeight: 44, marginBottom: 18 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: T.fill, borderCurve: 'continuous', borderRadius: 10, paddingHorizontal: 14, minHeight: 44, marginBottom: 18 }}>
               <Search size={16} color={T.muted} />
               <TextInput
                 value={query}

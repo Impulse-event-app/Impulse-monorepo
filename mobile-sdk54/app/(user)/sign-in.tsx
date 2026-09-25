@@ -33,7 +33,7 @@ function GoogleBtn({ onPress, loading }: { onPress: () => void; loading?: boolea
       accessibilityRole="button"
       accessibilityState={{ disabled: !!loading }}
       style={({ pressed }) => ({
-        width: '100%', minHeight: 52, paddingVertical: 8, borderRadius: 26,
+        width: '100%', minHeight: 52, paddingVertical: 8, borderCurve: 'continuous', borderRadius: 26,
         backgroundColor: pressed ? T.fill : 'transparent', borderWidth: 1, borderColor: T.line2,
         flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
         opacity: loading ? 0.5 : 1,

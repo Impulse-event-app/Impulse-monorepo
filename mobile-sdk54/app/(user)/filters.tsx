@@ -9,17 +9,17 @@ import {
   View,
 } from 'react-native';
 import {
-  CATEGORIES,
   DEFAULT_FILTERS,
   Filters,
+  PRICE_MAX,
   applyFilters,
+  categoryOptions,
   money,
 } from '../../src/data';
 import { fontMono, fontUI, useApp } from '../../src/theme';
 import { Btn, Chip, NATIVE_SHEETS, SheetFrame, TextBtn } from '../../src/components';
 import { hapticSelection } from '../../src/haptics';
 
-const ACTS = CATEGORIES.filter((c) => c !== 'All');
 const SORTS = [
   { id: 'closest', label: 'Closest' },
   { id: 'price', label: 'Lowest price' },
@@ -42,7 +42,7 @@ function FRow({ label, hint, children }: { label: string; hint?: string; childre
 function Segmented({ value, options, onChange }: { value: string; options: { id: string; label: string }[]; onChange: (id: string) => void }) {
   const { T } = useApp();
   return (
-    <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', backgroundColor: T.fill, borderRadius: 9, padding: 2, gap: 2 }}>
+    <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', backgroundColor: T.fill, borderCurve: 'continuous', borderRadius: 11, padding: 2, gap: 2 }}>
       {options.map((o) => {
         const on = value === o.id;
         return (
@@ -53,7 +53,7 @@ function Segmented({ value, options, onChange }: { value: string; options: { id:
             accessibilityRole="radio"
             accessibilityState={{ checked: on }}
             style={{
-              flex: 1, minHeight: 32, paddingVertical: 4, borderRadius: 7, alignItems: 'center', justifyContent: 'center',
+              flex: 1, minHeight: 32, paddingVertical: 4, borderCurve: 'continuous', borderRadius: 7, alignItems: 'center', justifyContent: 'center',
               backgroundColor: on ? (T.dark ? T.line2 : T.surface) : 'transparent',
               shadowColor: '#000', shadowOpacity: on && !T.dark ? 0.08 : 0, shadowRadius: 1, shadowOffset: { width: 0, height: 1 },
             }}
@@ -75,7 +75,7 @@ function PartyInline({ value, onChange }: { value: number; onChange: (v: number)
       accessibilityRole="button"
       accessibilityLabel={a11y}
       accessibilityState={{ disabled: dis }}
-      style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: T.fill, alignItems: 'center', justifyContent: 'center', opacity: dis ? 0.45 : 1 }}
+      style={{ width: 44, height: 44, borderCurve: 'continuous', borderRadius: 10, backgroundColor: T.fill, alignItems: 'center', justifyContent: 'center', opacity: dis ? 0.45 : 1 }}
     >
       <Text style={{ fontSize: 20, color: dis ? T.faint : T.text, lineHeight: 24 }}>{label}</Text>
     </Pressable>
@@ -95,7 +95,7 @@ function PartyInline({ value, onChange }: { value: number; onChange: (v: number)
 function PriceSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const { T } = useApp();
   const MIN = 10;
-  const MAX = 200;
+  const MAX = PRICE_MAX;
   const STEP = 10;
   const widthRef = useRef(1);
   // PanResponder is created once, so read the latest callback through a ref.
@@ -136,13 +136,13 @@ function PriceSlider({ value, onChange }: { value: number; onChange: (v: number)
         }}
         style={{ height: 44, justifyContent: 'center' }}
       >
-        <View pointerEvents="none" style={{ height: 6, borderRadius: 3, backgroundColor: T.fill, overflow: 'hidden' }}>
+        <View pointerEvents="none" style={{ height: 6, borderCurve: 'continuous', borderRadius: 3, backgroundColor: T.fill, overflow: 'hidden' }}>
           <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${fillPct}%`, backgroundColor: T.accent }} />
         </View>
         <View
           pointerEvents="none"
           style={{
-            position: 'absolute', left: `${fillPct}%`, marginLeft: -13, width: 26, height: 26, borderRadius: 13, backgroundColor: '#fff',
+            position: 'absolute', left: `${fillPct}%`, marginLeft: -13, width: 26, height: 26, borderCurve: 'continuous', borderRadius: 13, backgroundColor: '#fff',
             shadowColor: '#000', shadowOpacity: 0.28, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 3,
           }}
         />
@@ -167,8 +167,16 @@ export default function FiltersSheet() {
     ...f.areas,
     ...drops.map((d) => d.suburb).filter(Boolean),
   ]));
+  const acts = categoryOptions(drops);
   const count = applyFilters(drops, f).length;
-  const isDefault = JSON.stringify(f) === JSON.stringify(DEFAULT_FILTERS);
+  const isDefault = (x: Filters) => JSON.stringify(x) === JSON.stringify(DEFAULT_FILTERS);
+  const nothingToClear = isDefault(f) && isDefault(filters);
+  // Clear all takes effect immediately — not just in the draft — so closing the
+  // sheet afterwards (X / swipe) doesn't bring the old filters back.
+  const clearAll = () => {
+    setF(DEFAULT_FILTERS);
+    setFilters(DEFAULT_FILTERS);
+  };
 
   const close = () => router.back();
   const apply = () => {
@@ -182,7 +190,7 @@ export default function FiltersSheet() {
       onClose={close}
       title="Filters"
       action={
-        <TextBtn onPress={() => setF(DEFAULT_FILTERS)} disabled={isDefault} color={isDefault ? T.faint : T.accent}>
+        <TextBtn onPress={clearAll} disabled={nothingToClear} color={nothingToClear ? T.faint : T.accent}>
           Clear all
         </TextBtn>
       }
@@ -194,7 +202,7 @@ export default function FiltersSheet() {
     >
       <FRow label="What" hint={f.cats.length ? `${f.cats.length} selected` : 'Anything'}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 8, rowGap: 10 }}>
-          {ACTS.map((a) => (
+          {acts.map((a) => (
             <Chip key={a} active={f.cats.includes(a)} onPress={() => toggle('cats', a)}>{a}</Chip>
           ))}
         </View>

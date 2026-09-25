@@ -28,7 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Drop, fmtCountdown, money, pct, useCountdown, venuePhotoUrl } from './data';
 import { IMPULSE_RED, fontMono, fontUI, useTheme } from './theme';
-import { ChevronBack, ChevronRight, PinTriangle } from './icons';
+import { CategoryIcon, ChevronBack, ChevronRight, PinTriangle } from './icons';
 import { hapticSelection } from './haptics';
 
 export const EASE = Easing.bezier(0.32, 0.72, 0, 1);
@@ -153,11 +153,11 @@ export function Glass({
     // zIndex 0 makes the container its own stacking context so the fill's
     // zIndex -1 stays inside it (web paints positioned layers above static
     // children like a bare <Svg> otherwise).
-    <View pointerEvents={pointerEvents} style={[{ borderRadius: radius, overflow: 'hidden', zIndex: 0 }, style]}>
+    <View pointerEvents={pointerEvents} style={[{ borderCurve: 'continuous', borderRadius: radius, overflow: 'hidden', zIndex: 0 }, style]}>
       <GlassFill intensity={intensity} />
       {children}
       {edge && (
-        <View pointerEvents="none" style={[FILL, { borderRadius: radius, borderWidth: 0.5, borderColor: T.glassEdge }]} />
+        <View pointerEvents="none" style={[FILL, { borderCurve: 'continuous', borderRadius: radius, borderWidth: 0.5, borderColor: T.glassEdge }]} />
       )}
     </View>
   );
@@ -206,7 +206,7 @@ export function BackButton({ onPress, style }: { onPress: () => void; style?: St
 /** A glass badge (radius 8, 26pt) for chips over photos. */
 export function GlassBadge({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
-    <Glass radius={8} style={[{ minHeight: 26, paddingVertical: 3, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center' }, style]}>
+    <Glass radius={10} style={[{ minHeight: 26, paddingVertical: 3, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center' }, style]}>
       {children}
     </Glass>
   );
@@ -396,7 +396,7 @@ export function Radar({
   };
   return (
     <View
-      style={[{ width: size, height: size, borderRadius: r, overflow: 'hidden' }, style]}
+      style={[{ width: size, height: size, borderCurve: 'continuous', borderRadius: r, overflow: 'hidden' }, style]}
       accessible={!decorative}
       accessibilityRole={decorative ? undefined : 'image'}
       accessibilityLabel={decorative ? undefined : 'Impulse'}
@@ -439,7 +439,7 @@ export function HuddleMark({ size = 30, radius }: { size?: number; radius?: numb
     <View
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
-      style={{ width: size, height: size, borderRadius: r, overflow: 'hidden' }}
+      style={{ width: size, height: size, borderCurve: 'continuous', borderRadius: r, overflow: 'hidden' }}
     >
       <Svg width={size} height={size} viewBox="0 0 512 512">
         <Rect width={512} height={512} fill={IMPULSE_RED} />
@@ -501,7 +501,7 @@ export function Btn({
         <View
           style={{
             // minHeight (not height) so the label can grow with Dynamic Type.
-            minHeight: h, paddingVertical: 8, borderRadius: h / 2, paddingHorizontal: small ? 18 : 22,
+            minHeight: h, paddingVertical: 8, borderCurve: 'continuous', borderRadius: h / 2, paddingHorizontal: small ? 18 : 22,
             flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9,
             opacity: disabled ? 0.35 : 1,
             backgroundColor:
@@ -575,7 +575,7 @@ export function Chip({
     >
       <View
         style={{
-          minHeight: h, paddingVertical: 4, paddingHorizontal: small ? 11 : 14, borderRadius: 8,
+          minHeight: h, paddingVertical: 4, paddingHorizontal: small ? 11 : 14, borderCurve: 'continuous', borderRadius: 10,
           backgroundColor: active ? T.chipOn : T.chipBg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
         }}
       >
@@ -603,7 +603,7 @@ export function Placeholder({
   const T = useTheme();
   if (uri) {
     return (
-      <View style={[{ borderRadius: radius, overflow: 'hidden', backgroundColor: T.ph }, style]}>
+      <View style={[{ borderCurve: 'continuous', borderRadius: radius, overflow: 'hidden', backgroundColor: T.ph }, style]}>
         <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" accessibilityIgnoresInvertColors />
       </View>
     );
@@ -612,7 +612,7 @@ export function Placeholder({
     <View
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
-      style={[{ backgroundColor: T.ph, borderRadius: radius, overflow: 'hidden' }, style]}
+      style={[{ backgroundColor: T.ph, borderCurve: 'continuous', borderRadius: radius, overflow: 'hidden' }, style]}
     >
       {[...Array(24)].map((_, i) => (
         <View
@@ -654,7 +654,7 @@ export function DiscountChip({ now, usual }: { now: number; usual: number }) {
     <View
       accessible
       accessibilityLabel={`${p} percent off`}
-      style={{ minHeight: 20, paddingHorizontal: 6, borderRadius: 6, backgroundColor: T.accentSoft, justifyContent: 'center' }}
+      style={{ minHeight: 20, paddingHorizontal: 6, borderCurve: 'continuous', borderRadius: 6, backgroundColor: T.accentSoft, justifyContent: 'center' }}
     >
       <Text style={{ ...fontMono(600, 12), fontSize: 12, color: T.accent }}>−{p}%</Text>
     </View>
@@ -671,7 +671,7 @@ export function DiscountBadge({ now, usual }: { now: number; usual: number }) {
       accessible
       accessibilityLabel={`${p} percent off`}
       style={{
-        minHeight: 32, paddingHorizontal: 11, paddingVertical: 4, borderRadius: 10,
+        minHeight: 32, paddingHorizontal: 11, paddingVertical: 4, borderCurve: 'continuous', borderRadius: 12,
         backgroundColor: T.accent, justifyContent: 'center',
         shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 3,
       }}
@@ -743,7 +743,7 @@ export function LiveDot({ color, blink, size = 7 }: { color: string; blink?: boo
     <Animated.View
       accessibilityElementsHidden
       importantForAccessibility="no"
-      style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color, opacity: o }}
+      style={{ width: size, height: size, borderCurve: 'continuous', borderRadius: size / 2, backgroundColor: color, opacity: o }}
     />
   );
 }
@@ -834,7 +834,7 @@ function GlassCard({
     : (T.dark ? 'rgba(30,30,32,0.58)' : 'rgba(255,255,255,0.62)');
 
   return (
-    <View style={[{ borderRadius: radius, overflow: 'hidden', zIndex: 0 }, style]}>
+    <View style={[{ borderCurve: 'continuous', borderRadius: radius, overflow: 'hidden', zIndex: 0 }, style]}>
       {solid ? (
         <View pointerEvents="none" style={[layer, { backgroundColor: T.surface }]} />
       ) : (
@@ -872,7 +872,7 @@ function GlassCard({
       {children}
       <View
         pointerEvents="none"
-        style={[FILL, { borderRadius: radius, borderWidth: 0.5, borderColor: solid ? T.line : T.glassEdge }]}
+        style={[FILL, { borderCurve: 'continuous', borderRadius: radius, borderWidth: 0.5, borderColor: solid ? T.line : T.glassEdge }]}
       />
     </View>
   );
@@ -941,7 +941,7 @@ export function DropCardCompact({ d, onPress }: { d: Drop; onPress?: () => void 
     <Touchable onPress={onPress} scale={0.994} accessibilityLabel={dropA11yLabel(d)}>
       {/* See-through glass: this card floats over the map, which blurs behind it. */}
       <GlassCard radius={20} style={{ flexDirection: 'row' }}>
-        <Placeholder label="" uri={venuePhotoUrl(d)} radius={14} style={{ width: 80, margin: 6 }} />
+        <Placeholder label="" uri={venuePhotoUrl(d)} radius={16} style={{ width: 80, margin: 6 }} />
         <View style={{ paddingVertical: 13, paddingLeft: 9, paddingRight: 15, flex: 1, minWidth: 0 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
             <Text numberOfLines={2} style={{ flex: 1, ...fontUI(600), fontSize: 17, letterSpacing: -0.26, color: T.text }}>
@@ -979,14 +979,14 @@ export function Switch({
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ checked: on, disabled: !!disabled }}
       style={{
-        width: 51, height: 31, borderRadius: 999, padding: 2, opacity: disabled ? 0.5 : 1,
+        width: 51, height: 31, borderCurve: 'continuous', borderRadius: 999, padding: 2, opacity: disabled ? 0.5 : 1,
         backgroundColor: on ? T.accent : T.line2,
         flexDirection: 'row', justifyContent: on ? 'flex-end' : 'flex-start', alignItems: 'center',
       }}
     >
       <View
         style={{
-          width: 27, height: 27, borderRadius: 14, backgroundColor: '#fff',
+          width: 27, height: 27, borderCurve: 'continuous', borderRadius: 16, backgroundColor: '#fff',
           shadowColor: '#000', shadowOpacity: 0.24, shadowRadius: 1.5, shadowOffset: { width: 0, height: 1 }, elevation: 2,
         }}
       />
@@ -1002,9 +1002,9 @@ export function Radio({ on }: { on: boolean }) {
     <View
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
-      style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: on ? T.accent : T.line2, alignItems: 'center', justifyContent: 'center' }}
+      style={{ width: 22, height: 22, borderCurve: 'continuous', borderRadius: 13, borderWidth: 1.5, borderColor: on ? T.accent : T.line2, alignItems: 'center', justifyContent: 'center' }}
     >
-      {on && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: T.accent }} />}
+      {on && <View style={{ width: 10, height: 10, borderCurve: 'continuous', borderRadius: 5, backgroundColor: T.accent }} />}
     </View>
   );
 }
@@ -1033,7 +1033,7 @@ export function Stepper({
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       style={({ pressed }) => ({
-        width: size, height: size, borderRadius: 8, backgroundColor: T.fill,
+        width: size, height: size, borderCurve: 'continuous', borderRadius: 10, backgroundColor: T.fill,
         alignItems: 'center', justifyContent: 'center', opacity: dis ? 0.4 : pressed ? 0.7 : 1,
       })}
     >
@@ -1094,7 +1094,7 @@ export function CodeDisplay({
           <View
             key={i}
             style={{
-              minWidth: s.w, minHeight: s.h, borderRadius: s.r, backgroundColor: T.fill,
+              minWidth: s.w, minHeight: s.h, borderCurve: 'continuous', borderRadius: s.r, backgroundColor: T.fill,
               borderWidth: 1, borderColor: T.line, alignItems: 'center', justifyContent: 'center',
             }}
           >
@@ -1132,7 +1132,7 @@ export function CodeInput({
             <View
               key={i}
               style={{
-                flex: 1, maxWidth: 52, minHeight: 62, borderRadius: 10, backgroundColor: T.fill,
+                flex: 1, maxWidth: 52, minHeight: 62, borderCurve: 'continuous', borderRadius: 12, backgroundColor: T.fill,
                 borderWidth: 1.5, borderColor: current ? T.accent : 'transparent',
                 alignItems: 'center', justifyContent: 'center',
               }}
@@ -1140,7 +1140,7 @@ export function CodeInput({
               {ch ? (
                 <Text maxFontSizeMultiplier={CODE_MAX_SCALE} style={{ ...fontMono(600), fontSize: 28, color: T.text }}>{ch}</Text>
               ) : current ? (
-                <Animated.View style={{ width: 2, height: 26, borderRadius: 1, backgroundColor: T.accent, opacity: caret }} />
+                <Animated.View style={{ width: 2, height: 26, borderCurve: 'continuous', borderRadius: 1, backgroundColor: T.accent, opacity: caret }} />
               ) : null}
             </View>
           );
@@ -1178,7 +1178,7 @@ export const Field = forwardRef<TextInput, TextInputProps & { prefix?: string; c
     return (
       <View
         style={[{
-          flexDirection: 'row', alignItems: 'center', minHeight: 52, borderRadius: 10, backgroundColor: T.fill,
+          flexDirection: 'row', alignItems: 'center', minHeight: 52, borderCurve: 'continuous', borderRadius: 12, backgroundColor: T.fill,
           paddingHorizontal: 14, borderWidth: 1, borderColor: focused ? T.accent : 'transparent',
         }, containerStyle]}
       >
@@ -1232,10 +1232,10 @@ export function FauxQR({ code, size = 132 }: { code: string; size?: number }) {
   const gap = 1.5;
   const cell = (inner - gap * (N - 1)) / N;
   return (
-    <View style={{ width: size, height: size, backgroundColor: '#fff', borderRadius: 14, padding: pad }}>
+    <View style={{ width: size, height: size, backgroundColor: '#fff', borderCurve: 'continuous', borderRadius: 16, padding: pad }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', width: inner, height: inner, gap }}>
         {cells.map((on, i) => (
-          <View key={i} style={{ width: cell, height: cell, borderRadius: 1, backgroundColor: on ? '#0A0A0A' : 'transparent' }} />
+          <View key={i} style={{ width: cell, height: cell, borderCurve: 'continuous', borderRadius: 1, backgroundColor: on ? '#0A0A0A' : 'transparent' }} />
         ))}
       </View>
     </View>
@@ -1244,11 +1244,13 @@ export function FauxQR({ code, size = 132 }: { code: string; size?: number }) {
 
 // ── map pin ──────────────────────────────────────────────────
 export function Pin({
-  active, onPress, label, accessibilityLabel,
+  active, onPress, label, cat, accessibilityLabel,
 }: {
   active?: boolean;
   onPress?: () => void;
   label: string;
+  /** Category glyph shown before the price, so pins read at a glance. */
+  cat?: string;
   accessibilityLabel?: string;
 }) {
   const T = useTheme();
@@ -1261,14 +1263,15 @@ export function Pin({
       style={{ alignItems: 'center' }}
     >
       {active && (
-        <View style={{ position: 'absolute', top: -8, width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: T.accent, opacity: 0.55 }} />
+        <View style={{ position: 'absolute', top: -8, width: 40, height: 40, borderCurve: 'continuous', borderRadius: 20, borderWidth: 1, borderColor: T.accent, opacity: 0.55 }} />
       )}
       <View
         style={{
-          backgroundColor: T.accent, height: active ? 30 : 26, paddingHorizontal: 11, borderRadius: 999,
-          alignItems: 'center', justifyContent: 'center',
+          backgroundColor: T.accent, height: active ? 30 : 26, paddingLeft: cat ? 8 : 11, paddingRight: 11, borderCurve: 'continuous', borderRadius: 999,
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
         }}
       >
+        {cat && <CategoryIcon cat={cat} size={active ? 16 : 15} color={T.accentInk} />}
         <Text maxFontSizeMultiplier={1} style={{ ...fontMono(600, 13), fontSize: 13, color: T.accentInk }}>{label}</Text>
       </View>
       <View style={{ marginTop: -1 }}>
@@ -1450,7 +1453,7 @@ export function SheetFrame({
         ]}
       >
         <View style={{ alignItems: 'center', paddingTop: 9 }}>
-          <View style={{ width: 36, height: 5, borderRadius: 3, backgroundColor: T.line2 }} />
+          <View style={{ width: 36, height: 5, borderCurve: 'continuous', borderRadius: 3, backgroundColor: T.line2 }} />
         </View>
         {header}
         {body}
@@ -1475,7 +1478,7 @@ export function Group({
   return (
     <View style={[{ marginTop: 32 }, style]}>
       {label ? <Label style={{ marginHorizontal: 16, marginBottom: 7 }}><Text accessibilityRole="header">{label}</Text></Label> : null}
-      <View style={{ backgroundColor: T.surface, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: T.line }}>
+      <View style={{ backgroundColor: T.surface, borderCurve: 'continuous', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: T.line }}>
         {items.map((c, i) => (
           <View key={i}>
             {c}

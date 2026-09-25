@@ -92,7 +92,7 @@ function HeroTile({ label, glyph, red, w }: { label: string; glyph: keyof typeof
   return (
     <View
       style={{
-        width: w, height: (w * 4) / 3, borderRadius: 12, padding: 10, gap: 11,
+        width: w, height: (w * 4) / 3, borderCurve: 'continuous', borderRadius: 12, padding: 10, gap: 11,
         backgroundColor: red ? IMPULSE_RED : T.dark ? T.surface2 : T.surface,
         borderWidth: red ? 0 : 1, borderColor: T.line2,
         alignItems: 'center', justifyContent: 'center',

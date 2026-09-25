@@ -15,6 +15,42 @@ export const CATEGORIES = [
   'Darts',
 ];
 
+// Venues pick their category in venue-web from a different list ("Mini Golf",
+// "Escape Room", "Pool / Billiards", "Bar", …), so backend values rarely match
+// the labels above character-for-character. Every deal's category goes through
+// canonicalCat() so filters, preferences and map icons compare like with like.
+const CAT_ALIASES: Record<string, string> = {
+  bowling: 'Bowling', tenpin: 'Bowling',
+  karaoke: 'Karaoke',
+  escaperoom: 'Escape rooms',
+  minigolf: 'Mini golf', puttputt: 'Mini golf',
+  pool: 'Pool', poolbilliard: 'Pool', billiard: 'Pool', poolbar: 'Pool', snooker: 'Pool',
+  comedy: 'Comedy',
+  livemusic: 'Live music', music: 'Live music', gig: 'Live music',
+  dart: 'Darts',
+  bar: 'Bar', rooftopbar: 'Bar', pub: 'Bar', cocktailbar: 'Bar', drink: 'Bar',
+  restaurant: 'Restaurant', food: 'Restaurant', dining: 'Restaurant',
+  cafe: 'Cafe', coffee: 'Cafe',
+  arcade: 'Arcade', game: 'Arcade',
+  other: 'Other',
+};
+
+const catKey = (s: string) =>
+  s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '').replace(/s$/, '');
+
+/** Canonical display label for a raw category; unknown ones pass through trimmed. */
+export function canonicalCat(raw: string | null | undefined): string {
+  const s = (raw ?? '').trim();
+  return CAT_ALIASES[catKey(s)] ?? (s || 'Other');
+}
+
+/** Filter options: the core list, plus any other category live deals carry. */
+export function categoryOptions(drops: { cat: string }[]): string[] {
+  const core = CATEGORIES.filter((c) => c !== 'All');
+  const extra = Array.from(new Set(drops.map((d) => canonicalCat(d.cat)))).filter((c) => !core.includes(c));
+  return [...core, ...extra];
+}
+
 // ── Sydney suburbs (home-base search + area picker) ──────────
 // Local list so search is instant and offline; swap for a Places-backed
 // autocomplete when a web-enabled Google key exists.
@@ -269,18 +305,23 @@ export type Filters = {
   sort: 'closest' | 'price' | 'rating';
 };
 
+// The price slider's top stop, which means "Any price" — not "$200 or less".
+export const PRICE_MAX = 200;
+
 export const DEFAULT_FILTERS: Filters = {
-  cats: [], areas: [], when: 'all', party: 1, maxPrice: 200, sort: 'closest',
+  cats: [], areas: [], when: 'all', party: 1, maxPrice: PRICE_MAX, sort: 'closest',
 };
 
 export function applyFilters(list: Drop[], f: Filters): Drop[] {
+  const cats = new Set(f.cats.map(canonicalCat));
+  const areas = new Set(f.areas.map((a) => a.trim().toLowerCase()));
   let out = list.filter(
     (d) =>
-      (f.cats.length === 0 || f.cats.includes(d.cat)) &&
-      (f.areas.length === 0 || f.areas.includes(d.suburb)) &&
+      (cats.size === 0 || cats.has(canonicalCat(d.cat))) &&
+      (areas.size === 0 || areas.has((d.suburb || '').trim().toLowerCase())) &&
       (f.when === 'all' || d.status === f.when) &&
-      d.cap >= f.party &&
-      d.now <= f.maxPrice,
+      (d.cap ?? Infinity) >= f.party &&
+      (f.maxPrice >= PRICE_MAX || d.now <= f.maxPrice),
   );
   if (f.sort === 'closest') out = [...out].sort((a, b) => a.km - b.km);
   else if (f.sort === 'price') out = [...out].sort((a, b) => a.now - b.now);
@@ -294,7 +335,7 @@ export function activeFilterCount(f: Filters): number {
   n += f.areas.length ? 1 : 0;
   n += f.when !== 'all' ? 1 : 0;
   n += f.party > 1 ? 1 : 0;
-  n += f.maxPrice < 200 ? 1 : 0;
+  n += f.maxPrice < PRICE_MAX ? 1 : 0;
   n += f.sort !== 'closest' ? 1 : 0;
   return n;
 }
@@ -347,7 +388,7 @@ export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): D
   return {
     id: d.id,
     venue: d.venue_name,
-    cat: d.category,
+    cat: canonicalCat(d.category),
     suburb: d.venue_suburb ?? '',
     km: Math.round(km * 10) / 10,
     now: d.deal_price,
@@ -375,7 +416,7 @@ export function apiBookingToPlan(b: ApiBooking): Plan {
     bookingId: b.id,
     dropId: b.deal_id,
     venue: b.venue_name,
-    cat: b.deal_category,
+    cat: canonicalCat(b.deal_category),
     party: b.num_people,
     time: b.slot_time,
     total: b.total_paid,

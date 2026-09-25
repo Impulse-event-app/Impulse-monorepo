@@ -44,7 +44,7 @@ function HuddleJourney({ stage }: { stage: number }) {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
               <View
                 style={{
-                  width: 22, height: 22, borderRadius: 11, backgroundColor: reached ? T.accent : T.fill,
+                  width: 22, height: 22, borderCurve: 'continuous', borderRadius: 13, backgroundColor: reached ? T.accent : T.fill,
                   alignItems: 'center', justifyContent: 'center',
                 }}
               >
@@ -80,7 +80,7 @@ function AvatarSlot({ name, voted, empty }: { name?: string; voted?: boolean; em
     <View style={{ alignItems: 'center', width: 60 }}>
       <View
         style={{
-          width: 48, height: 48, borderRadius: 24,
+          width: 48, height: 48, borderCurve: 'continuous', borderRadius: 24,
           backgroundColor: empty ? 'transparent' : T.surface2,
           borderWidth: empty ? 1.5 : voted ? 1.5 : 1,
           borderColor: empty ? T.line2 : voted ? T.accent : T.line,
@@ -92,7 +92,7 @@ function AvatarSlot({ name, voted, empty }: { name?: string; voted?: boolean; em
         {voted && !empty && (
           <View
             style={{
-              position: 'absolute', right: -3, bottom: -3, width: 18, height: 18, borderRadius: 9,
+              position: 'absolute', right: -3, bottom: -3, width: 18, height: 18, borderCurve: 'continuous', borderRadius: 11,
               backgroundColor: T.accent, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: T.surface,
             }}
           >
@@ -250,7 +250,7 @@ export default function HuddlePopup() {
   const balance = fmtCents(huddle?.my_share?.balance_cents ?? 0);
 
   // Inner cards sit one step off the sheet surface.
-  const card = { marginTop: 18, padding: 16, backgroundColor: T.dark ? T.surface2 : T.bg, borderRadius: 10, borderWidth: 1, borderColor: T.line } as const;
+  const card = { marginTop: 18, padding: 16, backgroundColor: T.dark ? T.surface2 : T.bg, borderCurve: 'continuous', borderRadius: 12, borderWidth: 1, borderColor: T.line } as const;
 
   return (
     <SheetFrame
@@ -290,7 +290,7 @@ export default function HuddlePopup() {
       {huddle && huddle.status === 'open' && (
         <View style={[card, { gap: 12 }]}>
           <View style={{ alignItems: 'center', gap: 10 }}>
-            <View style={{ backgroundColor: '#fff', padding: 12, borderRadius: 14 }}>
+            <View style={{ backgroundColor: '#fff', padding: 12, borderCurve: 'continuous', borderRadius: 16 }}>
               <QRCode value={joinUrl(huddle.join_token)} size={160} backgroundColor="#fff" color="#0A0A0A" />
             </View>
             <Label>Scan to join</Label>
@@ -327,7 +327,7 @@ export default function HuddlePopup() {
           {/* Deposit payment — reuses the standard Pinch card field */}
           {huddle.status === 'awaiting_payment' && huddle.my_member_id && (
             myDepositPaid ? (
-              <View style={{ marginTop: 14, padding: 12, backgroundColor: T.accentSoft, borderRadius: 10 }}>
+              <View style={{ marginTop: 14, padding: 12, backgroundColor: T.accentSoft, borderCurve: 'continuous', borderRadius: 12 }}>
                 <Text style={{ ...fontUI(500, 15), fontSize: 15, lineHeight: 21, color: T.text }}>
                   Paid. {paidCount} of {huddle.group_size} in. Your code unlocks when everyone pays.
                 </Text>

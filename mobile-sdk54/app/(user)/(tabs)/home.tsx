@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, View } from 'react-native';
 import {
-  CATEGORIES,
+  categoryOptions,
   DEFAULT_FILTERS,
   activeFilterCount,
   applyFilters,
@@ -73,7 +73,7 @@ function FilterButton({ count, onPress }: { count: number; onPress: () => void }
     >
       <View
         style={{
-          minHeight: 34, paddingVertical: 4, paddingHorizontal: 13, borderRadius: 8, backgroundColor: count ? T.accent : T.fill,
+          minHeight: 34, paddingVertical: 4, paddingHorizontal: 13, borderCurve: 'continuous', borderRadius: 10, backgroundColor: count ? T.accent : T.fill,
           flexDirection: 'row', alignItems: 'center', gap: 7,
         }}
       >
@@ -107,7 +107,7 @@ function HuddleCard({ title, sub, live, onPress }: { title: string; sub: string;
     <Touchable onPress={onPress} scale={0.99} accessibilityLabel={`${title}, ${sub}`}>
       <View
         style={{
-          backgroundColor: T.surface, borderRadius: 14, borderWidth: 1, borderColor: T.line,
+          backgroundColor: T.surface, borderCurve: 'continuous', borderRadius: 16, borderWidth: 1, borderColor: T.line,
           paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 12,
         }}
       >
@@ -261,11 +261,11 @@ export default function HomeScreen() {
               style={{ position: 'absolute', top: 130, right: 18 }}
             >
               {rank >= 0 ? (
-                <View style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: T.accent, alignItems: 'center', justifyContent: 'center' }}>
+                <View style={{ width: 30, height: 30, borderCurve: 'continuous', borderRadius: 10, backgroundColor: T.accent, alignItems: 'center', justifyContent: 'center' }}>
                   <Text maxFontSizeMultiplier={1} style={{ ...fontMono(600), fontSize: 15, color: T.accentInk }}>{rank + 1}</Text>
                 </View>
               ) : (
-                <Glass radius={8} style={{ width: 30, height: 30, alignItems: 'center', justifyContent: 'center' }}>
+                <Glass radius={10} style={{ width: 30, height: 30, alignItems: 'center', justifyContent: 'center' }}>
                   <Text maxFontSizeMultiplier={1} style={{ ...fontUI(500), fontSize: 17, color: T.text }}>{pickable ? '+' : '–'}</Text>
                 </Glass>
               )}
@@ -315,7 +315,7 @@ export default function HomeScreen() {
                 /* Voting mode — the feed below is now the ballot */
                 <View
                   style={{
-                    borderRadius: 14, backgroundColor: T.accentSoft, paddingHorizontal: 14, paddingVertical: 12,
+                    borderCurve: 'continuous', borderRadius: 16, backgroundColor: T.accentSoft, paddingHorizontal: 14, paddingVertical: 12,
                     flexDirection: 'row', alignItems: 'center', gap: 12,
                   }}
                 >
@@ -349,7 +349,7 @@ export default function HomeScreen() {
             contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingTop: 18, paddingBottom: 6, alignItems: 'center' }}
           >
             <FilterButton count={activeCount} onPress={() => router.push('/(user)/filters')} />
-            {CATEGORIES.map((c) => (
+            {['All', ...categoryOptions(drops)].map((c) => (
               <Chip key={c} active={isChipOn(c)} onPress={() => quickCat(c)}>
                 {c}
               </Chip>
@@ -428,7 +428,7 @@ export default function HomeScreen() {
                     <View
                       key={i}
                       style={{
-                        width: i < voteRanking.length ? 16 : 6, height: 6, borderRadius: 3,
+                        width: i < voteRanking.length ? 16 : 6, height: 6, borderCurve: 'continuous', borderRadius: 3,
                         backgroundColor: i < voteRanking.length ? T.accentInk : 'rgba(255,255,255,0.4)',
                       }}
                     />

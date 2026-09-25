@@ -12,23 +12,28 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, money } from './data';
 import { useApp } from './theme';
 import { Glass, Touchable } from './components';
-import { Filter } from './icons';
+import { Filter, categoryIconSvg } from './icons';
 
 const STYLE_LIGHT = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
 const STYLE_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
 /**
- * Brand v2 price pin as a DOM element: red pill, white tabular label, pointer.
+ * Brand v2 price pin as a DOM element: red pill, category glyph + white
+ * tabular label, pointer.
  * The outer element is left unstyled because MapLibre positions it (absolute +
  * transform); styling it directly would override that and stretch it full-width.
  */
-function pinElement(label: string, accent: string): HTMLElement {
+function pinElement(label: string, cat: string, accent: string): HTMLElement {
   const el = document.createElement('div');
   el.style.cursor = 'pointer';
   const pill = document.createElement('div');
-  pill.textContent = label;
+  const icon = document.createElement('span');
+  icon.innerHTML = categoryIconSvg(cat, 15, '#FFFFFF');
+  Object.assign(icon.style, { display: 'flex' } as Partial<CSSStyleDeclaration>);
+  pill.appendChild(icon);
+  pill.appendChild(document.createTextNode(label));
   Object.assign(pill.style, {
-    position: 'relative', display: 'inline-block', height: '26px', padding: '0 11px',
+    position: 'relative', display: 'inline-flex', alignItems: 'center', gap: '5px', height: '26px', padding: '0 11px 0 8px',
     borderRadius: '999px', background: accent, color: '#FFFFFF', whiteSpace: 'nowrap',
     // line-height lives in the shorthand: a separate lineHeight would be reset by `font`.
     font: '600 13px/26px -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
@@ -94,8 +99,10 @@ export default function MapScreenWeb() {
     mapRef.current?.setStyle(dark ? STYLE_DARK : STYLE_LIGHT);
   }, [dark]);
 
-  // Plot a price pin per mappable deal. Rebuilt whenever the data or the
-  // active filters change so pins stay in sync.
+  // Plot a price pin per mappable deal. Rebuilt whenever the matching deals
+  // change so pins stay in sync — keyed on content, since applyFilters returns
+  // a fresh array every render and would otherwise re-fit the camera each time.
+  const matchKey = matched.map((d) => `${d.id}:${d.now}:${d.cat}`).join('|');
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -106,8 +113,8 @@ export default function MapScreenWeb() {
     matched.forEach((d) => {
       const c = dropCoords(d);
       if (!c) return;
-      const el = pinElement(money(d.now), T.accent);
-      el.title = `${d.venue} · ${d.suburb || 'Sydney'}`;
+      const el = pinElement(money(d.now), d.cat, T.accent);
+      el.title = `${d.venue} · ${d.cat} · ${d.suburb || 'Sydney'}`;
       el.addEventListener('click', () => router.push(`/(user)/event/${d.id}`));
       const marker = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -7] })
         .setLngLat([c.longitude, c.latitude])
@@ -121,7 +128,7 @@ export default function MapScreenWeb() {
     } else if (markersRef.current.length > 1) {
       map.fitBounds(bounds, { padding: { top: insets.top + 80, bottom: 140, left: 48, right: 48 }, maxZoom: 14, duration: 0 });
     }
-  }, [matched, T.accent, router, insets.top]);
+  }, [matchKey, T.accent, insets.top]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tear the map down on unmount so a remount re-initialises cleanly.
   useEffect(() => {

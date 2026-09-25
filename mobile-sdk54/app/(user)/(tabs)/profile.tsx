@@ -37,7 +37,7 @@ function StatTile({ big, label }: { big: string | number; label: string }) {
     <View
       accessible
       accessibilityLabel={`${label}, ${big}`}
-      style={{ flex: 1, backgroundColor: T.surface, borderRadius: 10, borderWidth: 1, borderColor: T.line, padding: 16 }}
+      style={{ flex: 1, backgroundColor: T.surface, borderCurve: 'continuous', borderRadius: 12, borderWidth: 1, borderColor: T.line, padding: 16 }}
     >
       <Text numberOfLines={2} style={{ ...fontMono(600), fontSize: 24, lineHeight: 28, letterSpacing: -0.48, color: T.text }}>{big}</Text>
       <Label style={{ marginTop: 7 }}>{label}</Label>
@@ -163,7 +163,7 @@ export default function ProfileScreen() {
                 <View
                   accessibilityElementsHidden
                   importantForAccessibility="no-hide-descendants"
-                  style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: T.surface2, borderWidth: 1, borderColor: T.line, alignItems: 'center', justifyContent: 'center' }}
+                  style={{ width: 60, height: 60, borderCurve: 'continuous', borderRadius: 30, backgroundColor: T.surface2, borderWidth: 1, borderColor: T.line, alignItems: 'center', justifyContent: 'center' }}
                 >
                   <Text maxFontSizeMultiplier={1} style={{ ...fontUI(600), fontSize: 22, color: T.text }}>{initials}</Text>
                 </View>
