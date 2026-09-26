@@ -91,11 +91,52 @@ def _require_approved(payment: dict) -> dict:
     return payment
 
 
+def _replayed_payment(err: PinchError, amount_cents: int) -> dict:
+    """A reused nonce comes back as HTTP 403 {"isNonceReplay": true, "data":
+    <the original payment>} — and Pinch ignores the amount on the retry
+    (probed in sandbox 2026-09-26). So a replay only counts as our charge when
+    the original was approved for exactly the amount we meant to charge now;
+    anything else re-raises with Pinch's exact body.
+
+    `amount` on a surcharged payment includes the card fee, so the intended
+    amount is read back from the chargeAmountCents we stamp into metadata."""
+    if err.status_code != 403:
+        raise err
+    try:
+        body = json.loads(err.body)
+    except ValueError:
+        raise err
+    payment = body.get("data") if isinstance(body, dict) and body.get("isNonceReplay") else None
+    if not payment:
+        raise err
+    try:
+        meta = json.loads(payment.get("metadata") or "{}")
+    except ValueError:
+        meta = {}
+    charged = meta.get("chargeAmountCents")
+    if charged is None and not payment.get("isSurcharged"):
+        charged = payment.get("amount")
+    if charged != amount_cents:
+        raise err
+    return _require_approved(payment)
+
+
+def _create_payment(input: dict, merchant_id: str) -> dict:
+    """POST the charge; a nonce replay of the same approved charge is success."""
+    try:
+        payment = pinch_client.create_payment(input, merchant_id)
+    except PaymentNotApproved:
+        raise
+    except PinchError as e:
+        return _replayed_payment(e, input["amount"])
+    return _require_approved(payment)
+
+
 def charge_deposit(*, payer_id: str, source_id: str, amount_cents: int,
                    description: str, metadata: dict, nonce: str, merchant_id: str) -> dict:
     """Charge a deposit: full amount is Impulse's, card fees surcharged to the
     customer. Returns the approved payment. Raises PinchError / PaymentNotApproved."""
-    payment = pinch_client.create_payment(
+    return _create_payment(
         {
             "payerId": payer_id,
             "sourceId": source_id,
@@ -103,12 +144,11 @@ def charge_deposit(*, payer_id: str, source_id: str, amount_cents: int,
             "applicationFee": amount_cents,
             "surcharge": ["credit-card"],
             "description": description,
-            "metadata": json.dumps(metadata),
+            "metadata": json.dumps({**metadata, "chargeAmountCents": amount_cents}),
             "nonce": nonce,
         },
         merchant_id,
     )
-    return _require_approved(payment)
 
 
 def refund_full(*, payment_id: str, reason: str, nonce: str, merchant_id: str) -> dict:
@@ -133,16 +173,15 @@ def charge_balance(*, payer_id: str, source_id: str, amount_cents: int,
                    nonce: str, merchant_id: str) -> dict:
     """Charge a balance: Impulse takes application_fee_cents, no surcharge.
     Returns the approved payment. Raises PinchError / PaymentNotApproved."""
-    payment = pinch_client.create_payment(
+    return _create_payment(
         {
             "payerId": payer_id,
             "sourceId": source_id,
             "amount": amount_cents,
             "applicationFee": application_fee_cents,
             "description": description,
-            "metadata": json.dumps(metadata),
+            "metadata": json.dumps({**metadata, "chargeAmountCents": amount_cents}),
             "nonce": nonce,
         },
         merchant_id,
     )
-    return _require_approved(payment)

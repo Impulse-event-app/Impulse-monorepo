@@ -267,80 +267,73 @@ export const dealApi = {
 
 // ── Bookings ──────────────────────────────────────────────────────────────────
 
+export type BookingStatus =
+  | "voting" | "collecting" | "confirmed" | "redeemed" | "cancelled" | "expired" | "collapsed";
+
 export interface Booking {
   id: string;
   deal_id: string;
-  user_id: string;
+  user_id: string | null;
   slot_time: string;
   num_people: number;
   total_paid: number;
-  confirmation_code: string | null; // null until the Pinch deposit is paid
-  status: "pending" | "confirmed" | "cancelled" | "attended";
+  confirmation_code: string | null; // null until every share is in
+  status: BookingStatus;
   redeemed_at: string | null;
   created_at: string;
+  has_voting: boolean;
+  payment_followup: boolean;        // some seat's charge declined — collect directly
 }
 
-export interface RedeemResponse {
-  confirmation_code: string;
-  status: string;
-  slot_time: string;
-  num_people: number;
-  redeemed_at: string | null;
-  payment_status: "unpaid" | "deposit_paid" | "fully_paid" | "cancelled";
-  balance_amount_cents: number | null;
-  // Set when the balance charge declined — collect payment directly
-  payment_warning: string | null;
-}
+// One verify/redeem path for every code — solo, group split or Huddle.
 
-export const bookingApi = {
-  listForDeal: (dealId: string) =>
-    request<Booking[]>("GET", `/bookings?deal_id=${dealId}`),
-  redeem: (code: string) =>
-    rawRequest("POST", `/bookings/redeem/${encodeURIComponent(code)}`),
-};
-
-// ── Huddles (group verification) ──────────────────────────────────────────────
-
-export interface HuddleVerifyMember {
+export interface VerifyMember {
   name: string;
   balance_cents: number;
   balance_status: "unpaid" | "paid" | "declined";
 }
 
-export interface HuddleVerifyResponse {
-  huddle_id: string;
+export interface VerifyResponse {
+  booking_id: string;
+  confirmation_code: string;
   group_size: number;
   venue_name: string;
   deal_title: string;
   slot: string;
   total_balance_cents: number;
-  members: HuddleVerifyMember[];
-  status: string;
+  members: VerifyMember[];
+  status: BookingStatus;
   already_redeemed: boolean;
+  redeemed_at: string | null;
 }
 
-export interface HuddleRedeemMemberResult {
+export interface RedeemMemberResult {
   name: string;
   balance_cents: number;
   status: "paid" | "declined";
   warning: string | null;
 }
 
-export interface HuddleRedeemResponse {
-  huddle_id: string;
-  redeemed: boolean;
-  members: HuddleRedeemMemberResult[];
+export interface RedeemResponse {
+  booking_id: string;
+  confirmation_code: string;
+  status: BookingStatus;
+  slot_time: string | null;
+  num_people: number;
+  redeemed_at: string | null;
+  members: RedeemMemberResult[];
   total_charged_cents: number;
   declines: number;
 }
 
-export const huddleApi = {
-  // Preview a group code (no charge). rawRequest so 404 (not a huddle code) can
-  // fall through to the booking-redeem path without throwing.
+export const bookingApi = {
+  listForDeal: (dealId: string) =>
+    request<Booking[]>("GET", `/bookings?deal_id=${dealId}`),
+  // Preview before charging. rawRequest so 404/403 map to screen states.
   verify: (code: string) =>
-    rawRequest("GET", `/huddles/verify/${encodeURIComponent(code)}`),
+    rawRequest("GET", `/bookings/verify/${encodeURIComponent(code)}`),
   redeem: (code: string) =>
-    request<HuddleRedeemResponse>("POST", `/huddles/redeem/${encodeURIComponent(code)}`),
+    rawRequest("POST", `/bookings/redeem/${encodeURIComponent(code)}`),
 };
 
 // ── Pinch managed merchant onboarding ────────────────────────────────────────

@@ -12,10 +12,23 @@ import { FONT_DISPLAY, FONT_MONO, card, toneBadge, type Tone } from "@/lib/ui";
 const COLS = "1fr 1fr 1fr 1fr 1.2fr 1fr";
 
 const STATUS_TONE: Record<Booking["status"], Tone> = {
+  voting: "neutral",
+  collecting: "neutral",
   confirmed: "soft",
-  attended: "solid",
+  redeemed: "solid",
   cancelled: "danger",
-  pending: "neutral",
+  expired: "neutral",
+  collapsed: "neutral",
+};
+
+const STATUS_LABEL: Record<Booking["status"], string> = {
+  voting: "voting",
+  collecting: "filling",
+  confirmed: "confirmed",
+  redeemed: "redeemed",
+  cancelled: "cancelled",
+  expired: "expired",
+  collapsed: "didn't go ahead",
 };
 
 export default function BookingsPage() {
@@ -99,7 +112,10 @@ function BookingsContent() {
                 <span style={{ fontSize: 14 }}>{b.num_people} {b.num_people === 1 ? "guest" : "guests"}</span>
                 <span style={{ fontWeight: 600, fontSize: 14 }}>{formatCurrency(b.total_paid)}</span>
                 <span>
-                  <span style={t.badge}><span style={t.dot} />{b.status}</span>
+                  <span style={t.badge}><span style={t.dot} />{STATUS_LABEL[b.status]}</span>
+                  {b.payment_followup && (
+                    <span style={{ ...toneBadge("danger").badge, marginLeft: 6 }} title="A card declined — collect at the till">Follow up</span>
+                  )}
                 </span>
                 <span style={{ fontFamily: FONT_MONO, fontSize: 13, color: "var(--muted)" }}>{b.redeemed_at ? formatDate(b.redeemed_at) : "—"}</span>
               </div>

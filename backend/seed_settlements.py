@@ -22,7 +22,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from database import SessionLocal
-from models import Booking, Deal, Settlement, SettlementLine, Venue
+from models import Booking, BookingParticipant, Deal, Settlement, SettlementLine, Venue
 from payments import BALANCE_APPLICATION_FEE_RATE
 
 SEED_PREFIX = "seed_tra_"
@@ -71,11 +71,14 @@ def seed_settlements(venue_id: str, wipe: bool = False) -> None:
             raise SystemExit(f"Venue {venue.name} has no deals — run seed.py first.")
 
         # Only balance charges settle to a venue; the deposit is Impulse's in full.
+        # One balance line per seat — a group booking settles each member's balance.
         bookings = (
-            db.query(Booking)
+            db.query(BookingParticipant)
+            .join(Booking, Booking.id == BookingParticipant.booking_id)
             .filter(
                 Booking.deal_id.in_(deal_ids),
-                Booking.payment_status == "fully_paid",
+                BookingParticipant.balance_status == "paid",
+                BookingParticipant.balance_payment_id.isnot(None),
                 Booking.redeemed_at.isnot(None),
             )
             .order_by(Booking.redeemed_at)
@@ -88,18 +91,18 @@ def seed_settlements(venue_id: str, wipe: bool = False) -> None:
 
         # Anything already covered by a real (or previously seeded) settlement.
         already = {
-            row.booking_id
-            for row in db.query(SettlementLine.booking_id)
+            row.pinch_payment_id
+            for row in db.query(SettlementLine.pinch_payment_id)
             .filter(SettlementLine.venue_id == venue_id)
             .all()
-            if row.booking_id
+            if row.pinch_payment_id
         }
 
         batches: dict = {}
         for b in bookings:
-            if b.id in already:
+            if b.balance_payment_id in already:
                 continue
-            batches.setdefault(_week_start(b.redeemed_at), []).append(b)
+            batches.setdefault(_week_start(b.booking.redeemed_at), []).append(b)
 
         if not batches:
             print("Every redeemed booking is already covered by a settlement. Nothing to do.")
@@ -132,7 +135,7 @@ def seed_settlements(venue_id: str, wipe: bool = False) -> None:
             fees_total = 0
             venue_total = 0
             for b in batch:
-                balance = b.balance_amount_cents or 0
+                balance = b.balance_cents or 0
                 fees = round(balance * _ASSUMED_FEE_RATE)
                 total = balance - fees
                 application_fee = round(balance * BALANCE_APPLICATION_FEE_RATE)
@@ -143,7 +146,7 @@ def seed_settlements(venue_id: str, wipe: bool = False) -> None:
                     settlement_id=settlement.id,
                     pinch_line_id=b.balance_payment_id,
                     pinch_payment_id=b.balance_payment_id,
-                    booking_id=b.id,
+                    booking_id=b.booking_id,
                     venue_id=venue_id,
                     kind="balance",
                     line_type="Settlement",
@@ -152,7 +155,7 @@ def seed_settlements(venue_id: str, wipe: bool = False) -> None:
                     total_cents=total,
                     venue_amount_cents=venue_amount,
                     description=f"Impulse balance — {venue.name}",
-                    transaction_date=b.redeemed_at,
+                    transaction_date=b.booking.redeemed_at,
                 ))
                 gross_total += balance
                 fees_total += fees

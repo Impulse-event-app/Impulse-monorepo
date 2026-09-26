@@ -1,33 +1,26 @@
 // Huddle status — a bottom sheet over the app. Shows the join link and N avatar
 // slots filling in live, a "Vote your top 3" button that turns the home feed
-// into the ballot, and (after resolution) the winner, your share, and the group
-// code. Polls while the huddle is live.
-import { useCallback, useEffect, useState } from 'react';
+// into the ballot, and (after resolution) the shared split flow: the creator
+// picks how to split, everyone confirms their share, the live meter fills,
+// and the one code appears on every phone at once. Live via realtime.
+import { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Alert, Platform, Share, Text, View } from 'react-native';
 import { fontMono, fontUI, useApp } from '../../../src/theme';
-import { getHuddle, getHuddleCandidates, payHuddleShare, cancelHuddle, describeCard, ApiHuddle, ApiError } from '../../../src/api';
+import { editSplit, getHuddle, getHuddleCandidates, cancelHuddle, ApiError } from '../../../src/api';
 import QRCode from 'react-native-qrcode-svg';
 import {
   Btn,
-  CodeDisplay,
-  Group,
   HuddleMark,
   Label,
   LiveDot,
-  Radio,
-  Row,
   SheetFrame,
-  Switch,
   TextBtn,
 } from '../../../src/components';
-import { Check, Plus, RowIcons, ShareGlyph } from '../../../src/icons';
-import { PinchCardField } from '../../../src/PinchCardField';
-import { useWallet } from '../../../src/wallet';
-import { hapticError, hapticSuccess } from '../../../src/haptics';
-
-const POLL_MS = 4000;
-const fmtCents = (c: number) => `$${(c / 100).toFixed(2)}`;
+import { Check, ShareGlyph } from '../../../src/icons';
+import { hapticError } from '../../../src/haptics';
+import { Completion, LiveMeter, SplitSelector, fmtCents, useLiveBooking } from '../../../src/split';
+import { SharePay, shareTerms } from '../../../src/SharePay';
 
 // Vote → Pay → Code. Highlights the current stage.
 function HuddleJourney({ stage }: { stage: number }) {
@@ -111,39 +104,17 @@ function AvatarSlot({ name, voted, empty }: { name?: string; voted?: boolean; em
 }
 
 export default function HuddlePopup() {
-  const { id, mt } = useLocalSearchParams<{ id: string; mt?: string }>();
-  const { T, profile, startVoting, setActiveHuddle } = useApp();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { T, startVoting, setActiveHuddle } = useApp();
   const router = useRouter();
-  const [huddle, setHuddle] = useState<ApiHuddle | null>(null);
+  const { view: huddle, setView: setHuddle, refresh } = useLiveBooking(id, getHuddle);
   const [copied, setCopied] = useState(false);
-  const [paying, setPaying] = useState(false);      // card field revealed
-  // Saved cards. A guest who joined by name has no account, so the wallet
-  // comes back empty and they simply get the card form.
-  const wallet = useWallet();
-  const defaultCard = wallet.cards?.find((c) => c.is_default) ?? wallet.cards?.[0] ?? null;
-  const [useNewCard, setUseNewCard] = useState(false);
-  const [saveCard, setSaveCard] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [savingSplit, setSavingSplit] = useState(false);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
-  const refresh = useCallback(async () => {
-    if (!id) return;
-    try {
-      setHuddle(await getHuddle(id, mt));
-    } catch {
-      // keep last known state; next poll retries
-    }
-  }, [id, mt]);
-
-  useEffect(() => {
-    refresh();
-    const t = setInterval(refresh, POLL_MS);
-    return () => clearInterval(t);
-  }, [refresh]);
-
   const share = async () => {
-    if (!huddle) return;
+    if (!huddle?.join_token) return;
     const url = joinUrl(huddle.join_token);
     if (Platform.OS === 'web') {
       try {
@@ -162,59 +133,11 @@ export default function HuddlePopup() {
   const goVote = async () => {
     if (!id) return;
     try {
-      const cands = await getHuddleCandidates(id, mt);
-      startVoting({ huddleId: id, memberToken: mt, candidateIds: cands.map((d) => d.id) });
+      const cands = await getHuddleCandidates(id);
+      startVoting({ huddleId: id, candidateIds: cands.map((d) => d.id) });
       router.back();   // reveal home in voting mode
     } catch (err) {
       Alert.alert('Could not load deals', err instanceof Error ? err.message : 'Please try again.');
-    }
-  };
-
-  /** Charge a card already on file — no card form, no re-entry. */
-  const onPayWithSavedCard = async () => {
-    if (!id || !defaultCard) return;
-    setSubmitting(true);
-    try {
-      setHuddle(await payHuddleShare(id, { payment_method_id: defaultCard.id }, mt));
-      hapticSuccess();
-      setPaying(false);
-    } catch (err) {
-      hapticError();
-      // 409 = the server won't charge this stored card (expired, detached,
-      // never authorised). Drop straight to the card form rather than dead-end.
-      if (err instanceof ApiError && err.status === 409) {
-        setUseNewCard(true);
-        Alert.alert('Card unavailable', err.message);
-      } else {
-        Alert.alert('Payment failed', err instanceof ApiError ? err.message : 'Please try again.');
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const onCardToken = async (token: string, cardHolderName: string) => {
-    if (!id) return;
-    setSubmitting(true);
-    try {
-      const fullName = (profile.name && profile.name !== 'You' ? profile.name : cardHolderName).trim();
-      const [firstName, ...rest] = fullName.split(/\s+/);
-      const updated = await payHuddleShare(id, {
-        token,
-        save_card: saveCard,
-        card_holder_name: cardHolderName,
-        email: profile.email || `no-email-${id.slice(0, 8)}@impulse.app`,
-        first_name: firstName || 'Impulse',
-        last_name: rest.join(' ') || 'Member',
-      }, mt);
-      setHuddle(updated);
-      hapticSuccess();
-      setPaying(false);
-    } catch (err) {
-      hapticError();
-      Alert.alert('Payment failed', err instanceof ApiError ? err.message : 'Please try again.');
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -222,7 +145,7 @@ export default function HuddlePopup() {
     if (!id) return;
     setCancelling(true);
     try {
-      await cancelHuddle(id, mt);
+      await cancelHuddle(id);
       setActiveHuddle(null);   // home card reverts to "Start a huddle"
       router.back();
     } catch (err) {
@@ -232,22 +155,20 @@ export default function HuddlePopup() {
     }
   };
 
-  const filled = huddle?.members ?? [];
+  const filled = huddle?.participants ?? [];
   const emptyCount = huddle ? Math.max(0, huddle.group_size - filled.length) : 0;
-  const canVote = huddle?.status === 'open' && !huddle.my_has_voted && !!huddle.my_member_id;
-  const imCreator = !!huddle?.members.find((m) => m.id === huddle.my_member_id)?.is_creator;
-  // Creator can call it off until the group is confirmed (active).
-  const canCancel = imCreator && (huddle?.status === 'open' || huddle?.status === 'awaiting_payment');
-  const resolved = huddle && ['awaiting_payment', 'active', 'redeemed'].includes(huddle.status);
-  const myMember = huddle?.members.find((m) => m.id === huddle.my_member_id);
-  const myDepositPaid = myMember?.deposit_status === 'paid';
-  const paidCount = filled.filter((m) => m.deposit_status === 'paid').length;
+  const canVote = huddle?.status === 'voting' && !huddle.my_has_voted && !!huddle.my_member_id;
+  const imCreator = !!huddle?.is_initiator;
+  // Creator can call it off until the group is confirmed.
+  const canCancel = imCreator && (huddle?.status === 'voting' || huddle?.status === 'collecting');
+  const resolved = huddle && ['collecting', 'confirmed', 'redeemed'].includes(huddle.status);
+  const done = huddle && ['confirmed', 'redeemed'].includes(huddle.status);
+  const paidCount = filled.filter((m) => m.state === 'paid').length;
   const stage = !huddle ? 0
-    : huddle.status === 'open' ? 0
-    : huddle.status === 'awaiting_payment' ? 1
-    : ['active', 'redeemed'].includes(huddle.status) ? 2 : 0;
-  const deposit = fmtCents(huddle?.my_share?.deposit_cents ?? 0);
-  const balance = fmtCents(huddle?.my_share?.balance_cents ?? 0);
+    : huddle.status === 'voting' ? 0
+    : huddle.status === 'collecting' ? 1
+    : done ? 2 : 0;
+  const myShare = huddle?.my_share ?? null;
 
   // Inner cards sit one step off the sheet surface.
   const card = { marginTop: 18, padding: 16, backgroundColor: T.dark ? T.surface2 : T.bg, borderCurve: 'continuous', borderRadius: 12, borderWidth: 1, borderColor: T.line } as const;
@@ -264,21 +185,21 @@ export default function HuddlePopup() {
     >
       {huddle && <HuddleJourney stage={stage} />}
 
-      {!!huddle && (
+      {!!huddle && !resolved && (
         <Text style={{ marginTop: 16, ...fontUI(400), fontSize: 15, lineHeight: 21, letterSpacing: -0.12, color: T.muted }}>
-          {resolved
-            ? "It's decided. Details below."
-            : huddle.my_has_voted
+          {huddle.my_has_voted
             ? `Your vote is in. ${filled.filter((m) => m.has_voted).length} of ${huddle.group_size} have voted.`
             : `${filled.length} of ${huddle.group_size} in. The result locks when everyone votes.`}
         </Text>
       )}
 
-      {/* member slots */}
-      <View style={{ marginTop: 20, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-        {filled.map((m) => <AvatarSlot key={m.id} name={m.display_name} voted={m.has_voted} />)}
-        {[...Array(emptyCount)].map((_, i) => <AvatarSlot key={`e-${i}`} empty />)}
-      </View>
+      {/* member slots while voting; the live meter takes over after */}
+      {!resolved && (
+        <View style={{ marginTop: 20, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          {filled.map((m) => <AvatarSlot key={m.id} name={m.display_name} voted={m.has_voted} />)}
+          {[...Array(emptyCount)].map((_, i) => <AvatarSlot key={`e-${i}`} empty />)}
+        </View>
+      )}
 
       {canVote && (
         <View style={{ marginTop: 22 }}>
@@ -286,8 +207,8 @@ export default function HuddlePopup() {
         </View>
       )}
 
-      {/* join QR + link while open */}
-      {huddle && huddle.status === 'open' && (
+      {/* join QR + link while voting */}
+      {huddle && huddle.status === 'voting' && huddle.join_token && (
         <View style={[card, { gap: 12 }]}>
           <View style={{ alignItems: 'center', gap: 10 }}>
             <View style={{ backgroundColor: '#fff', padding: 12, borderCurve: 'continuous', borderRadius: 16 }}>
@@ -309,85 +230,74 @@ export default function HuddlePopup() {
         </View>
       )}
 
-      {/* resolved: winner + share + code */}
-      {resolved && huddle.winning_deal && (
+      {/* resolved: winner → split → shares → code */}
+      {resolved && huddle.deal && (
         <View style={card}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-            <LiveDot color={T.accent} />
-            <Text style={{ ...fontUI(500), fontSize: 13, color: T.accent }}>It's decided</Text>
-          </View>
-          <Text style={{ marginTop: 8, ...fontUI(600), fontSize: 22, letterSpacing: -0.48, color: T.text }}>{huddle.winning_deal.venue_name}</Text>
-          <Text style={{ marginTop: 2, ...fontUI(400), fontSize: 15, color: T.muted }}>{huddle.winning_deal.title}</Text>
-          {huddle.my_share && (
-            <Text style={{ marginTop: 12, ...fontUI(400, 15), fontSize: 15, lineHeight: 21, color: T.text }}>
-              Your share: {deposit} now, {balance} at the venue.
-            </Text>
+          {done ? (
+            <Completion view={huddle} />
+          ) : (
+            <>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                <LiveDot color={T.accent} />
+                <Text style={{ ...fontUI(500), fontSize: 13, color: T.accent }}>It's decided</Text>
+              </View>
+              <Text style={{ marginTop: 8, ...fontUI(600), fontSize: 22, letterSpacing: -0.48, color: T.text }}>{huddle.deal.venue_name}</Text>
+              <Text style={{ marginTop: 2, ...fontUI(400), fontSize: 15, color: T.muted }}>{huddle.deal.title}</Text>
+            </>
           )}
 
-          {/* Deposit payment — reuses the standard Pinch card field */}
-          {huddle.status === 'awaiting_payment' && huddle.my_member_id && (
-            myDepositPaid ? (
-              <View style={{ marginTop: 14, padding: 12, backgroundColor: T.accentSoft, borderCurve: 'continuous', borderRadius: 12 }}>
-                <Text style={{ ...fontUI(500, 15), fontSize: 15, lineHeight: 21, color: T.text }}>
-                  Paid. {paidCount} of {huddle.group_size} in. Your code unlocks when everyone pays.
-                </Text>
-              </View>
-            ) : paying ? (
-              <View style={{ marginTop: 14 }}>
-                {submitting ? (
-                  <ActivityIndicator color={T.accent} style={{ height: 120 }} />
-                ) : defaultCard && !useNewCard ? (
-                  <>
-                    <Group style={{ marginTop: 0 }}>
-                      <Row
-                        icon={RowIcons.card(T.muted)}
-                        label={describeCard(defaultCard)}
-                        sublabel={defaultCard.expiry_date ? `Expires ${defaultCard.expiry_date}` : undefined}
-                        trailing={<Radio on />}
-                      />
-                      <Row icon={<Plus size={13} color={T.accent} />} label="Use a different card" accent chevron={false} onPress={() => setUseNewCard(true)} />
-                    </Group>
-                    <View style={{ marginTop: 12 }}>
-                      <Btn full onPress={onPayWithSavedCard}>{`Pay ${deposit}`}</Btn>
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <PinchCardField
-                      depositLabel={deposit}
-                      colors={{ bg: T.bg, text: T.text, muted: T.muted, line: T.line, accent: T.accent, surface: T.surface, fill: T.fill }}
-                      onToken={({ token, cardHolderName }) => onCardToken(token, cardHolderName)}
-                      onError={(m) => { hapticError(); Alert.alert('Card error', m); }}
-                    />
-                    {/* Only offer to save for members with an account —
-                        guests who joined by name have nowhere to save it. */}
-                    {(wallet.signedIn === true || defaultCard) && (
-                      <Group style={{ marginTop: 12 }} inset={16}>
-                        {wallet.signedIn === true && (
-                          <Row label="Save this card" trailing={<Switch on={saveCard} onChange={setSaveCard} />} />
-                        )}
-                        {defaultCard && (
-                          <Row label={`Use ${describeCard(defaultCard)}`} accent chevron={false} onPress={() => setUseNewCard(false)} />
-                        )}
-                      </Group>
-                    )}
-                  </>
-                )}
+          {!huddle.split_confirmed && huddle.status === 'collecting' && (
+            imCreator ? (
+              <View style={{ marginTop: 18 }}>
+                <Text style={{ ...fontUI(500), fontSize: 15, color: T.text, marginBottom: 12 }}>How are you splitting it?</Text>
+                <SplitSelector
+                  seats={filled.map((p) => ({ name: p.is_me ? 'You' : p.display_name }))}
+                  totalCents={huddle.locked_price_cents ?? 0}
+                  submitLabel="Confirm the split"
+                  submitting={savingSplit}
+                  onSubmit={async (r) => {
+                    setSavingSplit(true);
+                    try {
+                      const ids = filled.map((p) => p.id);
+                      setHuddle(await editSplit(huddle.id, {
+                        split_mode: r.mode,
+                        amounts: r.mode === 'custom' ? Object.fromEntries(ids.map((pid, i) => [pid, r.amounts[i]])) : undefined,
+                        covers: Object.fromEntries(r.covers.map((c) => [ids[c.covered], ids[c.coverer]])),
+                      }));
+                    } catch (err) {
+                      hapticError();
+                      Alert.alert("Couldn't save the split", err instanceof ApiError ? err.message : 'Please try again.');
+                    } finally {
+                      setSavingSplit(false);
+                    }
+                  }}
+                />
               </View>
             ) : (
-              <View style={{ marginTop: 14 }}>
-                <Btn full onPress={() => setPaying(true)}>{`Pay my ${deposit} share`}</Btn>
-                <Label style={{ marginTop: 8, lineHeight: 18, textAlign: 'center' }}>
-                  The deposit and card fee are non-refundable. {balance} is due at the venue. {paidCount} of {huddle.group_size} paid.
-                </Label>
-              </View>
+              <Text style={{ marginTop: 14, ...fontUI(400, 15), fontSize: 15, lineHeight: 21, color: T.muted }}>
+                {huddle.initiator_name} is sorting out the split — you'll see your share here in a moment.
+              </Text>
             )
           )}
 
-          {huddle.status === 'active' && huddle.common_code && (
-            <View style={{ marginTop: 16, paddingTop: 18, borderTopWidth: 1, borderTopColor: T.line, alignItems: 'center', gap: 12 }}>
-              <CodeDisplay code={huddle.common_code} size="md" label="Group code" />
-              <Label style={{ textAlign: 'center' }}>Show this at the door. One code for everyone.</Label>
+          {huddle.split_confirmed && huddle.status === 'collecting' && myShare && (
+            <View style={{ marginTop: 16 }}>
+              <Text style={{ ...fontUI(400, 15), fontSize: 15, lineHeight: 21, color: T.text }}>
+                {myShare.covered_by_name
+                  ? `${myShare.covered_by_name} has your share covered.`
+                  : `Your share is ${fmtCents(myShare.share_cents)}.`}
+              </Text>
+              {myShare.status === 'unpaid' && myShare.share_cents > 0 && (
+                <>
+                  <Label style={{ marginTop: 6, lineHeight: 18 }}>{shareTerms(myShare)}</Label>
+                  <View style={{ marginTop: 14 }}>
+                    <SharePay bookingId={huddle.id} share={myShare} onPaid={refresh} onShareChanged={refresh} />
+                  </View>
+                </>
+              )}
+              <View style={{ marginTop: 20 }}>
+                <LiveMeter view={huddle} />
+              </View>
             </View>
           )}
         </View>

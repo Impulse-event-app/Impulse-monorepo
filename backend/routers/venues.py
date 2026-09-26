@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 import payments
 from auth import get_current_user
 from database import get_db
-from huddle_logic import parse_slot_datetime
-from models import Booking, Deal, Settlement, SettlementLine, Venue
+from booking_logic import slot_at
+from models import Booking, BookingParticipant, Deal, Settlement, SettlementLine, Venue
 from schemas import (
     DealPerformanceItem,
     DealResponse,
@@ -227,23 +227,25 @@ def get_payouts(
     # Earned but not yet in any transfer: redeemed bookings whose balance has
     # been charged and settled to nothing yet. Deposits are excluded because
     # they are Impulse's in full and never settle to the venue.
-    settled_booking_ids = {ln.booking_id for ln in lines if ln.booking_id}
+    # Per seat: a group booking settles one balance line per participant.
+    settled_payment_ids = {ln.pinch_payment_id for ln in lines if ln.pinch_payment_id}
     venue_deal_ids = list(deal_titles.keys())
     awaiting_cents = 0
     if venue_deal_ids:
         unsettled = (
-            db.query(Booking)
+            db.query(BookingParticipant)
+            .join(Booking, Booking.id == BookingParticipant.booking_id)
             .filter(
                 Booking.deal_id.in_(venue_deal_ids),
-                Booking.payment_status == "fully_paid",
-                Booking.balance_payment_id.isnot(None),
+                BookingParticipant.balance_status == "paid",
+                BookingParticipant.balance_payment_id.isnot(None),
             )
             .all()
         )
-        for b in unsettled:
-            if b.id in settled_booking_ids:
+        for seat in unsettled:
+            if seat.balance_payment_id in settled_payment_ids:
                 continue
-            balance = b.balance_amount_cents or 0
+            balance = seat.balance_cents or 0
             awaiting_cents += balance - round(balance * payments.BALANCE_APPLICATION_FEE_RATE)
 
     return PayoutsResponse(
@@ -303,9 +305,9 @@ def get_stats(
 
 
 def _deal_ended_at(deal: Deal) -> Optional[datetime]:
-    """When the deal finished running: its last slot, else expires_at. Naive
-    parses are read as UTC — same convention as huddles._cutoff()."""
-    slot_times = [t for s in (deal.slots or []) if (t := parse_slot_datetime(deal.date, s))]
+    """When the deal finished running: its last slot (read in the venue's
+    time zone), else expires_at."""
+    slot_times = [t for s in (deal.slots or []) if (t := slot_at(deal.date, s))]
     ended = max(slot_times) if slot_times else deal.expires_at
     if ended is None:
         return None

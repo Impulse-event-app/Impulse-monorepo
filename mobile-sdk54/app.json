@@ -54,7 +54,10 @@
         {
           "action": "VIEW",
           "autoVerify": true,
-          "data": [{ "scheme": "https", "host": "impulse.expo.app", "pathPrefix": "/huddle/join" }],
+          "data": [
+            { "scheme": "https", "host": "impulse.expo.app", "pathPrefix": "/huddle/join" },
+            { "scheme": "https", "host": "impulse.expo.app", "pathPrefix": "/seat" }
+          ],
           "category": ["BROWSABLE", "DEFAULT"]
         }
       ]

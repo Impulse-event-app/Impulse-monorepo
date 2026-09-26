@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+import booking_flow
 from database import SessionLocal
 from routers import (
     bookings, contact, deals, huddles, interactions, merchants, users, venues,
@@ -14,17 +15,17 @@ from routers import (
 
 logger = logging.getLogger("impulse.main")
 
-# In-app huddle deadline sweeper. Runs every HUDDLE_SWEEP_INTERVAL seconds
-# (default 60; set 0 to disable and rely on an external cron / sweep_huddles.py).
+# In-app booking deadline sweeper (Huddle voting/collapse + direct-booking guarantor). Runs every HUDDLE_SWEEP_INTERVAL seconds
+# (default 60; set 0 to disable and rely on an external cron / sweep_bookings.py).
 HUDDLE_SWEEP_INTERVAL = int(os.environ.get("HUDDLE_SWEEP_INTERVAL", "60"))
 
 
 def _run_sweep_once() -> None:
     db = SessionLocal()
     try:
-        result = huddles.sweep_deadlines(db)
+        result = booking_flow.sweep_deadlines(db)
         if any(result.values()):
-            logger.info("Huddle sweep: %s", result)
+            logger.info("Booking deadline sweep: %s", result)
     finally:
         db.close()
 
@@ -36,7 +37,7 @@ async def _sweep_loop() -> None:
         try:
             await asyncio.to_thread(_run_sweep_once)
         except Exception as e:  # never let the sweeper kill the app
-            logger.warning("Huddle sweep failed: %s", e)
+            logger.warning("Booking deadline sweep failed: %s", e)
 
 
 @asynccontextmanager

@@ -128,8 +128,10 @@ def update_deal(
 
     # Recompute deal_price if pricing fields are being changed
     if "original_price" in updates or "discount_pct" in updates:
-        new_original = updates.get("original_price", deal.original_price)
-        new_discount = updates.get("discount_pct", deal.discount_pct)
+        # float(): the stored value is a Decimal and the patched one a float,
+        # and changing only one of the two would otherwise mix them and 500.
+        new_original = float(updates.get("original_price", deal.original_price))
+        new_discount = float(updates.get("discount_pct", deal.discount_pct))
         updates["deal_price"] = round(new_original * (1 - new_discount / 100), 2)
 
     for key, value in updates.items():

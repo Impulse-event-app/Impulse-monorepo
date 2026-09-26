@@ -1,10 +1,11 @@
 import logging
 import os
-from typing import List
+from typing import List, Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 import payments
@@ -12,8 +13,9 @@ import pinch_client
 import wallet
 from auth import SUPABASE_URL, get_current_user
 from database import get_db
-from models import Booking, HuddleMember, PaymentMethod, User, UserVenueInteraction, Venue
+from models import Booking, BookingParticipant, PaymentMethod, User, UserVenueInteraction, Venue
 from schemas import (
+    UserSearchResult,
     PaymentMethodCreate,
     PaymentMethodResponse,
     PushTokenRegister,
@@ -26,6 +28,67 @@ logger = logging.getLogger("impulse.users")
 router = APIRouter()
 
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+
+
+SEARCH_MIN_CHARS = 3
+SEARCH_LIMIT = 8
+
+
+def _search_name(u: User) -> str:
+    return (u.full_name or "").strip() or "Impulse member"
+
+
+@router.get("/search", response_model=List[UserSearchResult])
+def search_users(
+    q: Optional[str] = Query(None, max_length=80),
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Find a friend to invite into a booking.
+
+    Privacy: returns only an id and a display name — never email or phone.
+    Names match by word prefix and need at least 3 characters; an email or
+    phone number only matches exactly, so the directory can't be browsed by
+    contact details. With no query, returns people you've already shared a
+    booking with, most recent first. Capped at 8 results."""
+    me = user["sub"]
+    # People I've been in a booking with — shown first, and on their own when q is empty.
+    mine = db.query(BookingParticipant.booking_id).filter(BookingParticipant.user_id == me)
+    recent_rows = (
+        db.query(User, func.max(BookingParticipant.joined_at).label("last"))
+        .join(BookingParticipant, BookingParticipant.user_id == User.id)
+        .filter(BookingParticipant.booking_id.in_(mine), User.id != me)
+        .group_by(User.id)
+        .order_by(func.max(BookingParticipant.joined_at).desc())
+        .limit(SEARCH_LIMIT)
+        .all()
+    )
+    recent_ids = {u.id for u, _ in recent_rows}
+
+    term = (q or "").strip()
+    if len(term) < SEARCH_MIN_CHARS:
+        return [UserSearchResult(id=u.id, display_name=_search_name(u), recent=True) for u, _ in recent_rows]
+
+    like = term.replace("%", "").replace("_", "")
+    matches = (
+        db.query(User)
+        .filter(
+            User.id != me,
+            or_(
+                User.full_name.ilike(f"{like}%"),
+                User.full_name.ilike(f"% {like}%"),
+                func.lower(User.email) == term.lower(),
+                User.phone == term,
+            ),
+        )
+        .limit(SEARCH_LIMIT * 2)
+        .all()
+    )
+    matches.sort(key=lambda u: (u.id not in recent_ids, _search_name(u).lower()))
+    return [
+        UserSearchResult(id=u.id, display_name=_search_name(u), recent=u.id in recent_ids)
+        for u in matches[:SEARCH_LIMIT]
+    ]
 
 
 @router.get("/me", response_model=UserResponse)
@@ -127,8 +190,9 @@ def delete_me(
         db.query(Booking).filter(Booking.user_id == uid).update(
             {Booking.user_id: None}, synchronize_session=False,
         )
-        db.query(HuddleMember).filter(HuddleMember.user_id == uid).update(
-            {HuddleMember.user_id: None, HuddleMember.display_name: "Former member"}, synchronize_session=False,
+        db.query(BookingParticipant).filter(BookingParticipant.user_id == uid).update(
+            {BookingParticipant.user_id: None, BookingParticipant.display_name: "Former member"},
+            synchronize_session=False,
         )
         db.query(UserVenueInteraction).filter(UserVenueInteraction.user_id == uid).delete(synchronize_session=False)
         db.query(PaymentMethod).filter(PaymentMethod.user_id == uid).delete(synchronize_session=False)

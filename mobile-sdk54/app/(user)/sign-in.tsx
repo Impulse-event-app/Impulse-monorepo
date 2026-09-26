@@ -141,7 +141,7 @@ export default function SignIn() {
 
   const handleGoogle = () =>
     withAuth(async () => {
-      const user = await signInWithGoogle();
+      const user = await signInWithGoogle(next);
       if (user) await afterAuth();
     }).catch((e) => setAuthError(e.message ?? 'Google sign-in failed.'));
 

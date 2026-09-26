@@ -22,8 +22,8 @@ export default function NewHuddlePopup() {
       const myName = profile.name && profile.name !== 'You' ? profile.name : undefined;
       const res = await createHuddle(size, myName);
       hapticSuccess();
-      setActiveHuddle({ huddleId: res.huddle.id, memberToken: res.member_token });
-      router.replace(`/(user)/huddle/${res.huddle.id}?mt=${encodeURIComponent(res.member_token)}`);
+      setActiveHuddle({ huddleId: res.id });
+      router.replace(`/(user)/huddle/${res.id}`);
     } catch (err) {
       hapticError();
       Alert.alert(

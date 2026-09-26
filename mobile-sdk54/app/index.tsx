@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useColorScheme, View } from 'react-native';
 import { tokens } from '../src/theme';
 import { supabase } from '../src/supabase';
-import { hasSeenIntro, isOnboarded } from '../src/auth';
+import { hasSeenIntro, isOnboarded, takeWebReturnPath } from '../src/auth';
 
 // Root route: no landing screen — send the user straight into the app. Also the
 // web OAuth landing page: signInWithGoogle() on web redirects back here with a
@@ -19,8 +19,10 @@ export default function Index() {
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        // Signed in but not onboarded → onboarding; otherwise straight in.
-        router.replace(isOnboarded(session) ? '/(user)/home' : '/(user)/onboarding');
+        // Signed in but not onboarded → onboarding; otherwise straight in —
+        // or back to where a web OAuth round trip started (e.g. a seat link).
+        const back = takeWebReturnPath();
+        router.replace(isOnboarded(session) ? (back ?? '/(user)/home') : '/(user)/onboarding');
         return;
       }
       // Guests can browse. The brand intro (with sign-in) shows once, on first

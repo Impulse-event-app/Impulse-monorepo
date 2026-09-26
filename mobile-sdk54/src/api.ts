@@ -117,7 +117,7 @@ export type ApiDeal = {
 export type ApiBooking = {
   id: string;
   deal_id: string;
-  user_id: string;
+  user_id: string | null;
   // joined fields
   venue_name: string;
   venue_id: string;
@@ -127,27 +127,47 @@ export type ApiBooking = {
   slot_time: string;
   num_people: number;
   total_paid: number;
-  confirmation_code: string | null;   // null until the deposit is paid
-  status: string;
+  confirmation_code: string | null;   // null until every share is in
+  status: BookingStatus;
   redeemed_at: string | null;
   created_at: string;
-  // payment fields
+  // payment fields — the caller's own seat
   deposit_amount_cents: number | null;
   balance_amount_cents: number | null;
-  payment_status: 'unpaid' | 'deposit_paid' | 'fully_paid' | 'cancelled';
-  payment_note: string | null;        // balance-charge outcome shown in-app
+  payment_status: 'unpaid' | 'deposit_paid' | 'fully_paid';
+  payment_note: string | null;        // charge outcome shown in-app
   payment_followup: boolean;
+  has_voting: boolean;
+  is_split: boolean;                  // Huddle Pay: one seat per person
+  my_member_id: string | null;
 };
+
+/** One lifecycle for every booking — solo, direct split and Huddle. */
+export type BookingStatus =
+  | 'voting' | 'collecting' | 'confirmed' | 'redeemed' | 'cancelled' | 'expired' | 'collapsed';
+
+export type SplitMode = 'even' | 'custom';
+
+/** At creation seats are addressed by index; 0 is the person booking. */
+export type SeatCover = { covered: number; coverer: number };
 
 export type BookingCreate = {
   deal_id: string;
   slot_time: string;
   num_people: number;
+  split?: boolean;                     // Huddle Pay; otherwise I pay for everyone
+  split_mode?: SplitMode;
+  amounts?: number[];                  // custom: final cents per seat, summing to the locked total
+  covers?: SeatCover[];
+  seat_labels?: (string | null)[];
 };
 
 /** Pay with a card on file, or with a new one. Exactly one of
- *  `payment_method_id` / `token` — the server rejects both or neither. */
+ *  `payment_method_id` / `token` — the server rejects both or neither.
+ *  `expected_deposit_cents` is the amount on screen when the person tapped
+ *  confirm; the server charges it only if it still matches their share. */
 export type BookingPay = {
+  expected_deposit_cents: number;
   payment_method_id?: string;
   token?: string;             // CaptureJs card token — never raw card details
   save_card?: boolean;        // keep a new card on file for next time
@@ -239,7 +259,8 @@ export async function createBooking(body: BookingCreate): Promise<ApiBooking> {
   });
 }
 
-/** Charge the 20% deposit via Pinch. On success returns the booking WITH its 6-digit code. */
+/** Pay my deposit share via Pinch. A solo booking comes back WITH its 6-digit code;
+ *  a split booking gets its code once every share is in. */
 export async function payBooking(bookingId: string, body: BookingPay): Promise<ApiBooking> {
   return request<ApiBooking>(`/bookings/${bookingId}/pay`, {
     method: 'POST',
@@ -298,79 +319,169 @@ export async function logInteraction(
   });
 }
 
-// ── huddles (group voting → shared booking) ──────────────────
+// ── split bookings (direct + Huddle share one view) ─────────
 
-export type HuddleMemberPublic = {
+export type MyShare = {
+  share_cents: number;
+  deposit_cents: number;          // charged on confirm — exactly this
+  balance_cents: number;          // charged when the venue scans the code
+  status: 'unpaid' | 'paid' | 'guaranteed' | 'settled' | 'refunded' | 'declined';
+  covered_by_name: string | null;
+};
+
+export type ParticipantState = 'waiting' | 'paid' | 'covered' | 'settled' | 'guaranteed' | 'refunded' | 'declined';
+
+/** What anyone in the booking sees about anyone else. Amounts only appear
+ *  for your own seat, or for everyone if you're the one who booked. */
+export type Participant = {
   id: string;
   display_name: string;
-  is_creator: boolean;
+  seat_label: string | null;
+  is_initiator: boolean;
+  is_me: boolean;
+  claimed: boolean;               // someone holds this seat (invited or opened)
+  invited: boolean;               // saved for someone who hasn't opened it yet
   has_voted: boolean;
-  deposit_status: 'unpaid' | 'paid' | 'refunded';
-  balance_status: string;
+  state: ParticipantState;
+  share_cents: number | null;
+  seat_token: string | null;      // initiator only, for unclaimed seats
 };
 
-export type HuddleShare = {
-  total_cents: number;
-  deposit_cents: number;
-  balance_cents: number;
-};
-
-export type ApiHuddle = {
+export type ApiBookingView = {
   id: string;
-  status: 'open' | 'voting_complete' | 'awaiting_payment' | 'active' | 'expired' | 'collapsed' | 'redeemed' | 'cancelled';
+  has_voting: boolean;
+  status: BookingStatus;
   group_size: number;
-  join_token: string;
+  split_mode: SplitMode;
+  split_confirmed: boolean;
+  locked_price_cents: number | null;
+  slot_time: string | null;
+  share_deadline: string | null;
   voting_deadline: string | null;
-  payment_deadline: string | null;
-  winning_deal_id: string | null;
-  common_code: string | null;   // only present once the huddle is active
-  members: HuddleMemberPublic[];
+  join_token: string | null;      // Huddle invite, voting stage only
+  initiator_name: string;
+  locked_in: boolean;             // the person booking has paid — everyone else can pay
+  deal: ApiDeal | null;
+  confirmation_code: string | null;   // identical for everyone, once all shares are in
+  participants: Participant[];
+  paid_count: number;
+  initiator_exposure_cents: number | null;   // direct bookings: still to come in
   created_at: string;
-  // caller-specific — never another member's data
   my_member_id: string | null;
+  is_initiator: boolean;
   my_has_voted: boolean;
-  my_share: HuddleShare | null;       // set once resolved; the exact amount to charge
-  winning_deal: ApiDeal | null;       // set once resolved
+  my_share: MyShare | null;
 };
 
-export type HuddleJoinResult = {
-  huddle: ApiHuddle;
+/** A Huddle is a booking with a voting stage — same view. */
+export type ApiHuddle = ApiBookingView;
+
+export type SeatLanding = {
+  booking_id: string;
   member_id: string;
-  member_token: string;   // this seat's secret — keep client-side only
+  initiator_name: string;
+  venue_name: string;
+  deal_title: string;
+  slot: string;
+  share: MyShare;
+  booking_status: BookingStatus;
+  locked_in: boolean;
+  share_deadline: string | null;
 };
+
+/** The live meter for anyone in the booking. */
+export async function getSplit(bookingId: string): Promise<ApiBookingView> {
+  return request<ApiBookingView>(`/bookings/${encodeURIComponent(bookingId)}/split`);
+}
+
+/** Initiator: choose/replace the split for seats that haven't paid. On a
+ *  Huddle this is also how the creator confirms the split. */
+export async function editSplit(
+  bookingId: string,
+  body: { split_mode: SplitMode; amounts?: Record<string, number>; covers?: Record<string, string> },
+): Promise<ApiBookingView> {
+  return request<ApiBookingView>(`/bookings/${encodeURIComponent(bookingId)}/split`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+/** Cover someone's share — it's added to mine, they owe nothing. */
+export async function coverShare(bookingId: string, coveredMemberId: string): Promise<ApiBookingView> {
+  return request<ApiBookingView>(`/bookings/${encodeURIComponent(bookingId)}/cover`, {
+    method: 'POST',
+    body: JSON.stringify({ covered_member_id: coveredMemberId }),
+  });
+}
+
+/** Initiator: take a seat out; the group shrinks and unpaid shares re-split. */
+export async function removeSeat(bookingId: string, memberId: string): Promise<ApiBookingView> {
+  return request<ApiBookingView>(
+    `/bookings/${encodeURIComponent(bookingId)}/seats/${encodeURIComponent(memberId)}`,
+    { method: 'DELETE' },
+  );
+}
+
+/** Open a seat link: the seat becomes mine and I see my exact share. */
+export async function claimSeat(seatToken: string): Promise<SeatLanding> {
+  return request<SeatLanding>(`/bookings/seat/${encodeURIComponent(seatToken)}/claim`, { method: 'POST' });
+}
+
+/** Someone on Impulse to invite — a name only, never their contact details. */
+export type UserSearchResult = { id: string; display_name: string; recent: boolean };
+
+/** Find a friend by name (3+ letters), or exact email/phone. Empty query →
+ *  people you've booked with before. */
+export async function searchUsers(q: string): Promise<UserSearchResult[]> {
+  const qs = q.trim() ? `?q=${encodeURIComponent(q.trim())}` : '';
+  return request<UserSearchResult[]>(`/users/search${qs}`);
+}
+
+/** Initiator: save a seat for a friend on Impulse — they get a push and it
+ *  shows in their Plans. */
+export async function inviteToSeat(bookingId: string, memberId: string, userId: string): Promise<ApiBookingView> {
+  return request<ApiBookingView>(
+    `/bookings/${encodeURIComponent(bookingId)}/seats/${encodeURIComponent(memberId)}/invite`,
+    { method: 'POST', body: JSON.stringify({ user_id: userId }) },
+  );
+}
+
+/** Invitee: can't make it — the seat opens back up. */
+export async function declineSeat(bookingId: string): Promise<void> {
+  await request<void>(`/bookings/${encodeURIComponent(bookingId)}/decline`, { method: 'POST' });
+}
+
+// ── huddles (the voting stage) ───────────────────────────────
 
 /** Start a huddle (signed-in only). Creator takes the first seat. */
-export async function createHuddle(groupSize: number, displayName?: string): Promise<HuddleJoinResult> {
-  return request<HuddleJoinResult>('/huddles', {
+export async function createHuddle(groupSize: number, displayName?: string): Promise<ApiHuddle> {
+  return request<ApiHuddle>('/huddles', {
     method: 'POST',
     body: JSON.stringify({ group_size: groupSize, display_name: displayName }),
   });
 }
 
-/** Join via share link/QR token. Works signed-in or as a guest (name required). */
-export async function joinHuddle(joinToken: string, displayName?: string): Promise<HuddleJoinResult> {
-  return publicRequest<HuddleJoinResult>(`/huddles/join/${encodeURIComponent(joinToken)}`, {
+/** Join via share link/QR token. Accounts are required; repeat joins keep the seat. */
+export async function joinHuddle(joinToken: string, displayName?: string): Promise<ApiHuddle> {
+  return request<ApiHuddle>(`/huddles/join/${encodeURIComponent(joinToken)}`, {
     method: 'POST',
     body: JSON.stringify({ display_name: displayName }),
   });
 }
 
 /** Member view of a huddle — avatar states only, ballots stay sealed. */
-export async function getHuddle(huddleId: string, memberToken?: string): Promise<ApiHuddle> {
-  const qs = memberToken ? `?member_token=${encodeURIComponent(memberToken)}` : '';
-  return publicRequest<ApiHuddle>(`/huddles/${encodeURIComponent(huddleId)}${qs}`);
+export async function getHuddle(huddleId: string): Promise<ApiHuddle> {
+  return request<ApiHuddle>(`/huddles/${encodeURIComponent(huddleId)}`);
 }
 
 /** The huddle ballot: live deals that fit the whole group. */
-export async function getHuddleCandidates(huddleId: string, memberToken?: string): Promise<ApiDeal[]> {
-  const qs = memberToken ? `?member_token=${encodeURIComponent(memberToken)}` : '';
-  return publicRequest<ApiDeal[]>(`/huddles/${encodeURIComponent(huddleId)}/candidates${qs}`);
+export async function getHuddleCandidates(huddleId: string): Promise<ApiDeal[]> {
+  return request<ApiDeal[]>(`/huddles/${encodeURIComponent(huddleId)}/candidates`);
 }
 
 /** Submit this member's sealed ballot — ordered deal ids, best first (1–3). */
-export async function submitBallot(huddleId: string, picks: string[], memberToken?: string): Promise<ApiHuddle> {
-  const qs = memberToken ? `?member_token=${encodeURIComponent(memberToken)}` : '';
-  return publicRequest<ApiHuddle>(`/huddles/${encodeURIComponent(huddleId)}/ballot${qs}`, {
+export async function submitBallot(huddleId: string, picks: string[]): Promise<ApiHuddle> {
+  return request<ApiHuddle>(`/huddles/${encodeURIComponent(huddleId)}/ballot`, {
     method: 'POST',
     body: JSON.stringify({ picks }),
   });
@@ -384,31 +495,7 @@ export async function registerPushToken(expoPushToken: string): Promise<void> {
   });
 }
 
-/** Exactly one of `payment_method_id` / `token`. Saved cards need an account —
- *  guests who joined by name via an invite link must send a token. */
-export type HuddlePayBody = {
-  payment_method_id?: string;
-  token?: string;
-  save_card?: boolean;
-  card_holder_name?: string;
-  email?: string;
-  first_name?: string;
-  last_name?: string;
-};
-
-/** Pay this member's deposit share of the winning deal (vault + charge). */
-export async function payHuddleShare(huddleId: string, body: HuddlePayBody, memberToken?: string): Promise<ApiHuddle> {
-  const qs = memberToken ? `?member_token=${encodeURIComponent(memberToken)}` : '';
-  return publicRequest<ApiHuddle>(`/huddles/${encodeURIComponent(huddleId)}/pay${qs}`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
-}
-
 /** Creator cancels the huddle. Refunds any paid deposit shares. */
-export async function cancelHuddle(huddleId: string, memberToken?: string): Promise<ApiHuddle> {
-  const qs = memberToken ? `?member_token=${encodeURIComponent(memberToken)}` : '';
-  return publicRequest<ApiHuddle>(`/huddles/${encodeURIComponent(huddleId)}/cancel${qs}`, {
-    method: 'POST',
-  });
+export async function cancelHuddle(huddleId: string): Promise<ApiHuddle> {
+  return request<ApiHuddle>(`/huddles/${encodeURIComponent(huddleId)}/cancel`, { method: 'POST' });
 }

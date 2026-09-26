@@ -40,19 +40,24 @@ import { FLOATING_TAB_CLEARANCE } from './_layout';
 // One-line status for the home huddle card, derived from the live huddle.
 // `live` marks the states that are waiting on this user.
 function describeHuddle(h: ApiHuddle): { title: string; sub: string; live: boolean } {
-  const voted = h.members.filter((m) => m.has_voted).length;
-  const paid = h.members.filter((m) => m.deposit_status === 'paid').length;
-  const me = h.members.find((m) => m.id === h.my_member_id);
+  const voted = h.participants.filter((m) => m.has_voted).length;
+  const settled = h.paid_count;
+  const me = h.participants.find((m) => m.is_me);
   switch (h.status) {
-    case 'open':
+    case 'voting':
       return me?.has_voted
         ? { title: 'Waiting on votes', sub: `${voted} of ${h.group_size} voted`, live: false }
         : { title: 'Your huddle is live', sub: 'Vote your top 3', live: true };
-    case 'awaiting_payment':
-      return me?.deposit_status === 'paid'
-        ? { title: 'Waiting on payments', sub: `${paid} of ${h.group_size} paid`, live: false }
-        : { title: "It's decided.", sub: 'Pay your share', live: true };
-    case 'active':
+    case 'collecting':
+      if (!h.split_confirmed) {
+        return h.is_initiator
+          ? { title: "It's decided.", sub: 'Choose how to split it', live: true }
+          : { title: "It's decided.", sub: `${h.initiator_name} is sorting the split`, live: false };
+      }
+      return h.my_share?.status === 'unpaid'
+        ? { title: "It's decided.", sub: 'Confirm your share', live: true }
+        : { title: 'Almost there', sub: `${settled} of ${h.group_size} in`, live: false };
+    case 'confirmed':
       return { title: 'Group code ready', sub: 'Show it at the door', live: true };
     case 'redeemed':
       return { title: 'Huddle done', sub: 'Enjoy the night', live: false };
@@ -148,13 +153,12 @@ export default function HomeScreen() {
     if (!voteSession || voteRanking.length === 0) return;
     setSubmitting(true);
     try {
-      await submitBallot(voteSession.huddleId, voteRanking, voteSession.memberToken);
+      await submitBallot(voteSession.huddleId, voteRanking);
       hapticSuccess();
       const hid = voteSession.huddleId;
-      const mt = voteSession.memberToken;
-      setActiveHuddle({ huddleId: hid, memberToken: mt });   // home card now tracks it
+      setActiveHuddle({ huddleId: hid });   // home card now tracks it
       clearVoting();
-      router.push(`/(user)/huddle/${hid}${mt ? `?mt=${encodeURIComponent(mt)}` : ''}`);
+      router.push(`/(user)/huddle/${hid}`);
     } catch (err) {
       hapticError();
       Alert.alert('Could not submit', err instanceof ApiError ? err.message : 'Please try again.');
@@ -171,7 +175,7 @@ export default function HomeScreen() {
     let alive = true;
     const tick = async () => {
       try {
-        const h = await getHuddle(activeHuddle.huddleId, activeHuddle.memberToken);
+        const h = await getHuddle(activeHuddle.huddleId);
         if (!alive) return;
         // Terminal states clear the card (and its persisted value).
         if (['expired', 'collapsed', 'redeemed', 'cancelled'].includes(h.status)) {
@@ -196,8 +200,7 @@ export default function HomeScreen() {
   const huddleBar = huddleStatus ? describeHuddle(huddleStatus) : null;
   const openHuddle = () => {
     if (!activeHuddle) return;
-    const mt = activeHuddle.memberToken;
-    router.push(`/(user)/huddle/${activeHuddle.huddleId}${mt ? `?mt=${encodeURIComponent(mt)}` : ''}`);
+    router.push(`/(user)/huddle/${activeHuddle.huddleId}`);
   };
 
   const areaLabel = filters.areas.length

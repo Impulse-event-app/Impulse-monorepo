@@ -27,7 +27,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 import pinch_client
-from models import Booking, Deal, Settlement, SettlementLine
+from models import Booking, BookingParticipant, Deal, Settlement, SettlementLine
 from payments import BALANCE_APPLICATION_FEE_RATE
 
 logger = logging.getLogger("impulse.settlements")
@@ -57,54 +57,59 @@ def _parse_metadata(raw) -> dict:
         return {}
 
 
-def _resolve_booking(db: Session, line: dict) -> tuple[Optional[Booking], Optional[str], Optional[str]]:
-    """Map a transfer line to (booking, kind, payment_id).
+def _resolve_booking(db: Session, line: dict) -> tuple[Optional[Booking], Optional[str], Optional[str], Optional[BookingParticipant]]:
+    """Map a transfer line to (booking, kind, payment_id, seat).
 
-    kind is "deposit" or "balance" — which of the two charges on that booking
-    this line settles.
+    kind is "deposit" or "balance" — which charge on that seat this line
+    settles. Every booking (solo, split, Huddle) charges per seat, so the
+    seat is found by payment id, with impulseMemberId as the metadata path.
     """
     meta = _parse_metadata(line.get("metadata"))
-    booking_id = meta.get("impulseBookingId")
-    kind = meta.get("type") if meta.get("type") in ("deposit", "balance") else None
+    kind = meta.get("type")
+    kind = {"guarantor_deposit": "deposit", "huddle_deposit": "deposit",
+            "huddle_balance": "balance"}.get(kind, kind)
+    kind = kind if kind in ("deposit", "balance") else None
 
-    if booking_id:
-        booking = db.query(Booking).filter(Booking.id == booking_id).first()
-        if booking:
-            payment_id = (
-                booking.deposit_payment_id if kind == "deposit"
-                else booking.balance_payment_id if kind == "balance"
-                else None
-            )
-            return booking, kind, payment_id
-
-    # No usable metadata — try the line id as a payment id.
+    seat = None
+    member_id = meta.get("impulseMemberId")
+    if member_id:
+        seat = db.query(BookingParticipant).filter(BookingParticipant.id == member_id).first()
     candidate = line.get("id")
-    if candidate:
-        booking = (
-            db.query(Booking)
+    if seat is None and candidate:
+        seat = (
+            db.query(BookingParticipant)
             .filter(
-                (Booking.deposit_payment_id == candidate)
-                | (Booking.balance_payment_id == candidate)
+                (BookingParticipant.deposit_payment_id == candidate)
+                | (BookingParticipant.balance_payment_id == candidate)
             )
             .first()
         )
-        if booking:
-            resolved = "deposit" if booking.deposit_payment_id == candidate else "balance"
-            return booking, resolved, candidate
+        if seat is not None:
+            kind = "deposit" if seat.deposit_payment_id == candidate else "balance"
+            return seat.booking, kind, candidate, seat
+    if seat is None:
+        booking_id = meta.get("impulseBookingId") or meta.get("impulseHuddleId")
+        booking = db.query(Booking).filter(Booking.id == booking_id).first() if booking_id else None
+        return booking, kind, None, None
 
-    return None, kind, None
+    payment_id = (
+        seat.deposit_payment_id if kind == "deposit"
+        else seat.balance_payment_id if kind == "balance"
+        else None
+    )
+    return seat.booking, kind, payment_id, seat
 
 
-def _venue_share_cents(booking: Optional[Booking], kind: Optional[str], total_cents: int) -> int:
+def _venue_share_cents(seat: Optional[BookingParticipant], kind: Optional[str], total_cents: int) -> int:
     """What this line is worth to the venue, per the Impulse fee model.
 
     Deposits are Impulse's in full (applicationFee == amount), so a deposit
     line settles nothing to the venue. On a balance, Impulse takes the
     application fee and the rest is the venue's.
     """
-    if booking is None or kind != "balance":
+    if seat is None or kind != "balance":
         return 0
-    balance = booking.balance_amount_cents or 0
+    balance = seat.balance_cents or 0
     application_fee = round(balance * BALANCE_APPLICATION_FEE_RATE)
     return max(total_cents - application_fee, 0)
 
@@ -146,7 +151,7 @@ def ingest_transfer(db: Session, transfer_id: str, merchant_id: str) -> Settleme
 
     venue_ids: set = set()
     for line in pinch_client.iter_transfer_line_items(transfer_id, merchant_id):
-        booking, kind, payment_id = _resolve_booking(db, line)
+        booking, kind, payment_id, seat = _resolve_booking(db, line)
         total_cents = int(line.get("total") or 0)
 
         venue_id = None
@@ -167,7 +172,7 @@ def ingest_transfer(db: Session, transfer_id: str, merchant_id: str) -> Settleme
             gross_cents=int(line.get("gross") or 0),
             fees_cents=int(line.get("fees") or 0),
             total_cents=total_cents,
-            venue_amount_cents=_venue_share_cents(booking, kind, total_cents),
+            venue_amount_cents=_venue_share_cents(seat, kind, total_cents),
             description=line.get("description"),
             transaction_date=_parse_dt(line.get("transactionDate")),
         ))

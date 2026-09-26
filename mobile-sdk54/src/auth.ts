@@ -52,8 +52,28 @@ export async function signInWithApple() {
 // query param that Supabase appends on that redirect.
 // Returns null if the user cancels the browser session (native only — on web
 // the page navigates away, so there's nothing left to return here).
-export async function signInWithGoogle() {
+// Web OAuth is a full-page round trip that lands on the site root, so where
+// the user was headed (a seat link, say) is parked here and picked up by
+// app/index.tsx once the session exists.
+const WEB_RETURN_KEY = 'impulse.returnTo';
+
+/** Web only: the path to resume after an OAuth round trip, consumed once. */
+export function takeWebReturnPath(): string | null {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
+  try {
+    const p = window.sessionStorage.getItem(WEB_RETURN_KEY);
+    window.sessionStorage.removeItem(WEB_RETURN_KEY);
+    return p && p.startsWith('/') && !p.startsWith('//') ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function signInWithGoogle(returnTo?: string) {
   if (Platform.OS === 'web') {
+    if (returnTo) {
+      try { window.sessionStorage.setItem(WEB_RETURN_KEY, returnTo); } catch { /* private mode — lands on home */ }
+    }
     // Trailing slash so the redirect reliably matches a Supabase allowlist entry
     // like "https://impulse--*.expo.app/**". IMPORTANT: this URL must be in the
     // Supabase dashboard's Auth → URL Configuration → Redirect URLs allowlist,
