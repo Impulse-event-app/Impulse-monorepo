@@ -20,7 +20,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from database import SessionLocal
-from models import Booking, Deal, User, UserVenueInteraction, Venue
+from booking_logic import deposit_split
+from models import Booking, BookingParticipant, Deal, User, UserVenueInteraction, Venue
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -319,6 +320,7 @@ def seed(owner_id: str, wipe: bool = False) -> None:
         sample_deals = db.query(Deal).filter(Deal.id.in_(all_deal_ids)).limit(4).all()
         for deal in sample_deals:
             num_people = random.randint(2, 4)
+            unit_cents = int(round(float(deal.deal_price) * 100))
             booking = Booking(
                 id=_uid(),
                 deal_id=deal.id,
@@ -328,8 +330,21 @@ def seed(owner_id: str, wipe: bool = False) -> None:
                 total_paid=round(float(deal.deal_price) * num_people, 2),
                 confirmation_code=_make_confirmation_code(),
                 status="confirmed",
+                locked_unit_price_cents=unit_cents,
+                locked_price_cents=unit_cents * num_people,
+                split_confirmed_at=datetime.now(timezone.utc),
+                spots_held=True,
             )
             db.add(booking)
+            seat_id = _uid()
+            deposit, balance = deposit_split(unit_cents * num_people)
+            db.add(BookingParticipant(
+                id=seat_id, booking_id=booking.id, user_id=owner_id, display_name="Demo owner",
+                share_amount_cents=unit_cents * num_people, deposit_cents=deposit, balance_cents=balance,
+                deposit_status="paid",
+            ))
+            db.flush()
+            booking.initiator_member_id = seat_id
             # decrement spots
             deal.spots_remaining = max(0, deal.spots_remaining - num_people)
             print(f"  + Booking: {deal.title} × {num_people} @ {deal.slots[0]}")

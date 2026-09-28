@@ -205,13 +205,11 @@ type AppState = {
 
 export type VoteSession = {
   huddleId: string;
-  memberToken?: string;
   candidateIds: string[];
 };
 
 export type ActiveHuddle = {
   huddleId: string;
-  memberToken?: string;
 };
 
 const Ctx = createContext<AppState | null>(null);
@@ -282,8 +280,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setBookingsLoading(true);
     try {
       const data = await getMyBookings();
-      // Hide unpaid holds (abandoned checkouts) — they have no code yet.
-      setPlans(data.filter((b) => b.status !== 'pending').map(apiBookingToPlan));
+      const { data: { session } } = await supabase.auth.getSession();
+      // Hide my own unpaid checkouts (abandoned before paying) — nothing is
+      // held. A seat a friend invited me to stays visible so I can come back.
+      const abandoned = (b: typeof data[number]) =>
+        b.status === 'collecting' && b.payment_status === 'unpaid' && b.user_id === session?.user.id;
+      setPlans(data.filter((b) => !abandoned(b) && b.status !== 'voting').map(apiBookingToPlan));
     } catch {
       // Not authenticated yet or network error — keep existing plans
     } finally {
@@ -355,11 +357,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refreshDeals();
 
-    // Live booking updates: when the venue verifies the customer's code, the
-    // backend updates the bookings row (status → attended, balance charged,
-    // payment_note set). Supabase Realtime pushes that change here so the
-    // customer's screen flips to "verified/charged" without a manual refresh.
-    // RLS ("bookings: user read own") scopes delivery to the signed-in user.
+    // Live booking updates: any change to a booking this user holds a seat in
+    // (a friend paying their share, the code issuing, the venue redeeming)
+    // bumps the bookings row. Supabase Realtime pushes that change here so
+    // Plans stays current without a manual refresh. RLS ("bookings:
+    // participants read") scopes delivery to bookings the user is part of.
     let bookingsChannel: RealtimeChannel | null = null;
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -375,12 +377,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             .channel('bookings-live')
             .on(
               'postgres_changes',
-              {
-                event: 'UPDATE',
-                schema: 'public',
-                table: 'bookings',
-                filter: `user_id=eq.${session.user.id}`,
-              },
+              { event: 'UPDATE', schema: 'public', table: 'bookings' },
               () => { refreshBookings(); },
             )
             .subscribe();

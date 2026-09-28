@@ -350,8 +350,10 @@ export type Plan = {
   party: number;
   time: string;
   total: number;
-  status: 'pending' | 'confirmed' | 'cancelled' | 'attended';
+  status: BookingStatus;
   paymentNote: string | null;  // balance-charge outcome, set when the venue scans the code
+  hasVoting?: boolean;         // a Huddle — opens the huddle sheet
+  isSplit?: boolean;           // Huddle Pay — opens the split view
 };
 
 export const genCode = () => 'IMP-' + Math.floor(1000 + Math.random() * 9000);
@@ -359,7 +361,7 @@ export const genCode = () => 'IMP-' + Math.floor(1000 + Math.random() * 9000);
 // ── API → Drop adapter ───────────────────────────────────────
 // Converts a backend ApiDeal (from GET /deals) into the Drop shape used
 // by the UI, filters, and map. Import ApiDeal from './api'.
-import type { ApiDeal, ApiBooking } from './api';
+import type { ApiDeal, ApiBooking, BookingStatus } from './api';
 
 export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): Drop {
   // Distance from user (requires venue coordinates and user location)
@@ -412,7 +414,7 @@ export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): D
 /** Convert a backend ApiBooking into the Plan shape used by PlansScreen. */
 export function apiBookingToPlan(b: ApiBooking): Plan {
   return {
-    code: b.confirmation_code ?? '',   // null only while the deposit is unpaid
+    code: b.confirmation_code ?? '',   // null until every share is in
     bookingId: b.id,
     dropId: b.deal_id,
     venue: b.venue_name,
@@ -420,8 +422,10 @@ export function apiBookingToPlan(b: ApiBooking): Plan {
     party: b.num_people,
     time: b.slot_time,
     total: b.total_paid,
-    status: b.status as Plan['status'],
+    status: b.status,
     paymentNote: b.payment_note,
+    hasVoting: b.has_voting,
+    isSplit: b.is_split,
   };
 }
 

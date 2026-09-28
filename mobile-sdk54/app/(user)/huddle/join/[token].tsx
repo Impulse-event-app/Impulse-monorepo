@@ -54,8 +54,8 @@ export default function HuddleJoinScreen() {
     setLoading(true);
     try {
       const res = await joinHuddle(token, name.trim() || undefined);
-      setActiveHuddle({ huddleId: res.huddle.id, memberToken: res.member_token });
-      router.replace(`/(user)/huddle/${res.huddle.id}?mt=${encodeURIComponent(res.member_token)}`);
+      setActiveHuddle({ huddleId: res.id });
+      router.replace(`/(user)/huddle/${res.id}`);
     } catch (err) {
       Alert.alert(
         'Could not join',

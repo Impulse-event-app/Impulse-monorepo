@@ -199,19 +199,40 @@ class DealWithVenueResponse(DealResponse):
 
 # ── Booking ───────────────────────────────────────────────────────────────────
 
+class SeatCover(BaseModel):
+    """At creation seats are addressed by index (0 = the initiator)."""
+    covered: int
+    coverer: int
+
+
 class BookingCreate(BaseModel):
+    """A booking for num_people. Without `split`, the person booking pays for
+    everyone (one payer, whole total). With `split` (Huddle Pay), there's one
+    seat per person, each with its own share and invite; `amounts` (custom
+    mode) are final per-seat cents, index 0 is the initiator; covered seats
+    are 0 and listed in `covers`."""
     deal_id: str
     slot_time: str
     num_people: int
+    split: bool = False
+    split_mode: Literal["even", "custom"] = "even"
+    amounts: Optional[List[int]] = None
+    covers: List[SeatCover] = []
+    seat_labels: Optional[List[Optional[str]]] = None   # e.g. [None, "Sam", "Alex"]
 
 
 class BookingPay(BaseModel):
-    """How to pay the deposit — either a saved card or a fresh CaptureJs token.
+    """How to pay a deposit share — either a saved card or a fresh CaptureJs token.
 
     Exactly one of `payment_method_id` (charge a card already on file) or
     `token` (a new card) must be supplied. With `token`, `save_card` decides
     whether it is kept on file afterwards; the payer/card details are only
-    needed on that path."""
+    needed on that path.
+
+    `expected_deposit_cents` is the amount the payer was shown when they
+    tapped confirm. The server charges it only if it still matches their
+    stored share — the amount charged is always the amount consented to."""
+    expected_deposit_cents: int
     payment_method_id: Optional[str] = None
     token: Optional[str] = None
     save_card: bool = False
@@ -258,20 +279,45 @@ class BookingResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    deal_id: str
+    deal_id: Optional[str]             # null only while a Huddle is voting
     user_id: Optional[str]             # null once the customer has deleted their account
-    slot_time: str
+    slot_time: Optional[str]
     num_people: int
     total_paid: float
     confirmation_code: Optional[str]   # null until the deposit is paid
     status: str
     redeemed_at: Optional[datetime]
     created_at: datetime
+    # The caller's own seat (the whole booking for a solo booking).
     deposit_amount_cents: Optional[int] = None
     balance_amount_cents: Optional[int] = None
-    payment_status: str = "unpaid"
-    payment_note: Optional[str] = None      # customer-facing balance-charge outcome
+    payment_status: str = "unpaid"          # unpaid | deposit_paid | fully_paid
+    payment_note: Optional[str] = None      # customer-facing charge outcome
     payment_followup: bool = False
+    has_voting: bool = False
+    is_split: bool = False                  # Huddle Pay: one seat per person
+    my_member_id: Optional[str] = None
+
+    @staticmethod
+    def seat_fields(b: object, user_id: Optional[str]) -> dict:
+        """Payment fields for `user_id`'s seat, falling back to the initiator's."""
+        seats = b.participants  # type: ignore[attr-defined]
+        me = next((p for p in seats if user_id and p.user_id == user_id), None) or next(
+            (p for p in seats if p.id == b.initiator_member_id), None)  # type: ignore[attr-defined]
+        if me is None:
+            return {}
+        status = "unpaid"
+        if me.deposit_status in ("paid", "guaranteed", "settled"):
+            status = "fully_paid" if me.balance_status == "paid" else "deposit_paid"
+        return dict(
+            deposit_amount_cents=me.deposit_cents,
+            balance_amount_cents=me.balance_cents,
+            payment_status=status,
+            payment_note=me.payment_note,
+            payment_followup=me.payment_followup,
+            my_member_id=me.id,
+            is_split=len(seats) > 1,
+        )
 
 
 class BookingWithDetailsResponse(BookingResponse):
@@ -282,7 +328,7 @@ class BookingWithDetailsResponse(BookingResponse):
     deal_category: str
 
     @classmethod
-    def from_booking(cls, booking: object) -> "BookingWithDetailsResponse":
+    def from_booking(cls, booking: object, user_id: Optional[str] = None) -> "BookingWithDetailsResponse":
         b = booking  # type: ignore[assignment]
         return cls(
             id=b.id,
@@ -295,11 +341,8 @@ class BookingWithDetailsResponse(BookingResponse):
             status=b.status,
             redeemed_at=b.redeemed_at,
             created_at=b.created_at,
-            deposit_amount_cents=b.deposit_amount_cents,
-            balance_amount_cents=b.balance_amount_cents,
-            payment_status=b.payment_status,
-            payment_note=b.payment_note,
-            payment_followup=b.payment_followup,
+            has_voting=b.has_voting,
+            **cls.seat_fields(b, user_id),
             venue_id=b.deal.venue_id,
             venue_name=b.deal.venue.name,
             deal_title=b.deal.title,
@@ -307,19 +350,45 @@ class BookingWithDetailsResponse(BookingResponse):
         )
 
 
-class RedeemResponse(BaseModel):
-    """Returned to the venue when they scan a ticket."""
-    model_config = ConfigDict(from_attributes=True)
+class VerifyMember(BaseModel):
+    name: str
+    balance_cents: int
+    balance_status: str            # unpaid | paid | declined
 
+
+class VerifyResponse(BaseModel):
+    """Preview shown to venue staff before confirming — no money moves."""
+    booking_id: str
+    confirmation_code: str
+    group_size: int
+    venue_name: str
+    deal_title: str
+    slot: str
+    total_balance_cents: int
+    members: List[VerifyMember]
+    status: str
+    already_redeemed: bool
+    redeemed_at: Optional[datetime] = None
+
+
+class RedeemMemberResult(BaseModel):
+    name: str
+    balance_cents: int
+    status: str                    # paid | declined
+    warning: Optional[str] = None  # "collect $X from {name} directly"
+
+
+class RedeemResponse(BaseModel):
+    """Returned to the venue when they confirm a code — solo or group."""
+    booking_id: str
     confirmation_code: str
     status: str
-    slot_time: str
+    slot_time: Optional[str]
     num_people: int
     redeemed_at: Optional[datetime]
-    payment_status: str = "unpaid"
-    balance_amount_cents: Optional[int] = None
-    # Set when the balance charge declined — venue collects payment directly
-    payment_warning: Optional[str] = None
+    members: List[RedeemMemberResult]
+    total_charged_cents: int
+    declines: int
 
 
 class CancelResponse(BaseModel):
@@ -424,7 +493,7 @@ class DealPerformanceItem(BaseModel):
     minutes_to_last_booking: Optional[int]      # deal created_at → newest booking
 
 
-# ── Huddle (group voting → shared booking) ────────────────────────────────────
+# ── Split bookings (direct + Huddle share one view) ───────────────────────────
 
 class HuddleCreate(BaseModel):
     group_size: int   # 2–10
@@ -432,47 +501,7 @@ class HuddleCreate(BaseModel):
 
 
 class HuddleJoin(BaseModel):
-    display_name: Optional[str] = None   # required for guests; signed-in users fall back to profile name
-
-
-class HuddleMemberPublic(BaseModel):
-    """What any member may see about any other member. Ballots stay sealed —
-    only the fact that a ballot exists (has_voted) is ever exposed."""
-    id: str
-    display_name: str
-    is_creator: bool
-    has_voted: bool
-    deposit_status: str
-    balance_status: str
-
-
-class HuddleResponse(BaseModel):
-    id: str
-    status: str
-    group_size: int
-    join_token: str
-    voting_deadline: Optional[datetime]
-    payment_deadline: Optional[datetime]
-    winning_deal_id: Optional[str]
-    # Only set (non-null) once the huddle is active — payment complete.
-    common_code: Optional[str]
-    members: List[HuddleMemberPublic]
-    created_at: datetime
-    # Caller-specific fields (never another member's):
-    my_member_id: Optional[str] = None
-    my_has_voted: bool = False
-    # My share of the winning deal — set once resolved. The amount charged at
-    # payment time is exactly my_share.deposit_cents, never recomputed.
-    my_share: Optional["HuddleShare"] = None
-    # Joined winning deal details once resolved.
-    winning_deal: Optional[DealWithVenueResponse] = None
-
-
-class HuddleJoinResponse(BaseModel):
-    huddle: HuddleResponse
-    member_id: str
-    # Secret for this seat. Returned only to its owner, at create/join time.
-    member_token: str
+    display_name: Optional[str] = None   # falls back to the profile name
 
 
 class BallotSubmit(BaseModel):
@@ -480,72 +509,102 @@ class BallotSubmit(BaseModel):
     picks: List[str]
 
 
-class HuddleShare(BaseModel):
-    total_cents: int
-    deposit_cents: int
-    balance_cents: int
-
-
 class PushTokenRegister(BaseModel):
     expo_push_token: str
 
 
-class HuddlePay(BaseModel):
-    """How a member pays their deposit share — a saved card or a new one.
-
-    `payment_method_id` is only available to signed-in members; guests (who
-    join by name via an invite link and have no user row) must send a token."""
-    payment_method_id: Optional[str] = None
-    token: Optional[str] = None
-    save_card: bool = False
-    card_holder_name: Optional[str] = None
-    email: Optional[str] = None
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-
-    @model_validator(mode="after")
-    def _one_payment_path(self):
-        if bool(self.payment_method_id) == bool(self.token):
-            raise ValueError("Supply exactly one of payment_method_id or token")
-        if self.token and not (self.email and self.first_name and self.last_name):
-            raise ValueError("first_name, last_name and email are required with a new card")
-        return self
+class UserSearchResult(BaseModel):
+    """Just enough to pick the right friend — never their email or phone."""
+    id: str
+    display_name: str
+    recent: bool = False         # you've been in a booking together before
 
 
-# ── Huddle venue verification (group redemption) ──────────────────────────────
-
-class HuddleVerifyMember(BaseModel):
-    name: str
-    balance_cents: int
-    balance_status: str            # unpaid | paid | declined
+class SeatInvite(BaseModel):
+    user_id: str
 
 
-class HuddleVerifyResponse(BaseModel):
-    """Preview shown to venue staff before confirming the group charge."""
-    huddle_id: str
+class SplitEdit(BaseModel):
+    """Initiator re-splits the seats that haven't paid. `amounts` (custom) are
+    final per-seat cents keyed by member id; `covers` maps covered → coverer."""
+    split_mode: Literal["even", "custom"]
+    amounts: Optional[Dict[str, int]] = None
+    covers: Dict[str, str] = {}
+
+
+class CoverRequest(BaseModel):
+    covered_member_id: str
+
+
+class MyShare(BaseModel):
+    share_cents: int
+    deposit_cents: int              # charged on confirm — exactly this
+    balance_cents: int              # charged when the venue scans the code
+    status: str                     # unpaid | paid | guaranteed | settled | refunded | declined
+    covered_by_name: Optional[str] = None
+
+
+class ParticipantPublic(BaseModel):
+    """What any participant may see about another. Ballots stay sealed — only
+    has_voted is exposed. Amounts are shown to the initiator (who set them)
+    and to each person for their own seat, never broadcast to the group."""
+    id: str
+    display_name: str
+    seat_label: Optional[str] = None
+    is_initiator: bool
+    is_me: bool
+    claimed: bool                   # a person holds this seat (invited or opened)
+    invited: bool = False           # saved for someone who hasn't opened it yet
+    has_voted: bool
+    state: str                      # waiting | paid | covered | guaranteed | refunded | declined
+    share_cents: Optional[int] = None
+    seat_token: Optional[str] = None     # initiator only, for unclaimed seats' links
+
+
+class BookingView(BaseModel):
+    id: str
+    has_voting: bool
+    status: str                     # voting | collecting | confirmed | redeemed | cancelled | expired | collapsed
     group_size: int
+    split_mode: str
+    split_confirmed: bool
+    locked_price_cents: Optional[int]
+    slot_time: Optional[str]
+    share_deadline: Optional[datetime]
+    voting_deadline: Optional[datetime]
+    join_token: Optional[str]            # Huddle invite link, voting stage only
+    initiator_name: str
+    # The person booking has paid their share, so the slot is held and
+    # everyone else can pay. Before that, invitees can see the plan only.
+    locked_in: bool
+    deal: Optional[DealWithVenueResponse]
+    # Set once every share is in — identical for every participant.
+    confirmation_code: Optional[str]
+    participants: List[ParticipantPublic]
+    paid_count: int
+    # Direct bookings: what would fall to the initiator's card if nobody else
+    # paid from here. Counts down as shares land. Null for Huddles.
+    initiator_exposure_cents: Optional[int]
+    created_at: datetime
+    my_member_id: Optional[str] = None
+    is_initiator: bool = False
+    my_has_voted: bool = False
+    my_share: Optional[MyShare] = None
+
+
+class SeatLanding(BaseModel):
+    """What a participant sees when they open their seat link — an invitation,
+    with their exact share."""
+    booking_id: str
+    member_id: str
+    initiator_name: str
     venue_name: str
     deal_title: str
     slot: str
-    total_balance_cents: int
-    members: List[HuddleVerifyMember]
-    status: str
-    already_redeemed: bool
-
-
-class HuddleRedeemMemberResult(BaseModel):
-    name: str
-    balance_cents: int
-    status: str                    # paid | declined
-    warning: Optional[str] = None  # "collect $X from {name} directly"
-
-
-class HuddleRedeemResponse(BaseModel):
-    huddle_id: str
-    redeemed: bool
-    members: List[HuddleRedeemMemberResult]
-    total_charged_cents: int
-    declines: int
+    share: MyShare
+    booking_status: str
+    locked_in: bool
+    share_deadline: Optional[datetime]
 
 
 # ── Waitlist ──────────────────────────────────────────────────────────────────

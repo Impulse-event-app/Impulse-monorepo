@@ -5,6 +5,7 @@ import { View } from 'react-native';
 import { AppProvider, useTheme } from '../../src/theme';
 import { supabase } from '../../src/supabase';
 import { NATIVE_SHEETS } from '../../src/components';
+import { usePushRouting } from '../../src/pushRouting';
 
 export const unstable_settings = {
   // Deep links (straight to an event, say) get the tabs underneath, so Back
@@ -18,9 +19,9 @@ export const unstable_settings = {
 //  - the Plans and You tabs, which render their own signed-out state
 //  - legal docs, so Terms/Privacy/Help stay readable before anyone signs up
 //  - the appearance setting, which needs no account
-//  - the huddle join link and huddle status sheet, which intentionally support
-//    guest access by name only (see huddle/join/[token].tsx) — invited friends
-//    may not have an account, and their member token authenticates them.
+//  - the huddle join link and a booking's seat link, which render their own
+//    "sign in to see it" state so an invited friend lands on the invitation
+//    first (accounts are required to take a seat).
 const PUBLIC_PATHS = new Set([
   '/sign-in', '/home', '/map', '/plans', '/profile', '/filters', '/area', '/profile-edit/appearance',
 ]);
@@ -28,8 +29,7 @@ const PUBLIC_PATHS = new Set([
 function isPublicPath(pathname: string): boolean {
   const p = pathname.replace(/^\/\(user\)/, '').replace(/^\/\(tabs\)/, '');
   if (PUBLIC_PATHS.has(p)) return true;
-  if (p.startsWith('/event/') || p.startsWith('/legal/') || p.startsWith('/huddle/join/')) return true;
-  return /^\/huddle\/(?!new$)[^/]+$/.test(p);
+  return p.startsWith('/event/') || p.startsWith('/legal/') || p.startsWith('/huddle/join/') || p.startsWith('/seat/');
 }
 
 // Gates every other route in this group behind a live session, so a direct
@@ -81,6 +81,9 @@ export default function UserLayout() {
 
 function UserStack() {
   const T = useTheme();
+  // Tapping a booking/huddle push opens that booking (the auth gate above
+  // still applies, so a signed-out tap lands on sign-in first).
+  usePushRouting();
 
   // Sheets: native iOS formSheet (grabber, detents, swipe down to dismiss,
   // centred form on iPad). Elsewhere, a transparent modal that SheetFrame
@@ -112,6 +115,8 @@ function UserStack() {
         <Stack.Screen name="huddle/new" options={sheet([0.6, 1])} />
         <Stack.Screen name="huddle/[id]" options={sheet([0.75, 1])} />
         <Stack.Screen name="huddle/join/[token]" options={{ animation: 'fade' }} />
+        <Stack.Screen name="seat/[token]" options={{ animation: 'fade' }} />
+        <Stack.Screen name="split/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="legal/[doc]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="confirm" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
         <Stack.Screen name="filters" options={sheet([0.75, 1])} />

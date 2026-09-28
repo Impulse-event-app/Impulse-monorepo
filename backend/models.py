@@ -186,11 +186,6 @@ class Deal(Base):
     bookings: List["Booking"] = relationship("Booking", back_populates="deal")
 
 
-_BOOKING_STATUS = SAEnum(
-    "pending", "confirmed", "cancelled", "attended",
-    name="booking_status",
-)
-
 _INTERACTION_TYPE = SAEnum(
     "view", "save", "booking", "rating",
     name="interaction_type",
@@ -198,87 +193,102 @@ _INTERACTION_TYPE = SAEnum(
 
 
 class Booking(Base):
+    """The one booking model. A solo booking has one participant; a direct
+    split booking has one participant per seat; a Huddle is a booking with
+    has_voting = true, whose deal is picked by ballot before shares are
+    collected. Everything after the deal is known — shares, the payment
+    fan-out, declines, refunds, the redemption code — is shared."""
     __tablename__ = "bookings"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
-    deal_id = Column(UUID(as_uuid=False), ForeignKey("deals.id"), nullable=False, index=True)
-    # Nullable: a booking outlives its customer's account. Deleting an account
-    # sets this to NULL (ON DELETE SET NULL) so the financial record survives,
-    # anonymised — see DELETE /users/me.
+    # Null only while a Huddle is still voting (CHECK has_voting OR deal_id IS NOT NULL).
+    deal_id = Column(UUID(as_uuid=False), ForeignKey("deals.id"), nullable=True, index=True)
+    # The initiator's account. Nullable: a booking outlives its customer's
+    # account (ON DELETE SET NULL) so the financial record survives, anonymised.
     user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
-    slot_time = Column(Text, nullable=False)
-    num_people = Column(Integer, nullable=False)
-    total_paid = Column(Numeric(10, 2), nullable=False)
-    # Null until the Pinch deposit succeeds — the code only exists once paid.
+    slot_time = Column(Text, nullable=True)
+    num_people = Column(Integer, nullable=False)                  # group size
+    total_paid = Column(Numeric(10, 2), nullable=False)          # locked_price_cents / 100, for display
+    # Null until every share is in (or guaranteed) — the code only exists once paid.
     confirmation_code = Column(Text, nullable=True, unique=True)
-    status = Column(_BOOKING_STATUS, nullable=False, server_default="confirmed")
-    redeemed_at = Column(DateTime(timezone=True), nullable=True)   # set when venue scans the ticket
+    # voting | collecting | confirmed | redeemed | cancelled | expired | collapsed
+    status = Column(Text, nullable=False, server_default="collecting")
+    redeemed_at = Column(DateTime(timezone=True), nullable=True)   # set when venue scans the code
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-
-    # ── Pinch payment fields ──────────────────────────────────
-    deposit_amount_cents = Column(Integer, nullable=True)
-    balance_amount_cents = Column(Integer, nullable=True)
-    deposit_payment_id = Column(Text, nullable=True)               # pmt_XXX for the 20% deposit
-    balance_payment_id = Column(Text, nullable=True)               # pmt_XXX for the 80% balance
-    pinch_payer_id = Column(Text, nullable=True)                   # pyr_XXX
-    pinch_source_id = Column(Text, nullable=True)                  # src_XXX (vaulted card)
-    # unpaid | deposit_paid | fully_paid | cancelled
-    payment_status = Column(Text, nullable=False, server_default="unpaid")
-    # Customer-facing outcome of the balance charge (shown in-app on the Plans screen)
-    payment_note = Column(Text, nullable=True)
-    # True when the balance charge declined at redemption — venue collects directly
-    payment_followup = Column(Boolean, nullable=False, server_default="false")
-
-    deal: "Deal" = relationship("Deal", back_populates="bookings")
-    user: "User" = relationship("User", back_populates="bookings")
-
-
-class Huddle(Base):
-    """A group plan: N people vote on deals, winner becomes a shared booking."""
-    __tablename__ = "huddles"
-
-    id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
-    creator_member_id = Column(UUID(as_uuid=False), ForeignKey("huddle_members.id", use_alter=True), nullable=True)
-    group_size = Column(Integer, nullable=False)
-    # open | voting_complete | awaiting_payment | active | expired | collapsed | redeemed
-    status = Column(Text, nullable=False, server_default="open")
-    join_token = Column(Text, nullable=False, unique=True)
-    winning_deal_id = Column(UUID(as_uuid=False), ForeignKey("deals.id"), nullable=True)
-    common_code = Column(Text, nullable=True, unique=True)
-    voting_deadline = Column(DateTime(timezone=True), nullable=True)
-    payment_deadline = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    # Bumped on every member join/vote/pay — the realtime poke channel.
+    # Bumped on every join/vote/pay/split change — the realtime poke channel.
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    members: List["HuddleMember"] = relationship(
-        "HuddleMember", back_populates="huddle", foreign_keys="HuddleMember.huddle_id",
+    # ── Split ─────────────────────────────────────────────────
+    has_voting = Column(Boolean, nullable=False, server_default="false")
+    split_mode = Column(Text, nullable=False, server_default="even")      # even | custom
+    # Frozen when the deal is fixed (creation, or Huddle resolution) and never
+    # re-read from the deal: the amount each person saw is the amount charged.
+    locked_unit_price_cents = Column(Integer, nullable=True)
+    locked_price_cents = Column(Integer, nullable=True)
+    initiator_member_id = Column(
+        UUID(as_uuid=False),
+        ForeignKey("booking_participants.id", use_alter=True, name="fk_bookings_initiator_member"),
+        nullable=True,
     )
-    winning_deal: Optional["Deal"] = relationship("Deal", foreign_keys=[winning_deal_id])
+    share_deadline = Column(DateTime(timezone=True), nullable=True)
+    # Set once the initiator has chosen the split; shares are collected after.
+    split_confirmed_at = Column(DateTime(timezone=True), nullable=True)
+    # Spots are taken out of the deal once (initiator's deposit / Huddle resolution).
+    spots_held = Column(Boolean, nullable=False, server_default="false")
+
+    # ── Voting stage (Huddle only) ────────────────────────────
+    join_token = Column(Text, nullable=True, unique=True)
+    voting_deadline = Column(DateTime(timezone=True), nullable=True)
+
+    deal: Optional["Deal"] = relationship("Deal", back_populates="bookings")
+    user: "User" = relationship("User", back_populates="bookings")
+    participants: List["BookingParticipant"] = relationship(
+        "BookingParticipant", back_populates="booking", foreign_keys="BookingParticipant.booking_id",
+    )
 
 
-class HuddleMember(Base):
-    __tablename__ = "huddle_members"
+class BookingParticipant(Base):
+    """One seat in a booking: who holds it, what their share is, and how it was paid."""
+    __tablename__ = "booking_participants"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
-    huddle_id = Column(UUID(as_uuid=False), ForeignKey("huddles.id"), nullable=False, index=True)
-    # null → guest, or a member whose account was since deleted (ON DELETE SET NULL)
+    booking_id = Column(UUID(as_uuid=False), ForeignKey("bookings.id"), nullable=False, index=True)
+    # Null for a direct-booking seat nobody has claimed yet, or a member whose
+    # account was since deleted (ON DELETE SET NULL).
     user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    display_name = Column(Text, nullable=False)
-    # Secret returned to the joining client; authenticates guests on later calls.
-    member_token = Column(Text, nullable=False, unique=True)
+    display_name = Column(Text, nullable=True)
+    # Per-seat invite link for direct bookings (one link per seat).
+    seat_token = Column(Text, nullable=True, unique=True)
+    seat_label = Column(Text, nullable=True)                      # e.g. "Sam", set by the initiator
     joined_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    claimed_at = Column(DateTime(timezone=True), nullable=True)
+
     # Sealed until resolution — never exposed to other members via any endpoint.
     ballot = Column(JSONB, nullable=True)                          # ordered deal ids, best first
     ballot_at = Column(DateTime(timezone=True), nullable=True)
+
+    # ── Share (stored, never derived at read time) ────────────
+    share_amount_cents = Column(Integer, nullable=True)
+    deposit_cents = Column(Integer, nullable=True)
+    balance_cents = Column(Integer, nullable=True)
+    # Set when someone covers this seat: its share moved to them, this seat owes nothing.
+    covered_by_member_id = Column(UUID(as_uuid=False), ForeignKey("booking_participants.id"), nullable=True)
+
+    # ── Payment ───────────────────────────────────────────────
     pinch_payer_id = Column(Text, nullable=True)
     pinch_source_id = Column(Text, nullable=True)
-    deposit_payment_id = Column(Text, nullable=True)
-    deposit_status = Column(Text, nullable=False, server_default="unpaid")  # unpaid | paid | refunded
-    balance_payment_id = Column(Text, nullable=True)
-    balance_status = Column(Text, nullable=False, server_default="unpaid")
+    deposit_payment_id = Column(Text, nullable=True, index=True)
+    # unpaid | paid | guaranteed | settled | refunded | declined
+    deposit_status = Column(Text, nullable=False, server_default="unpaid")
+    # Bumped after a definitive decline or a share change, so the next attempt
+    # gets a fresh nonce (Pinch replays the first result for a reused nonce).
+    deposit_attempt = Column(Integer, nullable=False, server_default="0")
+    balance_payment_id = Column(Text, nullable=True, index=True)
+    balance_status = Column(Text, nullable=False, server_default="unpaid")   # unpaid | paid | declined
+    payment_note = Column(Text, nullable=True)                     # customer-facing charge outcome
+    payment_followup = Column(Boolean, nullable=False, server_default="false")
 
-    huddle: "Huddle" = relationship("Huddle", back_populates="members", foreign_keys=[huddle_id])
+    booking: "Booking" = relationship("Booking", back_populates="participants", foreign_keys=[booking_id])
 
 
 class Waitlist(Base):

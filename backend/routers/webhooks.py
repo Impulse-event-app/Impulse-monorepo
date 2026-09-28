@@ -12,7 +12,7 @@ from sqlalchemy import or_
 import settlements
 from database import SessionLocal
 from mailer import MailNotConfigured, MailSendFailed, is_configured, send_email
-from models import Booking, User, Venue
+from models import BookingParticipant, User, Venue
 from pinch_client import PinchError
 
 router = APIRouter()
@@ -77,29 +77,29 @@ def _process_event(payload: dict) -> None:
 
     db = SessionLocal()
     try:
-        booking = (
-            db.query(Booking)
+        seat = (
+            db.query(BookingParticipant)
             .filter(
                 or_(
-                    Booking.deposit_payment_id == payment_id,
-                    Booking.balance_payment_id == payment_id,
+                    BookingParticipant.deposit_payment_id == payment_id,
+                    BookingParticipant.balance_payment_id == payment_id,
                 )
             )
             .first()
         )
-        if not booking:
-            logger.info("Pinch webhook for unknown payment %s — no matching booking", payment_id)
+        if not seat:
+            logger.info("Pinch webhook for unknown payment %s — no matching booking seat", payment_id)
             return
 
         if status == "approved":
-            if payment_id == booking.deposit_payment_id and booking.payment_status == "unpaid":
-                booking.payment_status = "deposit_paid"
-            elif payment_id == booking.balance_payment_id and booking.payment_status == "deposit_paid":
-                booking.payment_status = "fully_paid"
+            if payment_id == seat.deposit_payment_id and seat.deposit_status == "unpaid":
+                seat.deposit_status = "paid"
+            elif payment_id == seat.balance_payment_id and seat.balance_status != "paid":
+                seat.balance_status = "paid"
             db.commit()
         logger.info(
-            "Pinch webhook processed: payment %s status %s → booking %s payment_status %s",
-            payment_id, status, booking.id, booking.payment_status,
+            "Pinch webhook processed: payment %s status %s → booking %s seat %s deposit=%s balance=%s",
+            payment_id, status, seat.booking_id, seat.id, seat.deposit_status, seat.balance_status,
         )
     finally:
         db.close()

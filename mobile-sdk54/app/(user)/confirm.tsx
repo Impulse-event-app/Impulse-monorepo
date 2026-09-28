@@ -44,7 +44,7 @@ export default function ConfirmScreen() {
     );
   }
 
-  const verified = plan.status === 'attended';
+  const verified = plan.status === 'redeemed';
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>

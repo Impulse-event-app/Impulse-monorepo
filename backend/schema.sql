@@ -191,28 +191,83 @@ create policy "deals: venue owner write"
   );
 
 -- ── public.bookings ───────────────────────────────────────────
-
-create type booking_status as enum ('pending', 'confirmed', 'cancelled', 'attended');
+-- The one booking model. Solo = one participant; direct split = one
+-- participant per seat; Huddle = has_voting, deal picked by ballot first.
+-- Shares, payments, the code and redemption are shared by all three.
 
 create table if not exists public.bookings (
-  id                 uuid           primary key default gen_random_uuid(),
-  deal_id            uuid           not null references public.deals(id) on delete restrict,
-  -- Nullable + set null: bookings outlive a deleted account, anonymised.
-  user_id            uuid           references public.users(id) on delete set null,
-  slot_time          text           not null,
-  num_people         integer        not null,
-  total_paid         numeric(10,2)  not null,
-  confirmation_code  text           not null unique,
-  status             booking_status not null default 'confirmed',
-  redeemed_at        timestamptz,                                  -- set when venue scans the ticket
-  created_at         timestamptz    not null default now()
+  id                      uuid           primary key default gen_random_uuid(),
+  deal_id                 uuid           references public.deals(id) on delete restrict,  -- null while voting
+  -- The initiator. Nullable + set null: bookings outlive a deleted account, anonymised.
+  user_id                 uuid           references public.users(id) on delete set null,
+  slot_time               text,
+  num_people              integer        not null,
+  total_paid              numeric(10,2)  not null,
+  confirmation_code       text           unique,                   -- set once every share is in
+  -- voting | collecting | confirmed | redeemed | cancelled | expired | collapsed
+  status                  text           not null default 'collecting',
+  redeemed_at             timestamptz,
+  created_at              timestamptz    not null default now(),
+  updated_at              timestamptz    not null default now(),   -- realtime poke
+  has_voting              boolean        not null default false,
+  split_mode              text           not null default 'even',  -- even | custom
+  locked_unit_price_cents integer,                                  -- frozen; never re-read from the deal
+  locked_price_cents      integer,
+  initiator_member_id     uuid,                                     -- fk added below
+  share_deadline          timestamptz,
+  split_confirmed_at      timestamptz,
+  spots_held              boolean        not null default false,
+  join_token              text           unique,                   -- Huddle invite
+  voting_deadline         timestamptz,
+  constraint ck_bookings_deal_unless_voting check (has_voting or deal_id is not null)
 );
 
+create table if not exists public.booking_participants (
+  id                   uuid        primary key default gen_random_uuid(),
+  booking_id           uuid        not null references public.bookings(id),
+  user_id              uuid        references public.users(id) on delete set null,
+  display_name         text,
+  seat_token           text        unique,          -- per-seat invite link (direct bookings)
+  seat_label           text,
+  joined_at            timestamptz not null default now(),
+  claimed_at           timestamptz,
+  ballot               jsonb,                       -- sealed; this table is never published
+  ballot_at            timestamptz,
+  share_amount_cents   integer,
+  deposit_cents        integer,
+  balance_cents        integer,
+  covered_by_member_id uuid        references public.booking_participants(id),
+  pinch_payer_id       text,
+  pinch_source_id      text,
+  deposit_payment_id   text,
+  deposit_status       text        not null default 'unpaid',  -- unpaid | paid | guaranteed | settled | refunded | declined
+  deposit_attempt      integer     not null default 0,         -- nonce suffix; moves on after a decline / share change
+  balance_payment_id   text,
+  balance_status       text        not null default 'unpaid',  -- unpaid | paid | declined
+  payment_note         text,
+  payment_followup     boolean     not null default false
+);
+
+alter table public.bookings
+  add constraint fk_bookings_initiator_member
+  foreign key (initiator_member_id) references public.booking_participants(id);
+
+create index if not exists ix_booking_participants_booking_id on public.booking_participants (booking_id);
+create index if not exists ix_booking_participants_deposit_payment_id on public.booking_participants (deposit_payment_id);
+create index if not exists ix_booking_participants_balance_payment_id on public.booking_participants (balance_payment_id);
+create unique index if not exists uq_booking_participants_booking_user
+  on public.booking_participants (booking_id, user_id) where user_id is not null;
+
 alter table public.bookings enable row level security;
+alter table public.booking_participants enable row level security;
 
 create policy "bookings: user read own"
   on public.bookings for select
   using (auth.uid() = user_id);
+
+create policy "bookings: participants read"
+  on public.bookings for select
+  using (id in (select booking_id from public.booking_participants where user_id = auth.uid()));
 
 create policy "bookings: user insert own"
   on public.bookings for insert
@@ -221,6 +276,14 @@ create policy "bookings: user insert own"
 create policy "bookings: user cancel own"
   on public.bookings for update
   using (auth.uid() = user_id);
+
+create policy "booking_participants: read own seat"
+  on public.booking_participants for select
+  using (auth.uid() = user_id);
+
+-- Realtime: bookings only (updated_at is the poke). booking_participants is
+-- deliberately not published so sealed ballots can't leak.
+alter publication supabase_realtime add table public.bookings;
 
 -- ── public.user_venue_interactions ────────────────────────────
 -- Event log for the recommender.

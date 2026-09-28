@@ -15,6 +15,7 @@ import {
   EmptyState,
   FloatingFooter,
   Group,
+  HuddleMark,
   Label,
   Radio,
   ReadableColumn,
@@ -48,6 +49,9 @@ export default function ClaimScreen() {
 
   const times = apiDeal?.slots ?? (d?.status === 'now' ? ['Now', '7:30pm', '8:30pm'] : ['7:00pm', '8:00pm', '9:00pm']);
   const [party, setParty] = useState(2);
+  // How a group pays: one person covers everyone (default), or Huddle Pay —
+  // split it, with each friend invited into their own spot.
+  const [huddlePay, setHuddlePay] = useState(false);
   const [time, setTime] = useState(times[0]);
   const [loading, setLoading] = useState(false);
   // Once the slot is reserved we hold the unpaid booking and collect card details.
@@ -86,7 +90,12 @@ export default function ClaimScreen() {
   const perPerson = d.unit === 'pp';
   const total = perPerson ? d.now * party : d.now;
   const totalCents = Math.round(total * 100);
-  const { depositCents, balanceCents } = depositSplit(totalCents);
+  // Once the booking exists, show the server's numbers (the locked price),
+  // never a client-side guess — that's exactly what gets charged.
+  const splitting = party > 1 && huddlePay;
+  const estimate = depositSplit(totalCents);
+  const depositCents = pendingBooking?.deposit_amount_cents ?? estimate.depositCents;
+  const balanceCents = pendingBooking?.balance_amount_cents ?? estimate.balanceCents;
 
   const onReserve = async () => {
     setLoading(true);
@@ -95,7 +104,13 @@ export default function ClaimScreen() {
         deal_id: apiDeal.id,
         slot_time: time,
         num_people: party,
+        split: splitting,
       });
+      if (splitting) {
+        // Huddle Pay: invite people, set the split and lock it in over there.
+        router.push(`/(user)/split/${booking.id}`);
+        return;
+      }
       setPendingBooking(booking);
     } catch (err) {
       hapticError();
@@ -129,7 +144,10 @@ export default function ClaimScreen() {
     if (!pendingBooking || !defaultCard) return;
     setLoading(true);
     try {
-      finishPayment(await payBooking(pendingBooking.id, { payment_method_id: defaultCard.id }));
+      finishPayment(await payBooking(pendingBooking.id, {
+        expected_deposit_cents: depositCents,
+        payment_method_id: defaultCard.id,
+      }));
     } catch (err) {
       // A saved card the server won't charge (expired, detached, never
       // authorised) comes back 409 — drop straight to the card form.
@@ -153,6 +171,7 @@ export default function ClaimScreen() {
       const fullName = (profile?.full_name ?? cardHolderName).trim();
       const [firstName, ...rest] = fullName.split(/\s+/);
       finishPayment(await payBooking(pendingBooking.id, {
+        expected_deposit_cents: depositCents,
         token,
         save_card: saveCard,
         card_holder_name: cardHolderName,
@@ -208,6 +227,26 @@ export default function ClaimScreen() {
                   ))}
                 </View>
               </View>
+
+              {party > 1 && (
+                <Group label="How are you paying?">
+                  <Row
+                    label="I'll pay for everyone"
+                    sublabel="One payment, one code"
+                    trailing={<Radio on={!huddlePay} />}
+                    selected={!huddlePay}
+                    onPress={() => setHuddlePay(false)}
+                  />
+                  <Row
+                    icon={<HuddleMark size={18} />}
+                    label="Huddle Pay"
+                    sublabel="Split it — invite each person to pay their share"
+                    trailing={<Radio on={huddlePay} />}
+                    selected={huddlePay}
+                    onPress={() => setHuddlePay(true)}
+                  />
+                </Group>
+              )}
             </>
           ) : savedCards === null ? (
             <ActivityIndicator color={T.accent} style={{ height: 80 }} accessibilityLabel="Loading saved cards" />
@@ -246,8 +285,10 @@ export default function ClaimScreen() {
           <View style={{ marginTop: 40 }}>
             {line("Tonight's price", `${money(d.now)} ${unitLabel(d.unit)}`)}
             {line(perPerson ? 'People' : 'Slot', perPerson ? `× ${party}` : '× 1')}
-            {line('Pay now', `${fmtCents(depositCents)} + card fee`)}
-            {line('Pay at the venue', fmtCents(balanceCents))}
+            {splitting
+              ? line('Split between', `${party} people`)
+              : line('Pay now', `${fmtCents(depositCents)} + card fee`)}
+            {!splitting && line('Pay at the venue', fmtCents(balanceCents))}
             <View
               accessible
               accessibilityLabel={`Total, ${money(total)}`}
@@ -257,7 +298,9 @@ export default function ClaimScreen() {
               <Text style={{ ...fontMono(600), fontSize: 28, letterSpacing: -0.56, color: T.text }}>{money(total)}</Text>
             </View>
             <Label style={{ marginTop: 14, lineHeight: 18 }}>
-              The {fmtCents(depositCents)} deposit and card fee are non-refundable. {fmtCents(balanceCents)} is charged when your code is scanned at the venue.
+              {splitting
+                ? 'Next, invite everyone and set the split. Each person pays a deposit on their share now and the rest at the venue.'
+                : `The ${fmtCents(depositCents)} deposit and card fee are non-refundable. ${fmtCents(balanceCents)} is charged when your code is scanned at the venue.`}
             </Label>
           </View>
         </ReadableColumn>
@@ -272,7 +315,7 @@ export default function ClaimScreen() {
           {loading ? (
             <ActivityIndicator color={T.accent} style={{ height: 52 }} accessibilityLabel="Reserving your slot" />
           ) : (
-            <Btn full onPress={onReserve}>Continue to payment</Btn>
+            <Btn full onPress={onReserve}>{splitting ? 'Continue to Huddle Pay' : 'Continue to payment'}</Btn>
           )}
         </FloatingFooter>
       )}
