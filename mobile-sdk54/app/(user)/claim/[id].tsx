@@ -287,7 +287,7 @@ export default function ClaimScreen() {
             {line(perPerson ? 'People' : 'Slot', perPerson ? `× ${party}` : '× 1')}
             {splitting
               ? line('Split between', `${party} people`)
-              : line('Pay now', `${fmtCents(depositCents)} + card fee`)}
+              : line('Pay now', fmtCents(depositCents))}
             {!splitting && line('Pay at the venue', fmtCents(balanceCents))}
             <View
               accessible
@@ -300,7 +300,7 @@ export default function ClaimScreen() {
             <Label style={{ marginTop: 14, lineHeight: 18 }}>
               {splitting
                 ? 'Next, invite everyone and set the split. Each person pays a deposit on their share now and the rest at the venue.'
-                : `The ${fmtCents(depositCents)} deposit and card fee are non-refundable. ${fmtCents(balanceCents)} is charged when your code is scanned at the venue.`}
+                : `The ${fmtCents(depositCents)} deposit is non-refundable. ${fmtCents(balanceCents)} is charged when your code is scanned at the venue.`}
             </Label>
           </View>
         </ReadableColumn>
