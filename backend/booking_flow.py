@@ -797,6 +797,9 @@ def push_invite(db: Session, b: Booking, p: BookingParticipant) -> None:
         "title": f"{display_name(initiator(b))} saved you a spot",
         "body": f"{venue}, {slot_label(b)} — your share is {fmt_cents(p.share_amount_cents or 0)}",
         "data": push_data(b, "seat_invite"),
+        # Expands into Pay now / Can't make it — the app registers this
+        # category (mobile src/pushRouting.ts).
+        "categoryId": "seat_invite",
     }])
 
 

@@ -8,6 +8,11 @@
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { declineSeat } from './api';
+
+const SEAT_INVITE = 'seat_invite';
+const PAY = 'pay';
+const DECLINE = 'decline';
 
 type PushData = { bookingId?: unknown; huddleId?: unknown; type?: unknown };
 
@@ -43,7 +48,19 @@ export function usePushRouting() {
             shouldSetBadge: false,
           }),
         });
-        const open =(data: PushData | undefined) => {
+        // Seat invites expand into Pay now / Can't make it (the server sets
+        // categoryId "seat_invite"). Pay now opens the split screen, where the
+        // pay button is; declining happens in the background.
+        Notifications.setNotificationCategoryAsync(SEAT_INVITE, [
+          { identifier: PAY, buttonTitle: 'Pay now', options: { opensAppToForeground: true } },
+          { identifier: DECLINE, buttonTitle: "Can't make it", options: { opensAppToForeground: false, isDestructive: true } },
+        ]).catch(() => {});
+        const handle = (response: { actionIdentifier: string; notification: { request: { content: { data: unknown } } } }) => {
+          const data = response.notification.request.content.data as PushData;
+          if (response.actionIdentifier === DECLINE) {
+            if (typeof data?.bookingId === 'string') declineSeat(data.bookingId).catch(() => {});
+            return;
+          }
           const href = pushHref(data);
           if (href) router.push(href as never);
         };
@@ -51,12 +68,10 @@ export function usePushRouting() {
         // re-mount doesn't navigate again.
         const last = Notifications.getLastNotificationResponse();
         if (last) {
-          open(last.notification.request.content.data as PushData);
+          handle(last);
           Notifications.clearLastNotificationResponse();
         }
-        sub = Notifications.addNotificationResponseReceivedListener((response) => {
-          open(response.notification.request.content.data as PushData);
-        });
+        sub = Notifications.addNotificationResponseReceivedListener(handle);
       })
       .catch(() => { /* notifications unavailable (e.g. Expo Go limitation) */ });
 
