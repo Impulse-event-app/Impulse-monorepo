@@ -13,6 +13,9 @@ from routers import (
     waitlist, webhooks,
 )
 
+# Show the app's own INFO logs (push sends, sweeps) — Python's default root
+# level is WARNING, which hid them in Render's log stream.
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("impulse.main")
 
 # In-app booking deadline sweeper (Huddle voting/collapse + direct-booking guarantor). Runs every HUDDLE_SWEEP_INTERVAL seconds
