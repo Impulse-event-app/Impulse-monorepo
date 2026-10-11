@@ -28,6 +28,8 @@ const STATUS_LABEL: Record<Plan['status'], string> = {
 };
 
 const ENDED = new Set<Plan['status']>(['cancelled', 'expired', 'collapsed']);
+/** Finished plans: used at the door or lapsed. They leave the list. */
+const HIDDEN = new Set<Plan['status']>(['redeemed', 'expired']);
 
 /** Where a plan opens: a Huddle's sheet, a group's live meter, or the ticket. */
 function planHref(p: Plan): string {
@@ -57,7 +59,8 @@ function planA11yLabel(p: Plan): string {
 }
 
 export default function PlansScreen() {
-  const { T, plans, bookingsLoading, refreshBookings, signedIn } = useApp();
+  const { T, plans: allPlans, bookingsLoading, refreshBookings, signedIn } = useApp();
+  const plans = allPlans.filter((p) => !HIDDEN.has(p.status));
   const router = useRouter();
   const navTop = useNavTop();
   const [scrolled, onScroll] = useScrolled();

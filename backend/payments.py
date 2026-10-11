@@ -6,10 +6,14 @@ these, so the fee model, surcharge rules, metadata encoding, and nonce handling
 live in exactly one place.
 
 Fee model (revised 2026-07-30):
-- Deposit: the confirming 20% is Impulse's entire take. Impulse keeps the full
-  amount (applicationFee = amount). Pinch caps applicationFee at amount −
-  transaction fees, so card fees are surcharged to the customer. Metadata MUST
+- Deposit: the confirming deposit is Impulse's entire take. Pinch caps
+  applicationFee at amount − transaction fees, and Impulse absorbs those fees:
+  applicationFee = amount − the fee Pinch quotes for that card. Metadata MUST
   be a JSON string — an object nulls Pinch's request.
+
+Card-fee surcharging was dropped 2026-10-10: Australia's surcharge ban means
+Pinch now rejects `surcharge` with "Surcharging is not permitted.", which
+failed every deposit (solo, split and Huddle alike).
 - Balance: no application fee. The balance belongs to the venue in full; the
   customer pays exactly the quoted balance and the venue absorbs Pinch's fees.
 
@@ -98,8 +102,9 @@ def _replayed_payment(err: PinchError, amount_cents: int) -> dict:
     the original was approved for exactly the amount we meant to charge now;
     anything else re-raises with Pinch's exact body.
 
-    `amount` on a surcharged payment includes the card fee, so the intended
-    amount is read back from the chargeAmountCents we stamp into metadata."""
+    `amount` on a surcharged payment (pre-2026-10-10 deposits) includes the card
+    fee, so the intended amount is read back from the chargeAmountCents we stamp
+    into metadata."""
     if err.status_code != 403:
         raise err
     try:
@@ -134,15 +139,18 @@ def _create_payment(input: dict, merchant_id: str) -> dict:
 
 def charge_deposit(*, payer_id: str, source_id: str, amount_cents: int,
                    description: str, metadata: dict, nonce: str, merchant_id: str) -> dict:
-    """Charge a deposit: full amount is Impulse's, card fees surcharged to the
-    customer. Returns the approved payment. Raises PinchError / PaymentNotApproved."""
+    """Charge a deposit: Impulse keeps everything Pinch's card fee leaves, and
+    the customer pays exactly the deposit. Returns the approved payment.
+    Raises PinchError / PaymentNotApproved."""
+    fees = pinch_client.calculate_fees(
+        {"sourceId": source_id, "amount": amount_cents}, merchant_id,
+    )
     return _create_payment(
         {
             "payerId": payer_id,
             "sourceId": source_id,
             "amount": amount_cents,
-            "applicationFee": amount_cents,
-            "surcharge": ["credit-card"],
+            "applicationFee": amount_cents - fees["fees"]["transactionFee"],
             "description": description,
             "metadata": json.dumps({**metadata, "chargeAmountCents": amount_cents}),
             "nonce": nonce,
@@ -152,8 +160,8 @@ def charge_deposit(*, payer_id: str, source_id: str, amount_cents: int,
 
 
 def refund_full(*, payment_id: str, reason: str, nonce: str, merchant_id: str) -> dict:
-    """Fully refund a prior payment — the actual captured amount (deposit share
-    plus any card-fee surcharge), so the member is made whole and no sub-minimum
+    """Fully refund a prior payment — the actual captured amount (deposit share,
+    plus the card-fee surcharge on deposits taken before 2026-10-10), so the member is made whole and no sub-minimum
     remainder is left (Pinch rejects refunds that would leave < $1 on a payment).
 
     Used only when a huddle plan collapses before it becomes a real booking —

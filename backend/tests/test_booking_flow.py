@@ -263,6 +263,12 @@ def _replay(amount, charge_amount_cents, status="approved", surcharged=True):
     return PinchError(403, json.dumps(body))
 
 
+@pytest.fixture(autouse=True)
+def _fee_quote(monkeypatch):
+    monkeypatch.setattr(pinch_client, "calculate_fees",
+                        lambda input, mid: {"fees": {"transactionFee": 49}})
+
+
 def _charge(amount_cents=1092):
     return payments.charge_deposit(payer_id="pyr", source_id="src", amount_cents=amount_cents,
                                    description="d", metadata={}, nonce="n", merchant_id="m")
@@ -301,3 +307,17 @@ def test_charge_stamps_intended_amount_into_metadata(monkeypatch):
     monkeypatch.setattr(pinch_client, "create_payment", ok)
     _charge(777)
     assert json.loads(sent["metadata"])["chargeAmountCents"] == 777
+
+
+def test_deposit_absorbs_card_fee_instead_of_surcharging(monkeypatch):
+    # Pinch rejects `surcharge` since the Australian ban ("Surcharging is not
+    # permitted."), and caps applicationFee at amount − its transaction fee.
+    sent = {}
+
+    def ok(input, mid):
+        sent.update(input)
+        return {"id": "pmt_1", "status": "approved"}
+    monkeypatch.setattr(pinch_client, "create_payment", ok)
+    _charge(1000)
+    assert "surcharge" not in sent
+    assert sent["amount"] == 1000 and sent["applicationFee"] == 951

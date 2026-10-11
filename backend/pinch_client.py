@@ -148,6 +148,16 @@ def create_payment(input: dict, merchant_id: str) -> dict:
     return _post("/payments/realtime", input, merchant_id)
 
 
+def calculate_fees(input: dict, merchant_id: str) -> dict:
+    """
+    POST /fees/calculate — preview Pinch's fee for a charge (GET returns 405).
+    input: sourceId (or token), amount (cents). Returns fees.transactionFee,
+    netAmount and the matched feeSchedule — scheme- and origin-aware, so it is
+    the exact ceiling Pinch enforces on applicationFee (probed 2026-10-10).
+    """
+    return _post("/fees/calculate", input, merchant_id)
+
+
 def get_payment(payment_id: str, merchant_id: str) -> dict:
     """GET /payments/{id} — used to read the actual captured amount."""
     url = f"{PINCH_BASE_URL}/payments/{payment_id}"
