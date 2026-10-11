@@ -9,6 +9,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 import payments
+import push
 import pinch_client
 import wallet
 from auth import SUPABASE_URL, get_current_user
@@ -221,6 +222,26 @@ def register_push_token(
         db.add(row)
     row.expo_push_token = body.expo_push_token
     db.commit()
+
+
+@router.post("/me/push-test")
+def push_test(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Send the caller a test push and hand back what Expo said, so a push
+    that never arrives can be diagnosed from the phone itself."""
+    row = db.query(User).filter(User.id == user["sub"]).first()
+    token = row.expo_push_token if row else None
+    if not token:
+        return {"has_token": False, "token_prefix": None, "expo_response": None}
+    result = push.send_push_many([{
+        "to": token,
+        "title": "Impulse test notification",
+        "body": "If you can see this, invites will reach you.",
+        "data": {"type": "push_test"},
+    }])
+    return {"has_token": True, "token_prefix": token[:30], "expo_response": result}
 
 
 # ── Saved cards ───────────────────────────────────────────────────────────────

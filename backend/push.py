@@ -21,18 +21,21 @@ def send_push(token: str, title: str, body: str, data: Optional[dict] = None) ->
     send_push_many([{"to": token, "title": title, "body": body, "data": data or {}}])
 
 
-def send_push_many(messages: List[dict]) -> None:
-    """Send a batch of Expo push messages. Never raises."""
+def send_push_many(messages: List[dict]) -> Optional[str]:
+    """Send a batch of Expo push messages. Never raises. Returns Expo's raw
+    response (or the transport error) for callers that want to show it."""
     messages = [m for m in messages if m.get("to")]
     if not messages:
-        return
+        return None
     try:
         resp = httpx.post(EXPO_PUSH_URL, json=messages, timeout=10)
         logger.info("Expo push: sent %d message(s), status %s: %s",
                     len(messages), resp.status_code, resp.text[:500])
         _log_ticket_errors(messages, resp)
+        return f"{resp.status_code} {resp.text[:500]}"
     except Exception as e:
         logger.warning("Expo push failed (%d message(s)): %s", len(messages), e)
+        return f"request failed: {e}"
 
 
 def _log_ticket_errors(messages: List[dict], resp: httpx.Response) -> None:

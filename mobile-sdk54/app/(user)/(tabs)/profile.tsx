@@ -21,7 +21,7 @@ import {
 import { RowIcons } from '../../../src/icons';
 import { deleteAccount, signOut as supabaseSignOut, syncUserProfile } from '../../../src/auth';
 import { useWallet } from '../../../src/wallet';
-import { describeCard } from '../../../src/api';
+import { describeCard, sendTestPush } from '../../../src/api';
 import { requestNotificationAccess, syncPushToken } from '../../../src/permissions';
 import { confirmDestructive } from '../../../src/confirm';
 import { FLOATING_TAB_CLEARANCE } from './_layout';
@@ -108,6 +108,24 @@ export default function ProfileScreen() {
       }
       setProfile((p) => ({ ...p, notifications: on }));
       await syncUserProfile({ notifications_enabled: on }).catch(console.warn);
+    } finally {
+      setNotifBusy(false);
+    }
+  };
+
+  // Diagnostics: register this device again, then ask the server to push to
+  // it, and show exactly what happened at each step.
+  const testPush = async () => {
+    setNotifBusy(true);
+    try {
+      const sync = await syncPushToken();
+      const res = await sendTestPush().catch((e) => ({ error: String(e?.message ?? e) }));
+      const server = 'error' in res
+        ? `Server: ${res.error}`
+        : res.has_token
+          ? `Server sent to ${res.token_prefix}…\nExpo: ${res.expo_response}`
+          : 'Server: no push token saved for your account';
+      Alert.alert('Test notification', `Device: ${sync}\n\n${server}`);
     } finally {
       setNotifBusy(false);
     }
@@ -213,6 +231,7 @@ export default function ProfileScreen() {
                     />
                   }
                 />
+                <Row icon={I('bell')} label="Send a test notification" onPress={notifBusy ? undefined : testPush} />
               </Group>
             </>
           ) : (

@@ -48,14 +48,15 @@ export async function requestNotificationAccess(): Promise<boolean> {
 /**
  * Fetch this device's Expo push token and register it with the backend.
  * Native only — Expo push tokens don't exist on web (huddle web sessions get
- * the same info via the polling status screen). Best-effort; never throws.
+ * the same info via the polling status screen). Never throws; returns what
+ * happened so the profile's test button can show it.
  */
-export async function syncPushToken(): Promise<void> {
-  if (Platform.OS === 'web') return;
+export async function syncPushToken(): Promise<string> {
+  if (Platform.OS === 'web') return 'web: no push tokens';
   try {
     const Notifications = await import('expo-notifications');
     const { status } = await Notifications.getPermissionsAsync();
-    if (status !== 'granted') return;
+    if (status !== 'granted') return `permission ${status}`;
 
     let projectId: string | undefined;
     try {
@@ -67,11 +68,12 @@ export async function syncPushToken(): Promise<void> {
     const { data: token } = await Notifications.getExpoPushTokenAsync(
       projectId ? { projectId } : undefined,
     );
-    if (!token) return;
+    if (!token) return 'no token from Expo';
 
     const { registerPushToken } = await import('./api');
     await registerPushToken(token);
-  } catch {
-    // notifications module unavailable (e.g. Expo Go SDK limitation) — ignore
+    return 'registered';
+  } catch (e) {
+    return `error: ${e instanceof Error ? e.message : String(e)}`;
   }
 }

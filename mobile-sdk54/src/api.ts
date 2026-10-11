@@ -495,6 +495,13 @@ export async function registerPushToken(expoPushToken: string): Promise<void> {
   });
 }
 
+export type PushTestResult = { has_token: boolean; token_prefix: string | null; expo_response: string | null };
+
+/** Send myself a test push; returns what Expo said. */
+export async function sendTestPush(): Promise<PushTestResult> {
+  return request<PushTestResult>('/users/me/push-test', { method: 'POST' });
+}
+
 /** Creator cancels the huddle. Refunds any paid deposit shares. */
 export async function cancelHuddle(huddleId: string): Promise<ApiHuddle> {
   return request<ApiHuddle>(`/huddles/${encodeURIComponent(huddleId)}/cancel`, { method: 'POST' });
