@@ -370,8 +370,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         refreshDeals();
         refreshBookings();
         refreshProfile();
-        // Refresh the push token for already-opted-in users (huddle pushes).
-        import('./permissions').then((p) => p.syncPushToken().catch(() => {}));
+        // Refresh the push token (huddle + invite pushes). Someone who was
+        // never asked — skipped onboarding — gets the one iOS prompt now,
+        // or invites would never reach them.
+        import('./permissions').then((p) => p.syncPushToken({ ask: true }).catch(() => {}));
         if (!bookingsChannel) {
           bookingsChannel = supabase
             .channel('bookings-live')

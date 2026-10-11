@@ -118,7 +118,7 @@ export default function ProfileScreen() {
   const testPush = async () => {
     setNotifBusy(true);
     try {
-      const sync = await syncPushToken();
+      const sync = await syncPushToken({ ask: true });
       const res = await sendTestPush().catch((e) => ({ error: String(e?.message ?? e) }));
       const server = 'error' in res
         ? `Server: ${res.error}`

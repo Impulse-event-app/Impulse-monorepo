@@ -48,14 +48,20 @@ export async function requestNotificationAccess(): Promise<boolean> {
 /**
  * Fetch this device's Expo push token and register it with the backend.
  * Native only — Expo push tokens don't exist on web (huddle web sessions get
- * the same info via the polling status screen). Never throws; returns what
- * happened so the profile's test button can show it.
+ * the same info via the polling status screen). With `ask`, prompts a user
+ * who has never been asked. Never throws; returns what happened so the
+ * profile's test button can show it.
  */
-export async function syncPushToken(): Promise<string> {
+export async function syncPushToken({ ask = false }: { ask?: boolean } = {}): Promise<string> {
   if (Platform.OS === 'web') return 'web: no push tokens';
   try {
     const Notifications = await import('expo-notifications');
-    const { status } = await Notifications.getPermissionsAsync();
+    let { status } = await Notifications.getPermissionsAsync();
+    // Never asked (skipped onboarding, or signed up before it asked): ask
+    // now. iOS only ever shows this once, so it can't nag.
+    if (status === 'undetermined' && ask) {
+      ({ status } = await Notifications.requestPermissionsAsync());
+    }
     if (status !== 'granted') return `permission ${status}`;
 
     let projectId: string | undefined;
