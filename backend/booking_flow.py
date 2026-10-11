@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Sequence
 
 from fastapi import HTTPException
-from sqlalchemy import func as sa_func, text
+from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session, joinedload
 
 import payments
@@ -575,18 +575,20 @@ def refund_participants(b: Booking, reason: str) -> tuple:
 # ── Push ─────────────────────────────────────────────────────────────────────
 
 def member_push_tokens(db: Session, participants: Sequence[BookingParticipant]) -> dict:
-    """user_id → expo push token for participants that have one. Defensive raw
-    SQL: returns {} until the expo_push_token column has been migrated."""
+    """user_id → expo push token for participants that have one. Never
+    raises — a failed lookup must not break the flow that's pushing."""
     user_ids = [p.user_id for p in participants if p.user_id]
     if not user_ids:
         return {}
     try:
-        rows = db.execute(
-            text("select id, expo_push_token from users where id = any(:ids) and expo_push_token is not null"),
-            {"ids": user_ids},
-        ).fetchall()
-        return {str(r[0]): r[1] for r in rows}
+        rows = (
+            db.query(User.id, User.expo_push_token)
+            .filter(User.id.in_(user_ids), User.expo_push_token.isnot(None))
+            .all()
+        )
+        return {str(uid): token for uid, token in rows}
     except Exception:
+        logger.exception("Push token lookup failed for %d user(s)", len(user_ids))
         db.rollback()
         return {}
 
