@@ -786,6 +786,8 @@ def push_invite(db: Session, b: Booking, p: BookingParticipant) -> None:
     """The invitee hears about it the way they'd hear from a friend."""
     token = member_push_tokens(db, [p]).get(p.user_id or "")
     if not token:
+        logger.info("Seat invite on booking %s: invitee %s has no push token (notifications off or never registered)",
+                    b.id, p.user_id)
         return
     venue = b.deal.venue.name if b.deal and b.deal.venue else "somewhere"
     push.send_push_many([{

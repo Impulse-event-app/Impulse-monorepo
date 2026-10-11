@@ -33,7 +33,17 @@ export function usePushRouting() {
     import('expo-notifications')
       .then((Notifications) => {
         if (!alive) return;
-        const open = (data: PushData | undefined) => {
+        // Without a handler iOS drops pushes that arrive while the app is
+        // open — show them as a banner like any other.
+        Notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowBanner: true,
+            shouldShowList: true,
+            shouldPlaySound: true,
+            shouldSetBadge: false,
+          }),
+        });
+        const open =(data: PushData | undefined) => {
           const href = pushHref(data);
           if (href) router.push(href as never);
         };
