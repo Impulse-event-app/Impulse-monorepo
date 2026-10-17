@@ -38,6 +38,9 @@
       "bundleIdentifier": "au.impulseapp.impulse",
       "usesAppleSignIn": true,
       "associatedDomains": ["applinks:impulse.expo.app"],
+      "entitlements": {
+        "com.apple.developer.usernotifications.time-sensitive": true
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }

@@ -15,6 +15,12 @@ logger = logging.getLogger("impulse.push")
 
 EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 
+# For pushes that ask someone to pay before a deadline. iOS lets them through
+# Focus and keeps them on the Lock Screen (needs the app's time-sensitive
+# entitlement; without it iOS quietly treats them as normal). Android shows
+# them as a heads-up banner.
+URGENT = {"interruptionLevel": "time-sensitive", "priority": "high"}
+
 
 def send_push(token: str, title: str, body: str, data: Optional[dict] = None) -> None:
     """Send one notification to one Expo push token. Never raises."""

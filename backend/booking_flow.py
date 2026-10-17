@@ -779,7 +779,7 @@ def push_shares(db: Session, b: Booking) -> None:
             f"{venue} {slot_label(b)} — your share is {fmt_cents(p.share_amount_cents or 0)}"
         )
         messages.append({"to": token, "title": "You're in", "body": body,
-                         "data": push_data(b, "split_confirmed")})
+                         "data": push_data(b, "split_confirmed"), **push.URGENT})
     if messages:
         push.send_push_many(messages)
 
@@ -800,6 +800,7 @@ def push_invite(db: Session, b: Booking, p: BookingParticipant) -> None:
         # Expands into Pay now / Can't make it — the app registers this
         # category (mobile src/pushRouting.ts).
         "categoryId": "seat_invite",
+        **push.URGENT,
     }])
 
 
