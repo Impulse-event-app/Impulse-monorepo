@@ -45,7 +45,7 @@ function ReelVideo({ uri, playing, width, height }: { uri: string; playing: bool
     else player.pause();
   }, [playing, player]);
   // Explicit size: on web the <video> doesn't take its box from absolute insets alone.
-  return <VideoView player={player} style={{ position: 'absolute', top: 0, left: 0, width, height }} contentFit="cover" nativeControls={false} allowsFullscreen={false} allowsPictureInPicture={false} />;
+  return <VideoView player={player} style={{ position: 'absolute', top: 0, left: 0, width, height }} contentFit="cover" nativeControls={false} allowsPictureInPicture={false} />;
 }
 
 function ReelItem({ r, height, width, near, playing, paused, onTogglePause }: {

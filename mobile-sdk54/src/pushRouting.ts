@@ -55,7 +55,7 @@ export function usePushRouting() {
           { identifier: PAY, buttonTitle: 'Pay now', options: { opensAppToForeground: true } },
           { identifier: DECLINE, buttonTitle: "Can't make it", options: { opensAppToForeground: false, isDestructive: true } },
         ]).catch(() => {});
-        const handle = (response: { actionIdentifier: string; notification: { request: { content: { data: unknown } } } }) => {
+        const handle = (response: { actionIdentifier: string; notification: { request: { content: { data?: unknown } } } }) => {
           const data = response.notification.request.content.data as PushData;
           if (response.actionIdentifier === DECLINE) {
             if (typeof data?.bookingId === 'string') declineSeat(data.bookingId).catch(() => {});

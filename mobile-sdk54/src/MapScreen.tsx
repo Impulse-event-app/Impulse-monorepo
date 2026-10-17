@@ -142,7 +142,7 @@ export default function MapScreen({ onShowList }: { onShowList?: () => void }) {
         initialRegion={SYDNEY_REGION}
         userInterfaceStyle={T.dark ? 'dark' : 'light'}
         showsCompass={false}
-        showsPointsOfInterest={false}
+        showsPointsOfInterests={false}
         showsMyLocationButton={false}
         toolbarEnabled={false}
         onPress={() => {
