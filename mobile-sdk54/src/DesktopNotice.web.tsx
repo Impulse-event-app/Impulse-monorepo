@@ -54,8 +54,7 @@ export function DesktopNotice() {
 
   return (
     <View
-      // @ts-expect-error — RN types have no 'fixed', but react-native-web
-      // supports it, and it keeps the overlay put if the page scrolls.
+      // 'fixed' keeps the overlay put if the page scrolls.
       style={{
         position: 'fixed',
         top: 0, left: 0, right: 0, bottom: 0,
