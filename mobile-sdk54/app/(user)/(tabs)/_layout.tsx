@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useTheme, fontUI } from '../../../src/theme';
 import { FooterScrim, Glass, useReduceMotion, useReduceTransparency } from '../../../src/components';
-import { TabTonight, TabMap, TabPlans, TabYou } from '../../../src/icons';
+import { TabTonight, TabDiscover, TabPlans, TabYou } from '../../../src/icons';
 import { hapticSelection } from '../../../src/haptics';
 
 // Height the floating bar occupies from the bottom of the screen. Scroll
@@ -176,10 +176,10 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="map"
+        name="discover"
         options={{
-          title: 'Map',
-          tabBarIcon: ({ focused, color }) => <TabMap color={color} on={focused} />,
+          title: 'Discover',
+          tabBarIcon: ({ focused, color }) => <TabDiscover color={color} on={focused} />,
         }}
       />
       <Tabs.Screen

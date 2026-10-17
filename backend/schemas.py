@@ -3,6 +3,8 @@ from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from booking_logic import slot_at
+
 
 # ── User ──────────────────────────────────────────────────────────────────────
 
@@ -197,6 +199,51 @@ class DealWithVenueResponse(DealResponse):
         )
 
 
+# ── Reels (Discover) ──────────────────────────────────────────────────────────
+
+class ReelResponse(BaseModel):
+    """A Discover reel with its venue and the venue's live deal, if any.
+    The deal fields are null when the venue has nothing bookable right now."""
+    id: str
+    video_url: str
+    poster_url: Optional[str]
+    caption: Optional[str]
+    venue_id: str
+    venue_name: str
+    venue_category: str
+    venue_suburb: Optional[str]
+    venue_image_url: Optional[str]
+    deal_id: Optional[str] = None
+    deal_title: Optional[str] = None
+    deal_price: Optional[float] = None
+    original_price: Optional[float] = None
+    unit: Optional[str] = None
+
+    @classmethod
+    def from_reel(cls, reel: object, deal: Optional[object] = None) -> "ReelResponse":
+        """Build from a VenueReel with .venue loaded, plus that venue's live deal."""
+        r = reel  # type: ignore[assignment]
+        d = deal  # type: ignore[assignment]
+        return cls(
+            id=r.id,
+            video_url=r.video_url,
+            poster_url=r.poster_url,
+            caption=r.caption,
+            venue_id=r.venue_id,
+            venue_name=r.venue.name,
+            venue_category=r.venue.category,
+            venue_suburb=r.venue.suburb,
+            venue_image_url=r.venue.image_url,
+            **(dict(
+                deal_id=d.id,
+                deal_title=d.title,
+                deal_price=float(d.deal_price),
+                original_price=float(d.original_price),
+                unit=d.unit,
+            ) if d is not None else {}),
+        )
+
+
 # ── Booking ───────────────────────────────────────────────────────────────────
 
 class SeatCover(BaseModel):
@@ -326,6 +373,7 @@ class BookingWithDetailsResponse(BookingResponse):
     venue_name: str
     deal_title: str
     deal_category: str
+    slot_at: Optional[datetime] = None   # when the slot starts (UTC); null if the text doesn't parse
 
     @classmethod
     def from_booking(cls, booking: object, user_id: Optional[str] = None) -> "BookingWithDetailsResponse":
@@ -347,6 +395,7 @@ class BookingWithDetailsResponse(BookingResponse):
             venue_name=b.deal.venue.name,
             deal_title=b.deal.title,
             deal_category=b.deal.category,
+            slot_at=slot_at(b.deal.date, b.slot_time) if b.slot_time else None,
         )
 
 

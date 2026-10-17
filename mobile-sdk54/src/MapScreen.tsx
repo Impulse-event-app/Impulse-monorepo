@@ -1,7 +1,7 @@
-// MapScreen.tsx — native (iOS/Android) map tab. Uses react-native-maps, which
-// is native-only. The route file app/(user)/(tabs)/map.tsx re-exports this, and
-// Metro serves MapScreen.web.tsx instead on web (react-native-maps can't bundle
-// there). Keep the two in sync when the map UI changes.
+// MapScreen.tsx — native (iOS/Android) map view of What's on. Uses
+// react-native-maps, which is native-only. The home tab renders it when the
+// viewer switches to the map, and Metro serves MapScreen.web.tsx instead on web
+// (react-native-maps can't bundle there). Keep the two in sync when the map UI changes.
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 import { DEFAULT_FILTERS, Drop, LatLng, SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, money } from './data';
 import { fontUI, useApp } from './theme';
-import { DropCardCompact, FadeIn, Glass, Pin, TextBtn, Touchable } from './components';
+import { DropCardCompact, FadeIn, Glass, Pin, TextBtn, Touchable, ViewSwitch } from './components';
 import { Filter } from './icons';
 import { hapticSelection } from './haptics';
 
@@ -54,12 +54,13 @@ function DropMarker({
   );
 }
 
-/** Floating filter button over the map. (No search field until search exists.) */
-export function MapTopBar({ activeCount, onFilters }: { activeCount: number; onFilters: () => void }) {
+/** Floating list switch + filter button over the map. (No search field until search exists.) */
+export function MapTopBar({ activeCount, onFilters, onShowList }: { activeCount: number; onFilters: () => void; onShowList?: () => void }) {
   const { T } = useApp();
   const insets = useSafeAreaInsets();
   return (
-    <View style={{ position: 'absolute', top: insets.top + 4, right: 16, flexDirection: 'row', zIndex: 8 }}>
+    <View style={{ position: 'absolute', top: insets.top + 4, right: 16, flexDirection: 'row', alignItems: 'center', gap: 8, zIndex: 8 }}>
+      {onShowList && <ViewSwitch to="list" onPress={onShowList} height={44} />}
       <Touchable onPress={onFilters} scale={0.96} accessibilityLabel={activeCount ? `Filters, ${activeCount} on` : 'Filters'}>
         {activeCount ? (
           <View style={{ width: 48, height: 44, borderCurve: 'continuous', borderRadius: 12, backgroundColor: T.accent, alignItems: 'center', justifyContent: 'center' }}>
@@ -75,7 +76,7 @@ export function MapTopBar({ activeCount, onFilters }: { activeCount: number; onF
   );
 }
 
-export default function MapScreen() {
+export default function MapScreen({ onShowList }: { onShowList?: () => void }) {
   const { T, filters, setFilters, drops } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -163,7 +164,7 @@ export default function MapScreen() {
         ))}
       </MapView>
 
-      <MapTopBar activeCount={activeCount} onFilters={() => router.push('/(user)/filters')} />
+      <MapTopBar activeCount={activeCount} onFilters={() => router.push('/(user)/filters')} onShowList={onShowList} />
 
       {located.length > 0 && shown.length === 0 && (
         <View style={{ position: 'absolute', top: insets.top + 60, left: 16, right: 16, alignItems: 'center' }}>

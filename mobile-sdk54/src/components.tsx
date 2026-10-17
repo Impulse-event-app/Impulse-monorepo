@@ -28,7 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Drop, fmtCountdown, money, pct, useCountdown, venuePhotoUrl } from './data';
 import { IMPULSE_RED, fontMono, fontUI, useTheme } from './theme';
-import { CategoryIcon, ChevronBack, ChevronRight, PinTriangle } from './icons';
+import { CategoryIcon, ChevronBack, ChevronRight, ListGlyph, LocationPin, PinTriangle } from './icons';
 import { hapticSelection } from './haptics';
 
 export const EASE = Easing.bezier(0.32, 0.72, 0, 1);
@@ -200,6 +200,21 @@ export function BackButton({ onPress, style }: { onPress: () => void; style?: St
     <GlassBtn onPress={onPress} style={style} accessibilityLabel="Back">
       <ChevronBack size={11} color={T.text} />
     </GlassBtn>
+  );
+}
+
+/** What's on's list ↔ map switch: a glass pill naming the view it opens. Sits in the top-right in both views. */
+export function ViewSwitch({ to, onPress, height = 34 }: { to: 'map' | 'list'; onPress: () => void; height?: number }) {
+  const T = useTheme();
+  return (
+    <Touchable onPress={onPress} scale={0.96} hitSlop={Math.max(5, (44 - height) / 2)} accessibilityLabel={to === 'map' ? 'Show map' : 'Show list'}>
+      <Glass radius={height / 2} style={{ height, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        {to === 'map' ? <LocationPin size={14} color={T.text} /> : <ListGlyph size={14} color={T.text} />}
+        <Text maxFontSizeMultiplier={1.3} style={{ ...fontUI(500), fontSize: 15, letterSpacing: -0.1, color: T.text }}>
+          {to === 'map' ? 'Map' : 'List'}
+        </Text>
+      </Glass>
+    </Touchable>
   );
 }
 
@@ -775,6 +790,37 @@ export function CountdownPill({ d, plain }: { d: Drop; plain?: boolean }) {
     <GlassBadge>
       <Live d={d} size={12.5} />
     </GlassBadge>
+  );
+}
+
+// ── loading skeleton ─────────────────────────────────────────
+/** A placeholder bar that breathes while content loads. Holds still under Reduce Motion. */
+export function Skeleton({ width = '100%', height = 14, radius = 6, style }: {
+  width?: DimensionValue;
+  height?: number;
+  radius?: number;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const T = useTheme();
+  const reduceMotion = useReduceMotion();
+  const v = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (reduceMotion) { v.setValue(1); return; }
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(v, { toValue: 0.45, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: NATIVE_DRIVER }),
+        Animated.timing(v, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: NATIVE_DRIVER }),
+      ]),
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [v, reduceMotion]);
+  return (
+    <Animated.View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[{ width, height, borderCurve: 'continuous', borderRadius: radius, backgroundColor: T.fill, opacity: v }, style]}
+    />
   );
 }
 

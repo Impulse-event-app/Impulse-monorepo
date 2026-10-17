@@ -183,6 +183,7 @@ type AppState = {
   plans: Plan[];
   addPlan: (p: Plan) => void;
   bookingsLoading: boolean;
+  bookingsLoaded: boolean;   // the first fetch since sign-in has settled
   refreshBookings: () => Promise<void>;
   profile: Profile;
   setProfile: React.Dispatch<React.SetStateAction<Profile>>;
@@ -224,6 +225,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [rawDeals, setRawDeals] = useState<ApiDeal[]>([]);
   const [dealsLoading, setDealsLoading] = useState(false);
   const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [bookingsLoaded, setBookingsLoaded] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const [voteSession, setVoteSession] = useState<VoteSession | null>(null);
   const [voteRanking, setVoteRanking] = useState<string[]>([]);
@@ -290,6 +292,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Not authenticated yet or network error — keep existing plans
     } finally {
       setBookingsLoading(false);
+      setBookingsLoaded(true);
     }
   };
 
@@ -388,6 +391,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         bookingsChannel?.unsubscribe();
         bookingsChannel = null;
         setPlans([]);
+        setBookingsLoaded(false);
         setProfile(DEFAULT_PROFILE);
       }
     });
@@ -406,7 +410,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     drops, apiDeals, dealsLoading, refreshDeals,
     plans,
     addPlan: (p) => setPlans((prev) => [p, ...prev]),
-    bookingsLoading, refreshBookings,
+    bookingsLoading, bookingsLoaded, refreshBookings,
     profile, setProfile, profileLoading, refreshProfile,
     voteSession, voteRanking,
     startVoting: (s) => { setVoteSession(s); setVoteRanking([]); },
@@ -439,4 +443,12 @@ export function useApp(): AppState {
 
 export function useTheme(): Theme {
   return useApp().T;
+}
+
+/** Renders its subtree with the dark tokens whatever the appearance setting — for screens over video. */
+export function DarkScope({ children }: { children: React.ReactNode }) {
+  const app = useApp();
+  const T = useMemo(() => tokens(true), []);
+  const value = useMemo(() => ({ ...app, T, dark: true, accent: T.accent }), [app, T]);
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

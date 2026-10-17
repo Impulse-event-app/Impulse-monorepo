@@ -13,11 +13,11 @@ export function TabTonight({ color = '#000', on = false }: IconProps & { on?: bo
     </Svg>
   );
 }
-export function TabMap({ color = '#000', on = false }: IconProps & { on?: boolean }) {
+export function TabDiscover({ color = '#000', on = false }: IconProps & { on?: boolean }) {
   return (
     <Svg width={23} height={23} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7} strokeLinejoin="round">
-      <Path d="M12 21c4.5-4.2 7-7.6 7-11a7 7 0 10-14 0c0 3.4 2.5 6.8 7 11z" />
-      <Circle cx={12} cy={10} r={2.3} fill={on ? color : 'none'} />
+      <Rect x={5.5} y={3.5} width={13} height={17} rx={3.5} />
+      <Path d="M10.5 9.3v5.4l4.3-2.7z" fill={on ? color : 'none'} />
     </Svg>
   );
 }
@@ -78,6 +78,23 @@ export function Plus({ size = 14, color = '#000' }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 14 14" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round">
       <Path d="M7 2v10M2 7h10" />
+    </Svg>
+  );
+}
+export function Play({ size = 22, color = '#fff' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 14 14">
+      <Path d="M4 2.4v9.2c0 .5.5.8.9.5l7-4.6a.6.6 0 000-1L4.9 1.9c-.4-.3-.9 0-.9.5z" fill={color} />
+    </Svg>
+  );
+}
+export function ListGlyph({ size = 15, color = '#000' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round">
+      <Path d="M5.5 4h8M5.5 8h8M5.5 12h8" />
+      <Circle cx={2.4} cy={4} r={0.9} fill={color} stroke="none" />
+      <Circle cx={2.4} cy={8} r={0.9} fill={color} stroke="none" />
+      <Circle cx={2.4} cy={12} r={0.9} fill={color} stroke="none" />
     </Svg>
   );
 }

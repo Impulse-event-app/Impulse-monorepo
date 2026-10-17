@@ -123,6 +123,7 @@ export type ApiBooking = {
   venue_id: string;
   deal_title: string;
   deal_category: string;
+  slot_at: string | null;             // slot start (UTC ISO); null if unparseable
   // booking fields
   slot_time: string;
   num_people: number;
@@ -232,6 +233,29 @@ export type DealFilters = {
   date?: string;
   active_only?: boolean;
 };
+
+/** A Discover reel: a short vertical video for a venue, with its live deal (null when nothing is bookable). */
+export type ApiReel = {
+  id: string;
+  video_url: string;
+  poster_url: string | null;
+  caption: string | null;
+  venue_id: string;
+  venue_name: string;
+  venue_category: string;
+  venue_suburb: string | null;
+  venue_image_url: string | null;
+  deal_id: string | null;
+  deal_title: string | null;
+  deal_price: number | null;
+  original_price: number | null;
+  unit: string | null;
+};
+
+/** The Discover feed. Public endpoint — no login required. */
+export async function listReels(): Promise<ApiReel[]> {
+  return publicRequest<ApiReel[]>('/reels');
+}
 
 /** List active deals, with optional filters. Public endpoint — no login required. */
 export async function listDeals(filters: DealFilters = {}): Promise<ApiDeal[]> {

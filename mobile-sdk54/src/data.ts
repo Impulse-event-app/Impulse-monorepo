@@ -349,6 +349,7 @@ export type Plan = {
   cat: string;
   party: number;
   time: string;
+  slotAt: number | null;       // slot start (epoch ms), when known
   total: number;
   status: BookingStatus;
   paymentNote: string | null;  // balance-charge outcome, set when the venue scans the code
@@ -421,6 +422,7 @@ export function apiBookingToPlan(b: ApiBooking): Plan {
     cat: canonicalCat(b.deal_category),
     party: b.num_people,
     time: b.slot_time,
+    slotAt: b.slot_at ? new Date(b.slot_at).getTime() : null,
     total: b.total_paid,
     status: b.status,
     paymentNote: b.payment_note,

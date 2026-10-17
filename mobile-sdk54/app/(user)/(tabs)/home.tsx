@@ -27,12 +27,14 @@ import {
   ReadableColumn,
   TextBtn,
   Touchable,
+  ViewSwitch,
   Wordmark,
   dropA11yLabel,
   useNavTop,
   useScrolled,
 } from '../../../src/components';
 import { ChevronRight, Filter } from '../../../src/icons';
+import MapScreen from '../../../src/MapScreen';
 import { useRequireAuth } from '../../../src/auth';
 import { hapticError, hapticSelection, hapticSuccess } from '../../../src/haptics';
 import { FLOATING_TAB_CLEARANCE } from './_layout';
@@ -136,6 +138,15 @@ export default function HomeScreen() {
     voteSession, voteRanking, toggleVotePick, clearVoting,
     activeHuddle, setActiveHuddle,
   } = useApp();
+  // What's on is one feed seen two ways. The map mounts on first use and then
+  // stays, so switching back keeps both the list's scroll and the map's camera.
+  const [view, setView] = useState<'list' | 'map'>('list');
+  const [mapMounted, setMapMounted] = useState(false);
+  const toggleView = () => {
+    hapticSelection();
+    setMapMounted(true);
+    setView((v) => (v === 'list' ? 'map' : 'list'));
+  };
   const displayName = profile.name || (profile.email ? profile.email.split('@')[0] : '') || 'You';
   const initials = displayName.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase() || 'U';
   const router = useRouter();
@@ -295,126 +306,139 @@ export default function HomeScreen() {
     ? 'Lock in my vote'
     : `Submit ${voteRanking.length} pick${voteRanking.length > 1 ? 's' : ''}`;
 
+  // A huddle ballot is the list, so voting always shows it.
+  const shown = voting ? 'list' : view;
+
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        contentContainerStyle={{ paddingTop: navTop, paddingBottom: (voting ? 90 : 20) + FLOATING_TAB_CLEARANCE }}
-        refreshControl={
-          <RefreshControl refreshing={dealsLoading} onRefresh={refreshDeals} tintColor={T.accent} progressViewOffset={navTop} />
-        }
-      >
-        <ReadableColumn>
-          <View style={{ paddingHorizontal: 16 }}>
-            <LargeTitle>What's on</LargeTitle>
-            <View style={{ marginTop: 6 }}>
-              <LocPill label={areaLabel} onPress={() => router.push('/(user)/area')} />
-            </View>
-
-            <View style={{ marginTop: 18 }}>
-              {voting ? (
-                /* Voting mode — the feed below is now the ballot */
-                <View
-                  style={{
-                    borderCurve: 'continuous', borderRadius: 16, backgroundColor: T.accentSoft, paddingHorizontal: 14, paddingVertical: 12,
-                    flexDirection: 'row', alignItems: 'center', gap: 12,
-                  }}
-                >
-                  <HuddleMark size={36} />
-                  <View style={{ flex: 1 }} accessible accessibilityLabel="Pick your top 3. Tap in order. Your vote is private.">
-                    <Text style={{ ...fontUI(500), fontSize: 17, letterSpacing: -0.19, color: T.text }}>
-                      Pick your top 3
-                    </Text>
-                    <Text style={{ ...fontUI(400), fontSize: 13, lineHeight: 18, color: T.muted, marginTop: 2 }}>
-                      Tap in order. Your vote is private.
-                    </Text>
-                  </View>
-                  <TextBtn onPress={clearVoting} color={T.accent} size={15} weight={500}>Cancel</TextBtn>
-                </View>
-              ) : huddleBar ? (
-                <HuddleCard title={huddleBar.title} sub={huddleBar.sub} live={huddleBar.live} onPress={openHuddle} />
-              ) : (
-                <HuddleCard
-                  title="Start a huddle"
-                  sub="Vote with friends, split the deposit"
-                  onPress={() => requireAuth(() => router.push('/(user)/huddle/new'))}
-                />
-              )}
-            </View>
-          </View>
-
-          {/* category rail */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingTop: 18, paddingBottom: 6, alignItems: 'center' }}
-          >
-            <FilterButton count={activeCount} onPress={() => router.push('/(user)/filters')} />
-            {['All', ...categoryOptions(drops)].map((c) => (
-              <Chip key={c} active={isChipOn(c)} onPress={() => quickCat(c)}>
-                {c}
-              </Chip>
-            ))}
-          </ScrollView>
-
-          <View style={{ paddingHorizontal: 16 }}>
-            {dealsLoading && drops.length === 0 ? (
-              <View style={{ alignItems: 'center', marginTop: 80 }}>
-                <ActivityIndicator color={T.accent} accessibilityLabel="Loading drops" />
+      <View style={{ flex: 1, display: shown === 'list' ? 'flex' : 'none' }}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          contentContainerStyle={{ paddingTop: navTop, paddingBottom: (voting ? 90 : 20) + FLOATING_TAB_CLEARANCE }}
+          refreshControl={
+            <RefreshControl refreshing={dealsLoading} onRefresh={refreshDeals} tintColor={T.accent} progressViewOffset={navTop} />
+          }
+        >
+          <ReadableColumn>
+            <View style={{ paddingHorizontal: 16 }}>
+              <LargeTitle>What's on</LargeTitle>
+              <View style={{ marginTop: 6 }}>
+                <LocPill label={areaLabel} onPress={() => router.push('/(user)/area')} />
               </View>
-            ) : (
-              <>
-                {section('On now', now)}
-                {section('Later tonight', later, now.length)}
-                {filtered.length === 0 && (
-                  <EmptyState
-                    mark={false}
-                    style={{ marginTop: 80 }}
-                    title="Nothing matches."
-                    body="Drop a suburb or raise the price."
-                    action={
-                      <TextBtn onPress={() => setFilters(DEFAULT_FILTERS)} color={T.accent} weight={500}>
-                        Clear filters
-                      </TextBtn>
-                    }
+
+              <View style={{ marginTop: 18 }}>
+                {voting ? (
+                  /* Voting mode — the feed below is now the ballot */
+                  <View
+                    style={{
+                      borderCurve: 'continuous', borderRadius: 16, backgroundColor: T.accentSoft, paddingHorizontal: 14, paddingVertical: 12,
+                      flexDirection: 'row', alignItems: 'center', gap: 12,
+                    }}
+                  >
+                    <HuddleMark size={36} />
+                    <View style={{ flex: 1 }} accessible accessibilityLabel="Pick your top 3. Tap in order. Your vote is private.">
+                      <Text style={{ ...fontUI(500), fontSize: 17, letterSpacing: -0.19, color: T.text }}>
+                        Pick your top 3
+                      </Text>
+                      <Text style={{ ...fontUI(400), fontSize: 13, lineHeight: 18, color: T.muted, marginTop: 2 }}>
+                        Tap in order. Your vote is private.
+                      </Text>
+                    </View>
+                    <TextBtn onPress={clearVoting} color={T.accent} size={15} weight={500}>Cancel</TextBtn>
+                  </View>
+                ) : huddleBar ? (
+                  <HuddleCard title={huddleBar.title} sub={huddleBar.sub} live={huddleBar.live} onPress={openHuddle} />
+                ) : (
+                  <HuddleCard
+                    title="Start a huddle"
+                    sub="Vote with friends, split the deposit"
+                    onPress={() => requireAuth(() => router.push('/(user)/huddle/new'))}
                   />
                 )}
-              </>
-            )}
-          </View>
-        </ReadableColumn>
-      </ScrollView>
+              </View>
+            </View>
 
-      <NavBar
-        title="What's on"
-        scrolled={scrolled}
-        hideLeadingOnScroll
-        leading={
-          <>
-            <Radar size={30} decorative />
-            <Wordmark size={19} />
-          </>
-        }
-        trailing={
-          <>
-            {signedIn ? (
-              <Touchable onPress={() => router.push('/(user)/(tabs)/profile')} accessibilityLabel="Your profile" hitSlop={5} scale={0.96}>
-                <Avatar initials={initials} />
-              </Touchable>
-            ) : (
-              <TextBtn
-                onPress={() => router.push({ pathname: '/(user)/sign-in', params: { next: '/home', back: '1' } })}
-                color={T.accent}
-                weight={500}
-              >
-                Sign in
-              </TextBtn>
-            )}
-          </>
-        }
-      />
+            {/* category rail */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingTop: 18, paddingBottom: 6, alignItems: 'center' }}
+            >
+              <FilterButton count={activeCount} onPress={() => router.push('/(user)/filters')} />
+              {['All', ...categoryOptions(drops)].map((c) => (
+                <Chip key={c} active={isChipOn(c)} onPress={() => quickCat(c)}>
+                  {c}
+                </Chip>
+              ))}
+            </ScrollView>
+
+            <View style={{ paddingHorizontal: 16 }}>
+              {dealsLoading && drops.length === 0 ? (
+                <View style={{ alignItems: 'center', marginTop: 80 }}>
+                  <ActivityIndicator color={T.accent} accessibilityLabel="Loading drops" />
+                </View>
+              ) : (
+                <>
+                  {section('On now', now)}
+                  {section('Later tonight', later, now.length)}
+                  {filtered.length === 0 && (
+                    <EmptyState
+                      mark={false}
+                      style={{ marginTop: 80 }}
+                      title="Nothing matches."
+                      body="Drop a suburb or raise the price."
+                      action={
+                        <TextBtn onPress={() => setFilters(DEFAULT_FILTERS)} color={T.accent} weight={500}>
+                          Clear filters
+                        </TextBtn>
+                      }
+                    />
+                  )}
+                </>
+              )}
+            </View>
+          </ReadableColumn>
+        </ScrollView>
+
+        <NavBar
+          title="What's on"
+          scrolled={scrolled}
+          hideLeadingOnScroll
+          leading={
+            <>
+              <Radar size={30} decorative />
+              <Wordmark size={19} />
+            </>
+          }
+          trailing={
+            <>
+              {/* A huddle ballot is the list, so there's no map while voting. */}
+              {!voting && <ViewSwitch to="map" onPress={toggleView} />}
+              {signedIn ? (
+                <Touchable onPress={() => router.push('/(user)/(tabs)/profile')} accessibilityLabel="Your profile" hitSlop={5} scale={0.96}>
+                  <Avatar initials={initials} />
+                </Touchable>
+              ) : (
+                <TextBtn
+                  onPress={() => router.push({ pathname: '/(user)/sign-in', params: { next: '/home', back: '1' } })}
+                  color={T.accent}
+                  weight={500}
+                >
+                  Sign in
+                </TextBtn>
+              )}
+            </>
+          }
+        />
+      </View>
+
+      {mapMounted && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: shown === 'map' ? 'flex' : 'none' }}>
+          <MapScreen onShowList={toggleView} />
+        </View>
+      )}
 
       {/* Voting submit — floats clear above the tab bar */}
       {voting && (

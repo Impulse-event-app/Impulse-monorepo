@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import booking_flow
 from database import SessionLocal
 from routers import (
-    bookings, contact, deals, huddles, interactions, merchants, users, venues,
+    bookings, contact, deals, huddles, interactions, merchants, reels, users, venues,
     waitlist, webhooks,
 )
 
@@ -68,6 +68,7 @@ app.add_middleware(
 app.include_router(users.router,        prefix="/users",        tags=["users"])
 app.include_router(venues.router,       prefix="/venues",       tags=["venues"])
 app.include_router(deals.router,        prefix="/deals",        tags=["deals"])
+app.include_router(reels.router,        prefix="/reels",        tags=["reels"])
 app.include_router(bookings.router,     prefix="/bookings",     tags=["bookings"])
 app.include_router(interactions.router, prefix="/interactions", tags=["interactions"])
 app.include_router(merchants.router,    prefix="/merchants",    tags=["merchants"])

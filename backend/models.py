@@ -132,6 +132,26 @@ class Venue(Base):
     merchant_documents: List["MerchantDocument"] = relationship(
         "MerchantDocument", back_populates="venue", cascade="all, delete-orphan"
     )
+    reels: List["VenueReel"] = relationship(
+        "VenueReel", back_populates="venue", cascade="all, delete-orphan"
+    )
+
+
+class VenueReel(Base):
+    """A short vertical video advertising a venue, shown in the Discover feed."""
+    __tablename__ = "venue_reels"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    venue_id = Column(UUID(as_uuid=False), ForeignKey("venues.id", ondelete="CASCADE"), nullable=False, index=True)
+    video_url = Column(Text, nullable=False)                   # public MP4 in the venue-reels bucket
+    poster_url = Column(Text, nullable=True)                   # first-frame JPEG, shown before playback
+    caption = Column(Text, nullable=True)
+    source_url = Column(Text, nullable=True)                   # where a stock clip came from (license trail)
+    sort_order = Column(Integer, default=0, server_default="0", nullable=False)
+    is_active = Column(Boolean, default=True, server_default="true", nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    venue: "Venue" = relationship("Venue", back_populates="reels")
 
 
 class MerchantDocument(Base):

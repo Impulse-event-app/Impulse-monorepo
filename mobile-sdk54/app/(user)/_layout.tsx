@@ -14,7 +14,7 @@ export const unstable_settings = {
 };
 
 // Routes reachable without a session. The deal feed is public, so guests can
-// browse (feed, map, event detail, filters) and are only asked to sign in at
+// browse (feed and its map, event detail, filters) and are only asked to sign in at
 // the point of need — booking, starting a huddle. Also public:
 //  - the Plans and You tabs, which render their own signed-out state
 //  - legal docs, so Terms/Privacy/Help stay readable before anyone signs up
@@ -23,7 +23,7 @@ export const unstable_settings = {
 //    "sign in to see it" state so an invited friend lands on the invitation
 //    first (accounts are required to take a seat).
 const PUBLIC_PATHS = new Set([
-  '/sign-in', '/home', '/map', '/plans', '/profile', '/filters', '/area', '/profile-edit/appearance',
+  '/sign-in', '/home', '/discover', '/plans', '/profile', '/filters', '/area', '/profile-edit/appearance',
 ]);
 
 function isPublicPath(pathname: string): boolean {

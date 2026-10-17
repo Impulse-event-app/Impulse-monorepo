@@ -1,4 +1,4 @@
-// MapScreen.web.tsx — web map tab. react-native-maps is native-only, so on web
+// MapScreen.web.tsx — web map view of What's on. react-native-maps is native-only, so on web
 // we render MapLibre GL with CARTO's free vector basemaps (no API key, just
 // attribution — same CARTO family as the app's old raster tiles, with proper
 // light/dark styles). Pins come from dropCoords() — exact venue coordinates
@@ -11,7 +11,7 @@ import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, money } from './data';
 import { useApp } from './theme';
-import { Glass, Touchable } from './components';
+import { Glass, Touchable, ViewSwitch } from './components';
 import { Filter, categoryIconSvg } from './icons';
 
 const STYLE_LIGHT = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
@@ -49,7 +49,7 @@ function pinElement(label: string, cat: string, accent: string): HTMLElement {
   return el;
 }
 
-export default function MapScreenWeb() {
+export default function MapScreenWeb({ onShowList }: { onShowList?: () => void }) {
   const { T, dark, filters, drops } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -90,6 +90,11 @@ export default function MapScreenWeb() {
     mapRef.current.once('idle', () => {
       containerRef.current?.querySelector('.maplibregl-compact-show')?.classList.remove('maplibregl-compact-show');
     });
+    // MapLibre sizes its canvas once, at creation. The map is hidden and shown
+    // with the list toggle, so re-measure whenever the container changes size.
+    const ro = new ResizeObserver(() => mapRef.current?.resize());
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -147,8 +152,9 @@ export default function MapScreenWeb() {
         style: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' },
       })}
 
-      {/* filter button (mirrors MapTopBar in MapScreen.tsx) */}
-      <View style={{ position: 'absolute', top: insets.top + 4, right: 16, flexDirection: 'row', zIndex: 8 }}>
+      {/* list switch + filter button (mirrors MapTopBar in MapScreen.tsx) */}
+      <View style={{ position: 'absolute', top: insets.top + 4, right: 16, flexDirection: 'row', alignItems: 'center', gap: 8, zIndex: 8 }}>
+        {onShowList && <ViewSwitch to="list" onPress={onShowList} height={44} />}
         <Touchable
           onPress={() => router.push('/(user)/filters')}
           scale={0.96}
