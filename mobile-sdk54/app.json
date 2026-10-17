@@ -17,6 +17,7 @@
       ],
       "expo-notifications",
       "expo-video",
+      "expo-status-bar",
       [
         "expo-splash-screen",
         {
