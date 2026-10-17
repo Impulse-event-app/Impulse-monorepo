@@ -1,8 +1,9 @@
 // icons.tsx — Impulse brand v2 icon set (simple strokes, react-native-svg).
 import React from 'react';
 import Svg, { Circle, Path, Rect, G } from 'react-native-svg';
+import type { ColorValue } from 'react-native';
 
-type IconProps = { size?: number; color?: string };
+type IconProps = { size?: number; color?: ColorValue };
 
 // ── tab bar icons (23pt) ─────────────────────────────────────
 export function TabTonight({ color = '#000', on = false }: IconProps & { on?: boolean }) {

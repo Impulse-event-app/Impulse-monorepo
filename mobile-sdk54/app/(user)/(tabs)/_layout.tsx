@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { Animated, Easing, Platform, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { useTheme, fontUI } from '../../../src/theme';
 import { FooterScrim, Glass, useReduceMotion, useReduceTransparency } from '../../../src/components';
 import { TabTonight, TabDiscover, TabPlans, TabYou } from '../../../src/icons';
