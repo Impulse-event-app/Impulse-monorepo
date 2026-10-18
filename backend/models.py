@@ -311,6 +311,24 @@ class BookingParticipant(Base):
     booking: "Booking" = relationship("Booking", back_populates="participants", foreign_keys=[booking_id])
 
 
+class LiveActivityToken(Base):
+    """An iOS Live Activity showing a group booking on someone's Lock Screen.
+
+    The app starts the activity itself and registers its APNs push token here;
+    the backend then pushes every booking change straight to APNs. One row per
+    running activity — a token is only good for the activity that issued it.
+    """
+    __tablename__ = "live_activity_tokens"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    booking_id = Column(UUID(as_uuid=False), ForeignKey("bookings.id", ondelete="CASCADE"), nullable=False, index=True)
+    member_id = Column(UUID(as_uuid=False), ForeignKey("booking_participants.id", ondelete="CASCADE"), nullable=False)
+    push_token = Column(Text, nullable=False, unique=True)
+    # Development builds get sandbox tokens; learned on the first send.
+    environment = Column(Text, nullable=False, server_default="production")   # production | sandbox
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class Waitlist(Base):
     """Pre-launch signups from the landing page. Anonymous — no auth, no FK
     into users; the same person can later create an account with no link back.

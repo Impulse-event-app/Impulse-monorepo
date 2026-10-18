@@ -17,6 +17,7 @@
       ],
       "expo-notifications",
       "expo-video",
+      ["expo-widgets", { "enablePushNotifications": true, "frequentUpdates": true }],
       "expo-status-bar",
       [
         "expo-splash-screen",

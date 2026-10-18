@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -573,6 +573,11 @@ class SeatInvite(BaseModel):
     user_id: str
 
 
+class LiveActivityTokenIn(BaseModel):
+    """The APNs push token of the Live Activity the app started for this booking."""
+    push_token: str = Field(min_length=8, max_length=512, pattern=r"^[0-9a-fA-F]+$")
+
+
 class SplitEdit(BaseModel):
     """Initiator re-splits the seats that haven't paid. `amounts` (custom) are
     final per-seat cents keyed by member id; `covers` maps covered → coverer."""
@@ -639,6 +644,9 @@ class BookingView(BaseModel):
     is_initiator: bool = False
     my_has_voted: bool = False
     my_share: Optional[MyShare] = None
+    # Props for my iOS Live Activity (live_activity.content_props); null when
+    # I shouldn't have one — solo, voting, or finished.
+    live_activity: Optional[Dict[str, Any]] = None
 
 
 class SeatLanding(BaseModel):

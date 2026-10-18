@@ -225,6 +225,7 @@ def test_guarantor_charges_initiator_once_at_deadline(env):
     b = new_booking(env, n=3)
     bid = b["id"]
     v = ok(host.get(f"/bookings/{bid}/split"))
+    host = env["as"]("host")
     ok(host.post(f"/bookings/{bid}/seats/{v['participants'][1]['id']}/invite", json={"user_id": env["ids"]["sam"]}))
     ok(host.post(f"/bookings/{bid}/pay", json=card(v["my_share"]["deposit_cents"])))
     past_deadline(env, bid)
@@ -297,3 +298,44 @@ def test_user_search_is_name_only_and_needs_three_letters(env):
     assert not any(h["id"] == env["ids"]["host"] for h in ok(host.get("/users/search", params={"q": "Rahul"})))
     assert ok(host.get("/users/search", params={"q": "sam@example.test"}))[0]["id"] == env["ids"]["sam"]
     assert ok(host.get("/users/search", params={"q": "sam@example"})) == []
+
+
+# ── Live Activities ──────────────────────────────────────────────────────────
+
+def test_live_activity_token_register_and_updates(env, monkeypatch):
+    import live_activity
+    from models import LiveActivityToken
+    queued = []
+    monkeypatch.setattr(live_activity, "enqueue", lambda ids: queued.append(set(ids)))
+
+    host = env["as"]("host")
+    b = new_booking(env, n=2)
+    bid = b["id"]
+    v = ok(host.get(f"/bookings/{bid}/split"))
+    la = v["live_activity"]
+    assert la["bookingId"] == bid and (la["paid"], la["total"]) == (0, 2) and la["phase"] == "collecting"
+
+    token = "ab" * 32
+    ok(host.put(f"/bookings/{bid}/live-activity-token", json={"push_token": token}), 204)
+    ok(host.put(f"/bookings/{bid}/live-activity-token", json={"push_token": token}), 204)   # idempotent
+    assert host.put(f"/bookings/{bid}/live-activity-token", json={"push_token": "not hex!"}).status_code == 422
+    assert env["as"]("jo").put(f"/bookings/{bid}/live-activity-token",
+                               json={"push_token": "cd" * 32}).status_code == 403          # not a member
+    host = env["as"]("host")
+    ok(host.post(f"/bookings/{bid}/seats/{v['participants'][1]['id']}/invite", json={"user_id": env["ids"]["sam"]}))
+    sam = env["as"]("sam")
+    assert ok(sam.get(f"/bookings/{bid}/split"))["live_activity"] is None                   # invitees get pushes
+    assert sam.put(f"/bookings/{bid}/live-activity-token",
+                   json={"push_token": "cd" * 32}).status_code == 403
+    host = env["as"]("host")
+    with env["Session"]() as db:
+        rows = db.query(LiveActivityToken).filter_by(booking_id=bid).all()
+        assert [r.push_token for r in rows] == [token] and rows[0].member_id == v["my_member_id"]
+
+    queued.clear()
+    ok(env["as"]("host").post(f"/bookings/{bid}/pay", json=card(b["deposit_amount_cents"])))
+    assert {bid} in queued                     # the pay's commit queued an update
+
+    ok(env["as"]("host").delete(f"/bookings/{bid}/live-activity-token"), 204)
+    with env["Session"]() as db:
+        assert db.query(LiveActivityToken).filter_by(booking_id=bid).count() == 0

@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Sequence
 
 from fastapi import HTTPException
+from sqlalchemy import event, inspect as sa_inspect
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session, joinedload
 
@@ -52,8 +53,27 @@ def now() -> datetime:
 
 
 def touch(b: Booking) -> None:
-    """Bump updated_at — the realtime poke that tells every participant to refetch."""
+    """Bump updated_at — the realtime poke that tells every participant to
+    refetch. Also marks the booking so its Live Activities update once the
+    commit lands (a booking with no id yet can't have any)."""
     b.updated_at = sa_func.now()
+    state = sa_inspect(b, raiseerr=False)
+    session = state.session if state is not None else None
+    if session is not None and b.id:
+        session.info.setdefault("touched_bookings", set()).add(b.id)
+
+
+@event.listens_for(Session, "after_commit")
+def _push_touched(session: Session) -> None:
+    touched = session.info.pop("touched_bookings", None)
+    if touched:
+        import live_activity
+        live_activity.enqueue(touched)
+
+
+@event.listens_for(Session, "after_rollback")
+def _forget_touched(session: Session) -> None:
+    session.info.pop("touched_bookings", None)
 
 
 def cents(amount) -> int:
@@ -711,6 +731,7 @@ def view(b: Booking, me: Optional[BookingParticipant]):
     """The one booking view — the live meter, the Huddle screen and the split
     screen all render this. Everyone in the booking gets the same
     confirmation_code at the same moment."""
+    import live_activity
     from schemas import BookingView, DealWithVenueResponse, ParticipantPublic
     is_ini = me is not None and me.id == b.initiator_member_id
     ini = initiator(b) if b.initiator_member_id else None
@@ -760,6 +781,7 @@ def view(b: Booking, me: Optional[BookingParticipant]):
         is_initiator=is_ini,
         my_has_voted=bool(me and me.ballot_at),
         my_share=my_share(b, me) if me else None,
+        live_activity=live_activity.view_props(b, me),
     )
 
 
