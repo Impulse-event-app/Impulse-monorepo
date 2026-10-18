@@ -8,6 +8,7 @@ import { ApiDeal, listDeals, getMyBookings } from './api';
 import { supabase } from './supabase';
 import { fetchUserProfile, syncUserProfile } from './auth';
 import { persistDel, persistGet, persistSet } from './persist';
+import { reconcileBookingActivities } from './liveActivity';
 
 const ACTIVE_HUDDLE_KEY = 'impulse.activeHuddle';
 const APPEARANCE_KEY = 'impulse.appearance';
@@ -288,6 +289,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const abandoned = (b: typeof data[number]) =>
         b.status === 'collecting' && b.payment_status === 'unpaid' && b.user_id === session?.user.id;
       setPlans(data.filter((b) => !abandoned(b) && b.status !== 'voting').map(apiBookingToPlan));
+      reconcileBookingActivities(
+        data.filter((b) => b.status === 'collecting').map((b) => b.id),
+      );
     } catch {
       // Not authenticated yet or network error — keep existing plans
     } finally {

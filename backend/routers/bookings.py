@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
 import booking_flow as flow
+import live_activity
 from auth import get_current_user
 from booking_logic import SplitError
 from database import get_db
@@ -18,6 +19,7 @@ from schemas import (
     BookingWithDetailsResponse,
     CancelResponse,
     CoverRequest,
+    LiveActivityTokenIn,
     RedeemMemberResult,
     RedeemResponse,
     SeatInvite,
@@ -443,6 +445,33 @@ def invite_to_seat(
     b = flow.load(db, booking_id)
     flow.push_invite(db, b, next(p for p in b.participants if p.id == member_id))
     return flow.view(b, flow.member_of(b, user))
+
+
+@router.put("/{booking_id}/live-activity-token", status_code=204)
+def register_live_activity(
+    booking_id: str,
+    body: LiveActivityTokenIn,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """The person who booked: my iOS Live Activity for this booking is
+    running — push its updates to this token. Nobody else gets a card."""
+    b = flow.load(db, booking_id)
+    me = flow.member_of(b, user)
+    if not live_activity.has_card(b, me):
+        raise HTTPException(status_code=403, detail="Only the person who booked has a Live Activity")
+    live_activity.register(db, b, me, body.push_token)
+
+
+@router.delete("/{booking_id}/live-activity-token", status_code=204)
+def unregister_live_activity(
+    booking_id: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Member: I ended my Live Activity for this booking — stop pushing to it."""
+    b = flow.load(db, booking_id)
+    live_activity.unregister(db, b, flow.member_of(b, user))
 
 
 @router.post("/{booking_id}/decline", status_code=204)

@@ -21,6 +21,7 @@ import { supabase } from './supabase';
 import { Btn, Chip, CodeDisplay, EASE, Label, NUM, useReduceMotion } from './components';
 import { Check } from './icons';
 import { hapticSelection, hapticSuccess } from './haptics';
+import { syncBookingActivity } from './liveActivity';
 import type { ApiBookingView, Participant, SeatCover, SplitMode } from './api';
 
 export const fmtCents = (c: number) => `$${(c / 100).toFixed(2)}`;
@@ -90,6 +91,7 @@ export function useLiveBooking(id: string | undefined, fetcher: (id: string) => 
       }
       lastStatus.current = next.status;
       setView(next);
+      syncBookingActivity(next);
     } catch {
       // keep the last known state; the next poke or poll retries
     }

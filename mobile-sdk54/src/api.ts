@@ -395,6 +395,26 @@ export type ApiBookingView = {
   is_initiator: boolean;
   my_has_voted: boolean;
   my_share: MyShare | null;
+  // Props for my iOS Live Activity; null when I shouldn't have one (solo,
+  // voting, finished). Absent from older backends.
+  live_activity?: LiveActivityProps | null;
+};
+
+/** What the Lock Screen / Dynamic Island card shows — built by the backend
+ *  (live_activity.content_props), so the app starts the activity with exactly
+ *  what later APNs updates will send. Times are epoch ms, 0 when unknown. */
+export type LiveActivityProps = {
+  bookingId: string;
+  venue: string;
+  slot: string;
+  phase: 'collecting' | 'ended';
+  paid: number;
+  total: number;
+  deadlineAt: number;
+  slotAt: number;
+  myShareCents: number;
+  iPaid: boolean;
+  note: string;
 };
 
 /** A Huddle is a booking with a voting stage — same view. */
@@ -428,6 +448,18 @@ export async function editSplit(
     method: 'PATCH',
     body: JSON.stringify(body),
   });
+}
+
+/** My Live Activity for this booking is running — the backend pushes its updates. */
+export async function registerLiveActivity(bookingId: string, pushToken: string): Promise<void> {
+  return request<void>(`/bookings/${encodeURIComponent(bookingId)}/live-activity-token`, {
+    method: 'PUT',
+    body: JSON.stringify({ push_token: pushToken }),
+  });
+}
+
+export async function unregisterLiveActivity(bookingId: string): Promise<void> {
+  return request<void>(`/bookings/${encodeURIComponent(bookingId)}/live-activity-token`, { method: 'DELETE' });
 }
 
 /** Cover someone's share — it's added to mine, they owe nothing. */
