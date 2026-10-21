@@ -1,9 +1,10 @@
-from datetime import datetime
+from datetime import date as Date, datetime
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from booking_logic import slot_at
+from deal_schedules import normalize_slot
 
 
 # ── User ──────────────────────────────────────────────────────────────────────
@@ -109,12 +110,24 @@ class DealCreate(BaseModel):
     unit: Optional[str] = None         # pricing unit, e.g. "pp", "/lane", "/room·hr"
     original_price: float
     discount_pct: float
-    date: str
-    slots: List[str]
+    # A one-off deal names its evening with deal_date; the server derives the
+    # display `date` and an expires_at at the last slot. Free-text `date` alone
+    # is the legacy shape and is still accepted.
+    date: Optional[str] = None
+    deal_date: Optional[Date] = None
+    slots: List[str] = Field(min_length=1)
     max_group_size: int = 6
     total_spots: int
     is_active: bool = True
     expires_at: Optional[datetime] = None
+
+    _slots = field_validator("slots")(lambda cls, v: _normalize_slots(v))
+
+    @model_validator(mode="after")
+    def _needs_a_day(self) -> "DealCreate":
+        if not self.deal_date and not self.date:
+            raise ValueError("Pick the date this deal runs")
+        return self
 
 
 class DealUpdate(BaseModel):
@@ -124,11 +137,95 @@ class DealUpdate(BaseModel):
     original_price: Optional[float] = None
     discount_pct: Optional[float] = None
     date: Optional[str] = None
-    slots: Optional[List[str]] = None
+    deal_date: Optional[Date] = None
+    slots: Optional[List[str]] = Field(None, min_length=1)
     max_group_size: Optional[int] = None
     total_spots: Optional[int] = None
     is_active: Optional[bool] = None
     expires_at: Optional[datetime] = None
+
+    _slots = field_validator("slots")(lambda cls, v: _normalize_slots(v) if v is not None else v)
+
+
+def _normalize_slots(slots: List[str]) -> List[str]:
+    """Store slots as '7:00 PM' (what booking deadlines parse), earliest first,
+    without repeats. A slot that isn't a time is a validation error."""
+    out = sorted({normalize_slot(s) for s in slots}, key=lambda s: datetime.strptime(s, "%I:%M %p"))
+    if not out:
+        raise ValueError("Add at least one time slot")
+    return out
+
+
+# ── Weekly deal schedules ─────────────────────────────────────────────────────
+
+class DealScheduleBase(BaseModel):
+    title: str
+    category: str
+    description: Optional[str] = None
+    unit: Optional[str] = None
+    original_price: float = Field(ge=0)
+    discount_pct: float = Field(ge=0, le=100)
+    slots: List[str] = Field(min_length=1)
+    weekdays: List[int] = Field(min_length=1)    # 0 = Monday … 6 = Sunday
+    starts_on: Optional[Date] = None
+    ends_on: Optional[Date] = None
+    max_group_size: int = Field(6, ge=1)
+    total_spots: int = Field(ge=1)
+    is_active: bool = True
+
+    _slots = field_validator("slots")(lambda cls, v: _normalize_slots(v))
+
+    @field_validator("weekdays")
+    @classmethod
+    def _weekdays(cls, v: List[int]) -> List[int]:
+        if any(d < 0 or d > 6 for d in v):
+            raise ValueError("Weekdays run from 0 (Monday) to 6 (Sunday)")
+        return sorted(set(v))
+
+    @model_validator(mode="after")
+    def _date_range(self) -> "DealScheduleBase":
+        if self.starts_on and self.ends_on and self.ends_on < self.starts_on:
+            raise ValueError("The end date is before the start date")
+        return self
+
+
+class DealScheduleCreate(DealScheduleBase):
+    venue_id: str
+
+
+class DealScheduleUpdate(DealScheduleBase):
+    """A full replacement: the venue-web form always sends every field."""
+
+
+class DealScheduleResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    venue_id: str
+    title: str
+    category: str
+    description: Optional[str]
+    unit: Optional[str]
+    original_price: float
+    discount_pct: float
+    deal_price: float
+    slots: List[str]
+    weekdays: List[int]
+    starts_on: Optional[Date]
+    ends_on: Optional[Date]
+    max_group_size: int
+    total_spots: int
+    is_active: bool
+    created_at: datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def _deal_price(cls, data: Any) -> Any:
+        if hasattr(data, "original_price"):  # ORM object
+            data = {k: getattr(data, k) for k in cls.model_fields if k != "deal_price" and hasattr(data, k)}
+        if isinstance(data, dict) and "deal_price" not in data:
+            data["deal_price"] = round(float(data["original_price"]) * (1 - float(data["discount_pct"]) / 100), 2)
+        return data
 
 
 class DealResponse(BaseModel):
@@ -144,6 +241,8 @@ class DealResponse(BaseModel):
     discount_pct: float
     deal_price: float
     date: str
+    deal_date: Optional[Date] = None
+    schedule_id: Optional[str] = None
     slots: List[str]
     max_group_size: int
     total_spots: int
@@ -180,6 +279,8 @@ class DealWithVenueResponse(DealResponse):
             discount_pct=float(d.discount_pct),
             deal_price=float(d.deal_price),
             date=d.date,
+            deal_date=d.deal_date,
+            schedule_id=d.schedule_id,
             slots=d.slots,
             max_group_size=d.max_group_size,
             total_spots=d.total_spots,

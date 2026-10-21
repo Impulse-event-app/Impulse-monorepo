@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, Float, ForeignKey,
+    Boolean, Column, Date, DateTime, Float, ForeignKey, Index,
     Integer, Numeric, SmallInteger, Text,
 )
 from sqlalchemy import Enum as SAEnum
@@ -194,16 +194,48 @@ class Deal(Base):
     discount_pct = Column(Numeric(5, 2), nullable=False)
     deal_price = Column(Numeric(10, 2), nullable=False)        # computed on create/update
     date = Column(Text, nullable=False)                        # e.g. "Monday 3 June 2026"
+    deal_date = Column(Date, nullable=True)                    # the evening it runs (Sydney); null on legacy free-text deals
     slots = Column(JSONB, nullable=False)                      # ["5:00 PM", "6:00 PM"]
     max_group_size = Column(Integer, default=6, nullable=False)
     total_spots = Column(Integer, nullable=False)
     spots_remaining = Column(Integer, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=True)
+    # Set when the weekly schedule generator made this deal; one deal per schedule per evening.
+    schedule_id = Column(UUID(as_uuid=False), ForeignKey("deal_schedules.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     venue: "Venue" = relationship("Venue", back_populates="deals")
     bookings: List["Booking"] = relationship("Booking", back_populates="deal")
+
+    __table_args__ = (
+        Index("uq_deals_schedule_date", "schedule_id", "deal_date", unique=True,
+              postgresql_where=schedule_id.isnot(None)),
+    )
+
+
+class DealSchedule(Base):
+    """A venue's weekly deal: the same offer on chosen weekdays. The generator
+    (deal_schedules.generate_scheduled_deals) turns it into a real Deal on the
+    day, so bookings always point at a concrete evening."""
+    __tablename__ = "deal_schedules"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    venue_id = Column(UUID(as_uuid=False), ForeignKey("venues.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(Text, nullable=False)
+    category = Column(Text, nullable=False)
+    description = Column(Text, nullable=True)
+    unit = Column(Text, nullable=True)
+    original_price = Column(Numeric(10, 2), nullable=False)
+    discount_pct = Column(Numeric(5, 2), nullable=False)
+    slots = Column(JSONB, nullable=False)                      # ["6:00pm", "7:30pm"]
+    weekdays = Column(ARRAY(SmallInteger()), nullable=False)   # 0 = Monday … 6 = Sunday
+    starts_on = Column(Date, nullable=True)                    # first evening it may run
+    ends_on = Column(Date, nullable=True)                      # last evening it may run
+    max_group_size = Column(Integer, default=6, nullable=False)
+    total_spots = Column(Integer, nullable=False)              # per evening
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 _INTERACTION_TYPE = SAEnum(

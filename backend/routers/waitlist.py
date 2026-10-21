@@ -216,7 +216,7 @@ def waitlist_stats(db: Session = Depends(get_db)):
     by_activity = {
         row[0]: row[1]
         for row in db.execute(text(
-            "select a, count(*) from waitlist, unnest(preferred_activities) a "
+            "select a, count(*) from public.waitlist, unnest(preferred_activities) a "
             "group by a order by count(*) desc, a asc"
         )).all()
     }
@@ -229,7 +229,7 @@ def waitlist_stats(db: Session = Depends(get_db)):
         for row in db.execute(text(
             "select (array_agg(other_activity order by created_at))[1] as label, "
             "       count(*) as n "
-            "from waitlist "
+            "from public.waitlist "
             "where other_activity is not null and btrim(other_activity) <> '' "
             "group by lower(btrim(other_activity)) "
             "order by n desc, label asc"

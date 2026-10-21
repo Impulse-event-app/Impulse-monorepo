@@ -214,6 +214,8 @@ export interface Deal {
   discount_pct: number;
   deal_price: number;
   date: string;
+  deal_date: string | null;      // "2026-11-03"; null on older free-text deals
+  schedule_id: string | null;    // set when a weekly schedule made this deal
   slots: string[];
   max_group_size: number;
   total_spots: number;
@@ -231,7 +233,8 @@ export interface DealCreate {
   unit?: string;
   original_price: number;
   discount_pct: number;
-  date: string;
+  date?: string;
+  deal_date?: string;
   slots: string[];
   max_group_size?: number;
   total_spots: number;
@@ -247,6 +250,7 @@ export interface DealUpdate {
   original_price?: number;
   discount_pct?: number;
   date?: string;
+  deal_date?: string;
   slots?: string[];
   max_group_size?: number;
   total_spots?: number;
@@ -263,6 +267,58 @@ export const dealApi = {
     request<Deal>("PATCH", `/deals/${id}`, body),
   delete: (id: string) =>
     request<void>("DELETE", `/deals/${id}`),
+};
+
+// ── Weekly deal schedules ─────────────────────────────────────────────────────
+// The backend turns a schedule into a normal deal on each evening it runs.
+
+export interface DealSchedule {
+  id: string;
+  venue_id: string;
+  title: string;
+  category: string;
+  description: string | null;
+  unit: string | null;
+  original_price: number;
+  discount_pct: number;
+  deal_price: number;
+  slots: string[];
+  weekdays: number[];          // 0 = Monday … 6 = Sunday
+  starts_on: string | null;
+  ends_on: string | null;
+  max_group_size: number;
+  total_spots: number;         // per evening
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface DealScheduleInput {
+  title: string;
+  category: string;
+  description?: string;
+  unit?: string;
+  original_price: number;
+  discount_pct: number;
+  slots: string[];
+  weekdays: number[];
+  starts_on?: string | null;
+  ends_on?: string | null;
+  max_group_size?: number;
+  total_spots: number;
+  is_active?: boolean;
+}
+
+export const scheduleApi = {
+  list: (venueId: string) =>
+    request<DealSchedule[]>("GET", `/deal-schedules?venue_id=${venueId}`),
+  get: (id: string) =>
+    request<DealSchedule>("GET", `/deal-schedules/${id}`),
+  create: (body: DealScheduleInput & { venue_id: string }) =>
+    request<DealSchedule>("POST", "/deal-schedules", body),
+  update: (id: string, body: DealScheduleInput) =>
+    request<DealSchedule>("PUT", `/deal-schedules/${id}`, body),
+  delete: (id: string) =>
+    request<void>("DELETE", `/deal-schedules/${id}`),
 };
 
 // ── Bookings ──────────────────────────────────────────────────────────────────

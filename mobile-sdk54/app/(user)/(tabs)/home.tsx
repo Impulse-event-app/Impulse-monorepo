@@ -25,6 +25,7 @@ import {
   NavBar,
   Radar,
   ReadableColumn,
+  Skeleton,
   TextBtn,
   Touchable,
   ViewSwitch,
@@ -108,6 +109,32 @@ function SectionHead({ title, count }: { title: string; count: number }) {
   );
 }
 
+/** Stand-in drop cards, shaped like DropCardEditorial, until the first deals fetch lands. */
+function DropListSkeleton() {
+  const { T } = useApp();
+  return (
+    <View accessible accessibilityLabel="Loading drops">
+      <View style={{ marginTop: 30, marginBottom: 12 }}>
+        <Skeleton width={96} height={20} />
+      </View>
+      <View style={{ gap: 16 }}>
+        {[0, 1].map((i) => (
+          <View key={i} style={{ backgroundColor: T.surface, borderCurve: 'continuous', borderRadius: 22, borderWidth: 1, borderColor: T.line }}>
+            <View style={{ margin: 8, marginBottom: 0 }}>
+              <Skeleton height={162} radius={15} />
+            </View>
+            <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18, gap: 10 }}>
+              <Skeleton width="60%" height={22} />
+              <Skeleton width="45%" height={13} />
+              <Skeleton width={110} height={26} style={{ marginTop: 6 }} />
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function HuddleCard({ title, sub, live, onPress }: { title: string; sub: string; live?: boolean; onPress: () => void }) {
   const { T } = useApp();
   return (
@@ -134,7 +161,7 @@ function HuddleCard({ title, sub, live, onPress }: { title: string; sub: string;
 
 export default function HomeScreen() {
   const {
-    T, filters, setFilters, drops, dealsLoading, refreshDeals, profile, signedIn,
+    T, filters, setFilters, drops, dealsLoaded, dealsFailed, refreshDeals, retryDeals, profile, signedIn,
     voteSession, voteRanking, toggleVotePick, clearVoting,
     activeHuddle, setActiveHuddle,
   } = useApp();
@@ -306,6 +333,14 @@ export default function HomeScreen() {
     ? 'Lock in my vote'
     : `Submit ${voteRanking.length} pick${voteRanking.length > 1 ? 's' : ''}`;
 
+  // The pull spinner is for the pull only: the first load and background
+  // refreshes (foregrounding) already have the skeleton or stale cards.
+  const [pulling, setPulling] = useState(false);
+  const onPull = async () => {
+    setPulling(true);
+    try { await refreshDeals(); } finally { setPulling(false); }
+  };
+
   // A huddle ballot is the list, so voting always shows it.
   const shown = voting ? 'list' : view;
 
@@ -318,7 +353,7 @@ export default function HomeScreen() {
           scrollEventThrottle={16}
           contentContainerStyle={{ paddingTop: navTop, paddingBottom: (voting ? 90 : 20) + FLOATING_TAB_CLEARANCE }}
           refreshControl={
-            <RefreshControl refreshing={dealsLoading} onRefresh={refreshDeals} tintColor={T.accent} progressViewOffset={navTop} />
+            <RefreshControl refreshing={pulling} onRefresh={onPull} tintColor={T.accent} progressViewOffset={navTop} />
           }
         >
           <ReadableColumn>
@@ -375,10 +410,20 @@ export default function HomeScreen() {
             </ScrollView>
 
             <View style={{ paddingHorizontal: 16 }}>
-              {dealsLoading && drops.length === 0 ? (
-                <View style={{ alignItems: 'center', marginTop: 80 }}>
-                  <ActivityIndicator color={T.accent} accessibilityLabel="Loading drops" />
-                </View>
+              {drops.length === 0 && dealsFailed ? (
+                <EmptyState
+                  mark={false}
+                  style={{ marginTop: 80 }}
+                  title="Couldn't load drops."
+                  body="Check your connection and try again."
+                  action={
+                    <TextBtn onPress={retryDeals} color={T.accent} weight={500}>
+                      Try again
+                    </TextBtn>
+                  }
+                />
+              ) : !dealsLoaded && drops.length === 0 ? (
+                <DropListSkeleton />
               ) : (
                 <>
                   {section('On now', now)}
