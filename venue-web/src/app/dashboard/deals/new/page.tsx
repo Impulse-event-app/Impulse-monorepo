@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { DealForm } from "@/components/DealForm";
-import { dealApi, type DealCreate } from "@/lib/api";
+import { DealForm, type DealSubmission } from "@/components/DealForm";
+import { dealApi, scheduleApi, type DealCreate } from "@/lib/api";
 import { useVenue } from "@/providers/VenueProvider";
 import { FONT_DISPLAY } from "@/lib/ui";
 
@@ -14,8 +14,14 @@ export default function NewDealPage() {
 
   if (!venue) return null;
 
-  async function handleSubmit(data: DealCreate | object) {
-    await dealApi.create(data as DealCreate);
+  async function handleSubmit(s: DealSubmission) {
+    if (s.kind === "schedule") {
+      await scheduleApi.create({ ...s.data, venue_id: venue!.id });
+      qc.invalidateQueries({ queryKey: ["schedules", venue!.id] });
+    } else {
+      await dealApi.create(s.data as DealCreate);
+    }
+    // A schedule that runs today makes tonight's deal straight away.
     qc.invalidateQueries({ queryKey: ["deals", venue!.id] });
     router.replace(`/dashboard/deals`);
   }

@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
-import { DealForm } from "@/components/DealForm";
+import { DealForm, type DealSubmission } from "@/components/DealForm";
 import { dealApi, type Deal, type DealUpdate } from "@/lib/api";
 import { useVenue } from "@/providers/VenueProvider";
 import { FONT_DISPLAY } from "@/lib/ui";
@@ -19,8 +19,8 @@ export default function EditDealPage() {
     enabled: !!id,
   });
 
-  async function handleSubmit(data: object) {
-    await dealApi.update(id, data as DealUpdate);
+  async function handleSubmit(s: DealSubmission) {
+    await dealApi.update(id, s.data as DealUpdate);
     qc.invalidateQueries({ queryKey: ["deals", venue?.id] });
     qc.invalidateQueries({ queryKey: ["deal", id] });
     router.push("/dashboard/deals");

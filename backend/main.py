@@ -8,8 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import booking_flow
 from database import SessionLocal
+from deal_schedules import generate_scheduled_deals
 from routers import (
-    bookings, contact, deals, huddles, interactions, merchants, reels, users, venues,
+    bookings, contact, deals, huddles, interactions, merchants, reels, schedules, users, venues,
     waitlist, webhooks,
 )
 
@@ -21,6 +22,10 @@ logger = logging.getLogger("impulse.main")
 # In-app booking deadline sweeper (Huddle voting/collapse + direct-booking guarantor). Runs every HUDDLE_SWEEP_INTERVAL seconds
 # (default 60; set 0 to disable and rely on an external cron / sweep_bookings.py).
 HUDDLE_SWEEP_INTERVAL = int(os.environ.get("HUDDLE_SWEEP_INTERVAL", "60"))
+
+# Weekly deal schedules → tonight's deals. Runs every SCHEDULED_DEALS_INTERVAL seconds (default 900; 0 disables).
+# Safe in several processes at once: a unique index allows one deal per schedule per evening.
+SCHEDULED_DEALS_INTERVAL = int(os.environ.get("SCHEDULED_DEALS_INTERVAL", "900"))
 
 
 def _run_sweep_once() -> None:
@@ -43,13 +48,36 @@ async def _sweep_loop() -> None:
             logger.warning("Booking deadline sweep failed: %s", e)
 
 
+def _run_schedules_once() -> None:
+    db = SessionLocal()
+    try:
+        generate_scheduled_deals(db)
+    finally:
+        db.close()
+
+
+async def _schedules_loop() -> None:
+    # Sleep first, like the sweep, so short-lived processes don't write. Short
+    # enough that an instance waking from sleep catches up soon.
+    while True:
+        await asyncio.sleep(SCHEDULED_DEALS_INTERVAL)
+        try:
+            await asyncio.to_thread(_run_schedules_once)
+        except Exception as e:  # never let the generator kill the app
+            logger.warning("Scheduled deals run failed: %s", e)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    task = asyncio.create_task(_sweep_loop()) if HUDDLE_SWEEP_INTERVAL > 0 else None
+    tasks = []
+    if HUDDLE_SWEEP_INTERVAL > 0:
+        tasks.append(asyncio.create_task(_sweep_loop()))
+    if SCHEDULED_DEALS_INTERVAL > 0:
+        tasks.append(asyncio.create_task(_schedules_loop()))
     try:
         yield
     finally:
-        if task:
+        for task in tasks:
             task.cancel()
 
 
@@ -68,6 +96,7 @@ app.add_middleware(
 app.include_router(users.router,        prefix="/users",        tags=["users"])
 app.include_router(venues.router,       prefix="/venues",       tags=["venues"])
 app.include_router(deals.router,        prefix="/deals",        tags=["deals"])
+app.include_router(schedules.router,    prefix="/deal-schedules", tags=["deal-schedules"])
 app.include_router(reels.router,        prefix="/reels",        tags=["reels"])
 app.include_router(bookings.router,     prefix="/bookings",     tags=["bookings"])
 app.include_router(interactions.router, prefix="/interactions", tags=["interactions"])

@@ -154,6 +154,32 @@ create policy "merchant_documents: owner read"
     where v.id = merchant_documents.venue_id and v.owner_id = auth.uid()
   ));
 
+-- ── public.deal_schedules ─────────────────────────────────────
+-- A venue's weekly deal. The backend generator turns it into a deals row on
+-- each evening it runs. Backend-only: RLS on, no policies.
+
+create table if not exists public.deal_schedules (
+  id               uuid        primary key default gen_random_uuid(),
+  venue_id         uuid        not null references public.venues(id) on delete cascade,
+  title            text        not null,
+  category         text        not null,
+  description      text,
+  unit             text,
+  original_price   numeric(10,2) not null,
+  discount_pct     numeric(5,2)  not null,
+  slots            jsonb       not null,      -- ["6:00 PM", "7:30 PM"]
+  weekdays         smallint[]  not null,      -- 0 = Monday … 6 = Sunday
+  starts_on        date,
+  ends_on          date,
+  max_group_size   integer     not null default 6,
+  total_spots      integer     not null,      -- per evening
+  is_active        boolean     not null default true,
+  created_at       timestamptz not null default now()
+);
+
+create index if not exists ix_deal_schedules_venue_id on public.deal_schedules (venue_id);
+alter table public.deal_schedules enable row level security;
+
 -- ── public.deals ──────────────────────────────────────────────
 
 create table if not exists public.deals (
@@ -166,14 +192,20 @@ create table if not exists public.deals (
   discount_pct     numeric(5,2)  not null,
   deal_price       numeric(10,2) not null,   -- computed on insert/update
   date             text        not null,      -- e.g. "Monday 3 June 2026"
+  deal_date        date,                      -- the evening it runs; null on legacy free-text deals
   slots            jsonb       not null,      -- ["5:00 PM", "6:00 PM"]
   max_group_size   integer     not null default 6,
   total_spots      integer     not null,
   spots_remaining  integer     not null,
   is_active        boolean     not null default true,
   expires_at       timestamptz,
+  schedule_id      uuid        references public.deal_schedules(id) on delete set null,
   created_at       timestamptz not null default now()
 );
+
+-- One generated deal per schedule per evening (several generators may run).
+create unique index if not exists uq_deals_schedule_date
+  on public.deals (schedule_id, deal_date) where schedule_id is not null;
 
 alter table public.deals enable row level security;
 

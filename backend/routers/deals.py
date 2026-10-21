@@ -1,10 +1,13 @@
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from auth import get_current_user
 from database import get_db
+from deal_schedules import SYDNEY, date_label, expires_for
 from models import Deal, Venue
 from routers.merchants import can_publish_deals
 from schemas import DealCreate, DealResponse, DealUpdate, DealWithVenueResponse
@@ -53,7 +56,12 @@ def list_deals(
     """Public: browse active deals with venue info included."""
     q = db.query(Deal).options(joinedload(Deal.venue)).join(Venue, Deal.venue_id == Venue.id)
     if active_only:
-        q = q.filter(Deal.is_active == True, Deal.spots_remaining > 0)
+        # A deal is gone once its last slot has passed (expires_at), even if
+        # nobody switched it off.
+        q = q.filter(
+            Deal.is_active == True, Deal.spots_remaining > 0,
+            or_(Deal.expires_at.is_(None), Deal.expires_at > datetime.now(timezone.utc)),
+        )
     if suburb:
         q = q.filter(Venue.suburb.ilike(f"%{suburb}%"))
     if category:
@@ -86,6 +94,11 @@ def create_deal(
     # live later goes through update_deal, which does refuse.
     if fields.get("is_active") and not can_publish_deals(venue):
         fields["is_active"] = False
+    if body.deal_date:
+        if body.deal_date < datetime.now(SYDNEY).date():
+            raise HTTPException(status_code=400, detail="That date has already passed")
+        fields["date"] = date_label(body.deal_date)
+        fields["expires_at"] = fields.get("expires_at") or expires_for(body.deal_date, body.slots)
 
     deal_price = round(body.original_price * (1 - body.discount_pct / 100), 2)
     deal = Deal(
@@ -133,6 +146,13 @@ def update_deal(
         new_original = float(updates.get("original_price", deal.original_price))
         new_discount = float(updates.get("discount_pct", deal.discount_pct))
         updates["deal_price"] = round(new_original * (1 - new_discount / 100), 2)
+
+    # A dated deal keeps its label and end time in step with its day and slots.
+    deal_date = updates.get("deal_date", deal.deal_date)
+    if deal_date and ("deal_date" in updates or "slots" in updates):
+        updates["date"] = date_label(deal_date)
+        if "expires_at" not in updates:
+            updates["expires_at"] = expires_for(deal_date, updates.get("slots", deal.slots))
 
     for key, value in updates.items():
         setattr(deal, key, value)
