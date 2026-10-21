@@ -1,6 +1,6 @@
 // theme.tsx — Impulse: theme tokens, fonts, and the app-wide state provider.
 // Ported from the Impulse design handoff (app-data.jsx / app-main.jsx).
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useColorScheme } from 'react-native';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { DEFAULT_FILTERS, Drop, Filters, Plan, apiBookingToPlan, apiDealToDrop } from './data';
@@ -179,7 +179,10 @@ type AppState = {
   // Raw API deals (keyed by id for O(1) lookup in detail screens)
   apiDeals: Record<string, ApiDeal>;
   dealsLoading: boolean;
+  dealsLoaded: boolean;      // a deals fetch has succeeded
+  dealsFailed: boolean;      // the cold-start retries ran out with nothing loaded
   refreshDeals: () => Promise<void>;
+  retryDeals: () => void;
   // Bookings / plans
   plans: Plan[];
   addPlan: (p: Plan) => void;
@@ -225,6 +228,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
   const [rawDeals, setRawDeals] = useState<ApiDeal[]>([]);
   const [dealsLoading, setDealsLoading] = useState(false);
+  const [dealsLoaded, setDealsLoaded] = useState(false);
+  const [dealsFailed, setDealsFailed] = useState(false);
+  const dealsLoadedRef = useRef(false);
   const [bookingsLoading, setBookingsLoading] = useState(false);
   const [bookingsLoaded, setBookingsLoaded] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -267,16 +273,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [rawDeals],
   );
 
-  const refreshDeals = async () => {
+  const fetchDeals = async (): Promise<boolean> => {
     setDealsLoading(true);
     try {
       const data = await listDeals();
       setRawDeals(data);
+      dealsLoadedRef.current = true;
+      setDealsLoaded(true);
+      setDealsFailed(false);
+      return true;
     } catch {
       // Keep stale data on error; screens handle empty state
+      return false;
     } finally {
       setDealsLoading(false);
     }
+  };
+
+  const refreshDeals = async () => { await fetchDeals(); };
+
+  // First load. A cold backend (Render spinning up) refuses or drops requests
+  // for up to a minute, so keep retrying behind the skeleton rather than
+  // showing an empty feed. Stops as soon as any deals fetch succeeds.
+  const coldLoadDeals = async (alive: () => boolean = () => true) => {
+    setDealsFailed(false);
+    for (const wait of [0, 2000, 3000, 5000, 8000, 12000, 15000, 15000]) {
+      if (wait) await new Promise((r) => setTimeout(r, wait));
+      if (!alive() || dealsLoadedRef.current) return;
+      if (await fetchDeals()) return;
+    }
+    if (alive() && !dealsLoadedRef.current) setDealsFailed(true);
   };
 
   const refreshBookings = async () => {
@@ -362,7 +388,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Deals are public — load immediately on mount regardless of auth.
   // Bookings require a session — load/clear on auth state changes.
   useEffect(() => {
-    refreshDeals();
+    let mounted = true;
+    coldLoadDeals(() => mounted);
 
     // Live booking updates: any change to a booking this user holds a seat in
     // (a friend paying their share, the code issuing, the venue redeeming)
@@ -401,6 +428,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => {
+      mounted = false;
       bookingsChannel?.unsubscribe();
       subscription.unsubscribe();
     };
@@ -411,7 +439,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     T, dark, appearance, setAppearance, accent: T.accent,
     signedIn,
     filters, setFilters,
-    drops, apiDeals, dealsLoading, refreshDeals,
+    drops, apiDeals, dealsLoading, dealsLoaded, dealsFailed, refreshDeals,
+    retryDeals: () => { coldLoadDeals(); },
     plans,
     addPlan: (p) => setPlans((prev) => [p, ...prev]),
     bookingsLoading, bookingsLoaded, refreshBookings,
