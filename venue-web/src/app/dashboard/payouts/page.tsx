@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { venueApi, type Payout, type PayoutsResponse } from "@/lib/api";
 import { useVenue } from "@/providers/VenueProvider";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { FONT_DISPLAY, FONT_MONO, card, toneBadge, type Tone } from "@/lib/ui";
+import { FONT_DISPLAY, numeric, card, toneBadge, type Tone } from "@/lib/ui";
 
 const COLS = "1.1fr 1.5fr 1fr 1fr 40px";
 
@@ -65,10 +65,10 @@ export default function PayoutsPage() {
 
   return (
     <div style={{ padding: "38px 44px" }}>
-      <div style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 8 }}>
+      <div style={{ ...numeric, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 8 }}>
         Payouts
       </div>
-      <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 32, letterSpacing: "-.02em", margin: "0 0 6px" }}>
+      <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 32, letterSpacing: "-.02em", margin: "0 0 6px" }}>
         Payouts
       </h1>
       <p style={{ color: "var(--muted)", fontSize: 14, margin: "0 0 26px", maxWidth: 620 }}>
@@ -84,10 +84,10 @@ export default function PayoutsPage() {
             ))
           : cards.map((c) => (
               <div key={c.label} style={{ ...card, borderRadius: 16, padding: 22 }}>
-                <div style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 14 }}>
+                <div style={{ ...numeric, fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 14 }}>
                   {c.label}
                 </div>
-                <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 30, letterSpacing: "-.02em", lineHeight: 1, whiteSpace: "nowrap" }}>
+                <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 30, letterSpacing: "-.02em", lineHeight: 1, whiteSpace: "nowrap" }}>
                   {c.value}
                 </div>
                 <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 10 }}>{c.sub}</div>
@@ -111,7 +111,7 @@ export default function PayoutsPage() {
         </div>
       ) : (
         <div style={{ ...card, borderRadius: 16, overflow: "hidden" }}>
-          <div style={{ display: "grid", gridTemplateColumns: COLS, gap: 14, padding: "14px 22px", background: "var(--surface2)", fontFamily: FONT_MONO, fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--faint)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: COLS, gap: 14, padding: "14px 22px", background: "var(--surface2)", ...numeric, fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--faint)" }}>
             <span>Date</span><span>Reference</span><span>Status</span><span style={{ textAlign: "right" }}>Amount</span><span />
           </div>
           {payouts.map((p) => (
@@ -149,13 +149,13 @@ function PayoutRow({ payout }: { payout: Payout }) {
         style={{ display: "grid", gridTemplateColumns: COLS, gap: 14, alignItems: "center", padding: "16px 22px", cursor: "pointer" }}
       >
         <span style={{ fontSize: 14, fontWeight: 600 }}>{payoutDate(payout.transfer_date)}</span>
-        <span style={{ fontFamily: FONT_MONO, fontSize: 12.5, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span style={{ ...numeric, fontSize: 12.5, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {payout.reference ?? payout.pinch_transfer_id}
         </span>
         <span>
           <span style={tone.badge}><span style={tone.dot} />{label}</span>
         </span>
-        <span style={{ fontWeight: 700, fontSize: 15, textAlign: "right" }}>{money(payout.amount_cents)}</span>
+        <span style={{ fontWeight: 600, fontSize: 15, textAlign: "right" }}>{money(payout.amount_cents)}</span>
         <span style={{ color: "var(--faint)", fontSize: 12, textAlign: "right", transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }}>
           ›
         </span>
@@ -170,7 +170,7 @@ function PayoutRow({ payout }: { payout: Payout }) {
                 {payout.account_number ? ` · ${payout.bsb ?? ""} ${payout.account_number}` : ""}
               </span>
             )}
-            <span style={{ fontFamily: FONT_MONO }}>{payout.pinch_transfer_id}</span>
+            <span style={{ ...numeric }}>{payout.pinch_transfer_id}</span>
           </div>
 
           {payout.lines.length === 0 ? (
@@ -181,7 +181,7 @@ function PayoutRow({ payout }: { payout: Payout }) {
                 key={`${ln.booking_id ?? "line"}-${i}`}
                 style={{ display: "grid", gridTemplateColumns: "90px 1fr 100px 90px", gap: 14, alignItems: "center", padding: "9px 0", borderTop: i === 0 ? "none" : "1px solid var(--line)", fontSize: 13 }}
               >
-                <span style={{ fontFamily: FONT_MONO, fontWeight: 700, letterSpacing: ".05em" }}>
+                <span style={{ ...numeric, fontWeight: 600, letterSpacing: ".05em" }}>
                   {ln.confirmation_code ?? "—"}
                 </span>
                 <span style={{ color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

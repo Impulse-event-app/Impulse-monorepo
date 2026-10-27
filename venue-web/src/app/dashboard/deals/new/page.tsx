@@ -31,7 +31,7 @@ export default function NewDealPage() {
       <button onClick={() => router.push("/dashboard/deals")} style={{ background: "none", border: "none", color: "var(--muted)", fontSize: 13, cursor: "pointer", marginBottom: 14, padding: 0 }}>
         ← Back to deals
       </button>
-      <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 32, letterSpacing: "-.02em", margin: "0 0 30px" }}>New deal</h1>
+      <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 32, letterSpacing: "-.02em", margin: "0 0 30px" }}>New deal</h1>
       <DealForm venueId={venue.id} onSubmit={handleSubmit} submitLabel="Save deal" />
     </div>
   );

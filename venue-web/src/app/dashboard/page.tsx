@@ -7,7 +7,7 @@ import { bookingApi, merchantApi, venueApi, type ApiError, type Booking, type De
 import { useAuth } from "@/providers/AuthProvider";
 import { useVenue } from "@/providers/VenueProvider";
 import { formatCurrency } from "@/lib/utils";
-import { FONT_DISPLAY, FONT_MONO, card, btnPrimary, btnGhost, eyebrow, toneBadge } from "@/lib/ui";
+import { FONT_DISPLAY, numeric, card, btnPrimary, btnGhost, eyebrow, toneBadge } from "@/lib/ui";
 
 export default function DashboardPage() {
   const { venue, loading, error, refetch } = useVenue();
@@ -42,14 +42,14 @@ function VenueLoadError({ error, onRetry }: { error: ApiError; onRetry: () => vo
   return (
     <div style={{ display: "grid", placeItems: "center", minHeight: "70vh", padding: 24 }}>
       <div style={{ ...card, borderRadius: 18, padding: 32, maxWidth: 460, textAlign: "center" }}>
-        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 20, marginBottom: 8 }}>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 20, marginBottom: 8 }}>
           Couldn&apos;t load your venue
         </div>
         <p style={{ color: "var(--muted)", fontSize: 14, lineHeight: 1.6, margin: "0 0 20px" }}>
           {auth
             ? "Your session couldn't be verified. Sign out and back in, then try again."
             : "We couldn't reach the server. This is a connection issue, not a missing venue — your venue is safe."}
-          <span style={{ display: "block", marginTop: 8, fontFamily: FONT_MONO, fontSize: 11, color: "var(--faint)" }}>
+          <span style={{ display: "block", marginTop: 8, ...numeric, fontSize: 11, color: "var(--faint)" }}>
             {error.status ? `Error ${error.status}` : "Network error"} · {error.message}
           </span>
         </p>
@@ -177,7 +177,7 @@ function PaymentsSetupBanner({
         <div style={{ fontWeight: 600, fontSize: 14 }}>{heading}</div>
         <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 3, lineHeight: 1.5 }}>{detail}</div>
         {compliance.outstanding.length > 0 && (
-          <div style={{ fontFamily: FONT_MONO, fontSize: 11, color: "var(--faint)", marginTop: 6 }}>
+          <div style={{ ...numeric, fontSize: 11, color: "var(--faint)", marginTop: 6 }}>
             {compliance.outstanding.length} item{compliance.outstanding.length === 1 ? "" : "s"} outstanding
           </div>
         )}
@@ -249,10 +249,10 @@ function DashboardContent({ venueId, venueName }: { venueId: string; venueName: 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 30, flexWrap: "wrap", gap: 16 }}>
         <div>
-          <div style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 8 }}>
+          <div style={{ ...numeric, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 8 }}>
             {todayLabel()}
           </div>
-          <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 34, letterSpacing: "-.02em", margin: 0 }}>
+          <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 34, letterSpacing: "-.02em", margin: 0 }}>
             {greeting()}, {firstName}
           </h1>
         </div>
@@ -279,9 +279,9 @@ function DashboardContent({ venueId, venueName }: { venueId: string; venueName: 
                 <span style={{ position: "absolute", top: 0, left: 0, width: "100%", height: 3, background: "var(--accent)" }} />
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
                   <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent)" }} />
-                  <span style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--muted)" }}>{st.label}</span>
+                  <span style={{ ...numeric, fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--muted)" }}>{st.label}</span>
                 </div>
-                <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 32, letterSpacing: "-.02em", lineHeight: 1, whiteSpace: "nowrap" }}>{st.value}</div>
+                <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 32, letterSpacing: "-.02em", lineHeight: 1, whiteSpace: "nowrap" }}>{st.value}</div>
                 <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 10 }}>{st.sub}</div>
               </div>
             ))}
@@ -291,7 +291,7 @@ function DashboardContent({ venueId, venueName }: { venueId: string; venueName: 
       <div className="dash-two-col" style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 16 }}>
         <div style={{ ...card, borderRadius: 16, padding: 24 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17 }}>Recent bookings</div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 17 }}>Recent bookings</div>
             <button onClick={() => router.push("/dashboard/bookings")} style={{ background: "none", border: "none", color: "var(--accent)", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
               View all →
             </button>
@@ -301,7 +301,7 @@ function DashboardContent({ venueId, venueName }: { venueId: string; venueName: 
           ) : (
             recent.map((r) => (
               <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 0", borderBottom: "1px solid var(--line)" }}>
-                <span style={{ fontFamily: FONT_MONO, fontSize: 13, color: "var(--accent)", width: 64 }}>{r.confirmation_code ?? "—"}</span>
+                <span style={{ ...numeric, fontSize: 13, color: "var(--accent)", width: 64 }}>{r.confirmation_code ?? "—"}</span>
                 <span style={{ flex: 1, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.dealTitle}</span>
                 <span style={{ fontSize: 13, color: "var(--muted)" }}>{r.slot_time} · {r.num_people}p</span>
                 <span style={{ fontWeight: 600, fontSize: 14 }}>{formatCurrency(r.total_paid)}</span>
@@ -311,15 +311,15 @@ function DashboardContent({ venueId, venueName }: { venueId: string; venueName: 
         </div>
 
         <div style={{ borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", border: "1px solid var(--line2)", background: "linear-gradient(160deg, color-mix(in oklab, var(--accent) 14%, var(--surface)), var(--surface))" }}>
-          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, marginBottom: 6 }}>Quick actions</div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 17, marginBottom: 6 }}>Quick actions</div>
           <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 20 }}>Publish a deal or check in a guest.</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <button onClick={() => router.push("/dashboard/deals/new")} style={{ textAlign: "left", padding: 16, borderRadius: 12, border: "1px solid var(--line2)", background: "var(--surface)", color: "var(--text)", cursor: "pointer" }}>
-              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 3 }}>+ New deal</div>
+              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 3 }}>+ New deal</div>
               <div style={{ fontSize: 12, color: "var(--muted)" }}>Fill empty tables tonight</div>
             </button>
             <button onClick={() => router.push("/dashboard/redeem")} style={{ textAlign: "left", padding: 16, borderRadius: 12, border: "1px solid var(--line2)", background: "var(--surface)", color: "var(--text)", cursor: "pointer" }}>
-              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 3 }}>Redeem ticket</div>
+              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 3 }}>Redeem ticket</div>
               <div style={{ fontSize: 12, color: "var(--muted)" }}>Enter a 6-digit code</div>
             </button>
           </div>
@@ -329,7 +329,7 @@ function DashboardContent({ venueId, venueName }: { venueId: string; venueName: 
       {/* Deal performance */}
       <div style={{ marginTop: 34 }}>
         <div style={{ ...eyebrow, marginBottom: 8 }}>Deal insights — helping you find your best window</div>
-        <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 22, letterSpacing: "-.02em", margin: "0 0 18px" }}>
+        <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 22, letterSpacing: "-.02em", margin: "0 0 18px" }}>
           Deal performance
         </h2>
 
@@ -364,7 +364,7 @@ function DashboardContent({ venueId, venueName }: { venueId: string; venueName: 
 }
 
 const metricLabel = {
-  fontFamily: FONT_MONO,
+  ...numeric,
   fontSize: 10,
   letterSpacing: ".1em",
   textTransform: "uppercase" as const,
@@ -384,12 +384,12 @@ function DealPerformanceCard({ deal }: { deal: DealPerformanceItem }) {
           <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {deal.title}
           </div>
-          <span style={{ fontFamily: FONT_MONO, fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--accent)", background: "var(--accent-soft)", padding: "3px 8px", borderRadius: 6 }}>
+          <span style={{ ...numeric, fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--accent)", background: "var(--accent-soft)", padding: "3px 8px", borderRadius: 6 }}>
             {deal.category}
           </span>
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, letterSpacing: "-.01em" }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 17, letterSpacing: "-.01em" }}>
             {trimPct(deal.discount_pct)}% off
           </div>
           <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 5, whiteSpace: "nowrap" }}>
@@ -402,18 +402,18 @@ function DealPerformanceCard({ deal }: { deal: DealPerformanceItem }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1.3fr", gap: 14, marginTop: 18, paddingTop: 16, borderTop: "1px solid var(--line)" }}>
         <div>
           <div style={metricLabel}>Spots filled</div>
-          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 19, lineHeight: 1 }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 19, lineHeight: 1 }}>
             {deal.spots_filled}
             <span style={{ color: "var(--faint)" }}> / {deal.total_spots}</span>
           </div>
         </div>
         <div>
           <div style={metricLabel}>Fill rate</div>
-          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 19, lineHeight: 1 }}>{pct}%</div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 19, lineHeight: 1 }}>{pct}%</div>
         </div>
         <div>
           <div style={metricLabel}>Live → last booking</div>
-          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 19, lineHeight: 1, color: deal.minutes_to_last_booking === null ? "var(--faint)" : undefined }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 19, lineHeight: 1, color: deal.minutes_to_last_booking === null ? "var(--faint)" : undefined }}>
             {deal.minutes_to_last_booking === null ? "—" : formatDuration(deal.minutes_to_last_booking)}
           </div>
         </div>

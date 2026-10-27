@@ -7,7 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { bookingApi, venueApi, type Booking, type Deal } from "@/lib/api";
 import { useVenue } from "@/providers/VenueProvider";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { FONT_DISPLAY, FONT_MONO, card, toneBadge, type Tone } from "@/lib/ui";
+import { FONT_DISPLAY, numeric, card, toneBadge, type Tone } from "@/lib/ui";
 
 const COLS = "1fr 1fr 1fr 1fr 1.2fr 1fr";
 
@@ -62,8 +62,8 @@ function BookingsContent() {
 
   return (
     <div style={{ padding: "38px 44px" }}>
-      <div style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 8 }}>Bookings</div>
-      <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 32, letterSpacing: "-.02em", margin: "0 0 24px" }}>Bookings</h1>
+      <div style={{ ...numeric, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 8 }}>Bookings</div>
+      <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 32, letterSpacing: "-.02em", margin: "0 0 24px" }}>Bookings</h1>
 
       {/* Deal filter pills */}
       {deals.length > 0 && (
@@ -100,14 +100,14 @@ function BookingsContent() {
         </div>
       ) : (
         <div style={{ ...card, borderRadius: 16, overflow: "hidden" }}>
-          <div style={{ display: "grid", gridTemplateColumns: COLS, gap: 14, padding: "14px 22px", background: "var(--surface2)", fontFamily: FONT_MONO, fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--faint)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: COLS, gap: 14, padding: "14px 22px", background: "var(--surface2)", ...numeric, fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--faint)" }}>
             <span>Code</span><span>Slot</span><span>Party</span><span>Paid</span><span>Status</span><span>Redeemed</span>
           </div>
           {bookings.map((b) => {
             const t = toneBadge(STATUS_TONE[b.status]);
             return (
               <div key={b.id} style={{ display: "grid", gridTemplateColumns: COLS, gap: 14, alignItems: "center", padding: "16px 22px", borderTop: "1px solid var(--line)" }}>
-                <span style={{ fontFamily: FONT_MONO, fontSize: 14, fontWeight: 700, letterSpacing: ".05em" }}>{b.confirmation_code ?? "—"}</span>
+                <span style={{ ...numeric, fontSize: 14, fontWeight: 600, letterSpacing: ".05em" }}>{b.confirmation_code ?? "—"}</span>
                 <span style={{ fontSize: 14, color: "var(--muted)" }}>{b.slot_time}</span>
                 <span style={{ fontSize: 14 }}>{b.num_people} {b.num_people === 1 ? "guest" : "guests"}</span>
                 <span style={{ fontWeight: 600, fontSize: 14 }}>{formatCurrency(b.total_paid)}</span>
@@ -117,7 +117,7 @@ function BookingsContent() {
                     <span style={{ ...toneBadge("danger").badge, marginLeft: 6 }} title="A card declined — collect at the till">Follow up</span>
                   )}
                 </span>
-                <span style={{ fontFamily: FONT_MONO, fontSize: 13, color: "var(--muted)" }}>{b.redeemed_at ? formatDate(b.redeemed_at) : "—"}</span>
+                <span style={{ ...numeric, fontSize: 13, color: "var(--muted)" }}>{b.redeemed_at ? formatDate(b.redeemed_at) : "—"}</span>
               </div>
             );
           })}

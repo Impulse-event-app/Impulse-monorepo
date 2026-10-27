@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { dealApi, scheduleApi, venueApi, type Deal, type DealSchedule } from "@/lib/api";
 import { useVenue } from "@/providers/VenueProvider";
 import { formatCurrency } from "@/lib/utils";
-import { FONT_DISPLAY, FONT_MONO, card, btnPrimary, iconBtn, iconBtnDanger, switchTrack, switchKnob } from "@/lib/ui";
+import { FONT_DISPLAY, numeric, card, btnPrimary, iconBtn, iconBtnDanger, switchTrack, switchKnob } from "@/lib/ui";
 
 const COLS = "2.4fr 1.2fr 1.2fr 1.4fr .8fr 1fr";
 const SCHEDULE_COLS = "2.4fr 2.6fr 1.2fr .8fr 1fr";
@@ -26,7 +26,7 @@ function describeRange(s: DealSchedule) {
   return null;
 }
 
-const sectionEyebrow = { fontFamily: FONT_MONO, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase" as const, color: "var(--faint)", margin: "0 0 12px" };
+const sectionEyebrow = { ...numeric, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase" as const, color: "var(--faint)", margin: "0 0 12px" };
 
 export default function DealsPage() {
   const { venue } = useVenue();
@@ -90,8 +90,8 @@ export default function DealsPage() {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
         <div>
-          <div style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 8 }}>Your deals</div>
-          <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 32, letterSpacing: "-.02em", margin: 0 }}>Deals</h1>
+          <div style={{ ...numeric, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 8 }}>Your deals</div>
+          <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 32, letterSpacing: "-.02em", margin: 0 }}>Deals</h1>
         </div>
         <button onClick={() => router.push("/dashboard/deals/new")} style={{ ...btnPrimary, padding: "12px 18px", borderRadius: 11, boxShadow: "0 8px 22px var(--accent-soft)" }}>
           + New deal
@@ -102,7 +102,7 @@ export default function DealsPage() {
         <section style={{ marginBottom: 34 }}>
           <h2 style={sectionEyebrow}>Weekly</h2>
           <div style={{ ...card, borderRadius: 16, overflow: "hidden" }}>
-            <div style={{ display: "grid", gridTemplateColumns: SCHEDULE_COLS, gap: 14, padding: "14px 22px", background: "var(--surface2)", fontFamily: FONT_MONO, fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--faint)" }}>
+            <div style={{ display: "grid", gridTemplateColumns: SCHEDULE_COLS, gap: 14, padding: "14px 22px", background: "var(--surface2)", ...numeric, fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--faint)" }}>
               <span>Deal</span><span>Runs</span><span>Price</span><span>On</span><span style={{ textAlign: "right" }}>Actions</span>
             </div>
             {schedules.map((s) => {
@@ -111,7 +111,7 @@ export default function DealsPage() {
                 <div key={s.id} style={{ display: "grid", gridTemplateColumns: SCHEDULE_COLS, gap: 14, alignItems: "center", padding: "18px 22px", borderTop: "1px solid var(--line)", opacity: s.is_active ? 1 : 0.6 }}>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 14.5, marginBottom: 4 }}>{s.title}</div>
-                    <span style={{ fontFamily: FONT_MONO, fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--accent)", background: "var(--accent-soft)", padding: "3px 8px", borderRadius: 6 }}>{s.category}</span>
+                    <span style={{ ...numeric, fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--accent)", background: "var(--accent-soft)", padding: "3px 8px", borderRadius: 6 }}>{s.category}</span>
                   </div>
                   <div style={{ fontSize: 13 }}>
                     <div style={{ fontWeight: 600, marginBottom: 3 }}>{describeDays(s.weekdays)}</div>
@@ -120,7 +120,7 @@ export default function DealsPage() {
                     </div>
                   </div>
                   <div>
-                    <span style={{ fontWeight: 700, fontSize: 15 }}>{formatCurrency(s.deal_price)}</span>
+                    <span style={{ fontWeight: 600, fontSize: 15 }}>{formatCurrency(s.deal_price)}</span>
                     <span style={{ fontSize: 12, color: "var(--faint)", textDecoration: "line-through", marginLeft: 6 }}>{formatCurrency(s.original_price)}</span>
                     {s.unit && <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 2 }}>{s.unit}</div>}
                   </div>
@@ -157,7 +157,7 @@ export default function DealsPage() {
       ) : (
         <div style={{ ...card, borderRadius: 16, overflow: "hidden" }}>
           {/* Header row */}
-          <div style={{ display: "grid", gridTemplateColumns: COLS, gap: 14, padding: "14px 22px", background: "var(--surface2)", fontFamily: FONT_MONO, fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--faint)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: COLS, gap: 14, padding: "14px 22px", background: "var(--surface2)", ...numeric, fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--faint)" }}>
             <span>Deal</span><span>Date</span><span>Price</span><span>Spots</span><span>Active</span><span style={{ textAlign: "right" }}>Actions</span>
           </div>
 
@@ -169,14 +169,14 @@ export default function DealsPage() {
               <div key={d.id} style={{ display: "grid", gridTemplateColumns: COLS, gap: 14, alignItems: "center", padding: "18px 22px", borderTop: "1px solid var(--line)" }}>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: 14.5, marginBottom: 4 }}>{d.title}</div>
-                  <span style={{ fontFamily: FONT_MONO, fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--accent)", background: "var(--accent-soft)", padding: "3px 8px", borderRadius: 6 }}>{d.category}</span>
+                  <span style={{ ...numeric, fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--accent)", background: "var(--accent-soft)", padding: "3px 8px", borderRadius: 6 }}>{d.category}</span>
                   {d.schedule_id && (
-                    <span style={{ fontFamily: FONT_MONO, fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", background: "var(--chip-bg)", padding: "3px 8px", borderRadius: 6, marginLeft: 6 }}>Weekly</span>
+                    <span style={{ ...numeric, fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", background: "var(--chip-bg)", padding: "3px 8px", borderRadius: 6, marginLeft: 6 }}>Weekly</span>
                   )}
                 </div>
                 <div style={{ fontSize: 13, color: "var(--muted)" }}>{d.date}</div>
                 <div>
-                  <span style={{ fontWeight: 700, fontSize: 15 }}>{formatCurrency(d.deal_price)}</span>
+                  <span style={{ fontWeight: 600, fontSize: 15 }}>{formatCurrency(d.deal_price)}</span>
                   <span style={{ fontSize: 12, color: "var(--faint)", textDecoration: "line-through", marginLeft: 6 }}>{formatCurrency(d.original_price)}</span>
                   {d.unit && <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 2 }}>{d.unit}</div>}
                 </div>

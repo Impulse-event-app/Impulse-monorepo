@@ -8,7 +8,7 @@ import {
   type VerifyMember,
 } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
-import { FONT_DISPLAY, FONT_MONO, card, btnPrimary, btnGhost, toneBadge } from "@/lib/ui";
+import { FONT_DISPLAY, numeric, card, btnPrimary, btnGhost, toneBadge } from "@/lib/ui";
 
 // One path for every code — solo, group split or Huddle: preview what's about
 // to be charged, then confirm.
@@ -93,8 +93,8 @@ export default function RedeemPage() {
     <div style={{ padding: "38px 44px", maxWidth: 900, margin: "0 auto" }}>
       {/* Header */}
       <div style={{ textAlign: "center", marginBottom: 30 }}>
-        <div style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 10 }}>Front of house</div>
-        <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 34, letterSpacing: "-.02em", margin: "0 0 6px" }}>Redeem a code</h1>
+        <div style={{ ...numeric, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 10 }}>Front of house</div>
+        <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 34, letterSpacing: "-.02em", margin: "0 0 6px" }}>Redeem a code</h1>
         <p style={{ color: "var(--muted)", fontSize: 14, margin: 0 }}>
           Enter the guest&apos;s 6-digit code. You&apos;ll see everyone in the booking before you charge.
         </p>
@@ -129,7 +129,7 @@ export default function RedeemPage() {
                 width: 64, height: 80, borderRadius: 14,
                 border: `1.5px solid ${active ? "var(--accent)" : "var(--line2)"}`,
                 background: "var(--surface)", display: "grid", placeItems: "center",
-                fontFamily: FONT_MONO, fontWeight: 700, fontSize: 34, color: "var(--text)",
+                ...numeric, fontWeight: 600, fontSize: 34, color: "var(--text)",
               }}
             >
               {d}
@@ -139,9 +139,9 @@ export default function RedeemPage() {
       </div>
 
       <div style={{ textAlign: "center", marginBottom: 28, minHeight: 18 }}>
-        {state.kind === "loading" && <span style={{ fontFamily: FONT_MONO, fontSize: 12, color: "var(--muted)" }}>● CHECKING…</span>}
+        {state.kind === "loading" && <span style={{ ...numeric, fontSize: 12, color: "var(--muted)" }}>● CHECKING…</span>}
         {previewing && state.data.group_size > 1 && (
-          <span style={{ fontFamily: FONT_MONO, fontSize: 12, color: "var(--accent)" }}>● GROUP CODE · {state.data.group_size} people</span>
+          <span style={{ ...numeric, fontSize: 12, color: "var(--accent)" }}>● GROUP CODE · {state.data.group_size} people</span>
         )}
       </div>
 
@@ -179,12 +179,12 @@ function PreviewCard({
         {/* header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px", background: "var(--surface2)", borderBottom: "1px solid var(--line)" }}>
           <div>
-            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18 }}>{data.deal_title}{data.group_size > 1 ? ` · ${data.group_size} people` : ""}</div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 18 }}>{data.deal_title}{data.group_size > 1 ? ` · ${data.group_size} people` : ""}</div>
             <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>{data.venue_name} · {data.slot} slot</div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontFamily: FONT_MONO, fontSize: 10, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--faint)" }}>Total to charge</div>
-            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 26, color: "var(--accent)" }}>{money(data.total_balance_cents)}</div>
+            <div style={{ ...numeric, fontSize: 10, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--faint)" }}>Total to charge</div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 26, color: "var(--accent)" }}>{money(data.total_balance_cents)}</div>
           </div>
         </div>
 
@@ -195,14 +195,14 @@ function PreviewCard({
             const t = toneBadge(ready ? "soft" : "danger");
             return (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 0", borderBottom: i === data.members.length - 1 ? "none" : "1px solid var(--line)" }}>
-                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--surface2)", border: "1px solid var(--line)", display: "grid", placeItems: "center", fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15, color: "var(--muted)" }}>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--surface2)", border: "1px solid var(--line)", display: "grid", placeItems: "center", fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, color: "var(--muted)" }}>
                   {m.name.charAt(0).toUpperCase()}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: 15 }}>{m.name}</div>
                   <div style={{ fontSize: 12, color: "var(--faint)" }}>{memberNote(m)}</div>
                 </div>
-                <div style={{ fontFamily: FONT_MONO, fontWeight: 700, fontSize: 16 }}>{money(m.balance_cents)}</div>
+                <div style={{ ...numeric, fontWeight: 600, fontSize: 16 }}>{money(m.balance_cents)}</div>
                 <span style={t.badge}><span style={t.dot} />{ready ? "Ready" : "Declined"}</span>
               </div>
             );
@@ -243,7 +243,7 @@ function ResultCard({ data, venueName, onReset }: { data: RedeemResponse; venueN
     <div style={{ ...card, border: "1px solid var(--line2)", padding: 24, boxShadow: "var(--shadow-sm)" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 18 }}>
         <div>
-          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 19 }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 19 }}>
             {data.num_people > 1 ? "Group redeemed" : "Valid — enjoy!"}{allPaid ? "" : ` — ${data.declines} to collect`}
           </div>
           <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 3 }}>{money(data.total_charged_cents)} charged at {venueName}.</div>
@@ -259,7 +259,7 @@ function ResultCard({ data, venueName, onReset }: { data: RedeemResponse; venueN
             <div key={i}>
               <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 0", borderBottom: "1px solid var(--line)" }}>
                 <span style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>{m.name}</span>
-                <span style={{ fontFamily: FONT_MONO, fontSize: 14 }}>{money(m.balance_cents)}</span>
+                <span style={{ ...numeric, fontSize: 14 }}>{money(m.balance_cents)}</span>
                 <span style={t.badge}><span style={t.dot} />{paid ? "Charged" : "Declined"}</span>
               </div>
               {m.warning && (
@@ -284,7 +284,7 @@ function MessageCard({ state, onReset }: { state: MessageState; onReset: () => v
       <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
         <span style={{ width: 12, height: 12, borderRadius: "50%", background: tone, marginTop: 7, flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 19 }}>{messageTitle(state)}</div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 19 }}>{messageTitle(state)}</div>
           <div style={{ fontSize: 14, color: "var(--muted)", marginTop: 3 }}>{messageBody(state)}</div>
         </div>
       </div>

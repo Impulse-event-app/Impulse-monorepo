@@ -14,7 +14,7 @@ import {
 } from "@/lib/api";
 import {
   FONT_DISPLAY,
-  FONT_MONO,
+  numeric,
   btnGhost,
   btnPrimary,
   card,
@@ -72,7 +72,7 @@ const errStyle: React.CSSProperties = {
 
 const sectionTitle: React.CSSProperties = {
   fontSize: 15,
-  fontWeight: 700,
+  fontWeight: 600,
   margin: "0 0 18px",
 };
 
@@ -283,7 +283,7 @@ export default function PaymentsSetupPage() {
       <h1
         style={{
           fontFamily: FONT_DISPLAY,
-          fontWeight: 700,
+          fontWeight: 600,
           fontSize: 32,
           letterSpacing: "-.02em",
           margin: "0 0 6px",
@@ -308,7 +308,7 @@ export default function PaymentsSetupPage() {
               <span style={dot} />
               {STATUS_LABEL[status ?? ""] ?? "Submitted"}
             </span>
-            <span style={{ fontFamily: FONT_MONO, fontSize: 11, color: "var(--faint)" }}>
+            <span style={{ ...numeric, fontSize: 11, color: "var(--faint)" }}>
               {compliance?.pinch_merchant_id}
             </span>
           </div>
@@ -359,7 +359,7 @@ export default function PaymentsSetupPage() {
               disabled={!reachable}
               onClick={() => reachable && setStep(s.key)}
               style={{
-                fontFamily: FONT_MONO,
+                ...numeric,
                 fontSize: 11,
                 letterSpacing: ".08em",
                 textTransform: "uppercase",
