@@ -32,7 +32,7 @@ import pinch_client
 from pinch_client import PinchError  # re-exported for callers
 
 # Impulse's cut of the balance charge. Zero by decision (2026-07-30): the whole
-# 20% deposit is Impulse's take, and the balance is entirely the venue's.
+# 10% deposit is Impulse's take, and the balance is entirely the venue's.
 # Previously 0.20, which stacked to a 36% effective take once the deposit was
 # counted. Kept as a constant rather than inlined so reinstating a balance fee
 # is one edit — settlements, payouts and the seed script all read it.

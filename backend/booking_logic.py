@@ -12,7 +12,7 @@ BORDA_POINTS = (3, 2, 1)   # 1st, 2nd, 3rd pick
 # 2026", "7:00 PM"). Every venue is in Sydney today; a per-venue zone would
 # replace this constant.
 VENUE_TZ = ZoneInfo("Australia/Sydney")
-DEPOSIT_RATE = 0.20
+DEPOSIT_RATE = 0.10
 DEPOSIT_FLOOR_CENTS = 100
 
 
@@ -62,7 +62,7 @@ def fmt_cents(cents: int) -> str:
 
 
 def deposit_split(share_cents: int) -> Tuple[int, int]:
-    """The one deposit rule: max(round(share * 0.20), 100), clamped to the
+    """The one deposit rule: max(round(share * 0.10), 100), clamped to the
     share so a sub-$1 share can't produce a negative balance. Returns
     (deposit, balance)."""
     deposit = min(max(round(share_cents * DEPOSIT_RATE), DEPOSIT_FLOOR_CENTS), share_cents)
@@ -72,7 +72,7 @@ def deposit_split(share_cents: int) -> Tuple[int, int]:
 def compute_shares(total_cents: int, n: int) -> List[dict]:
     """Split a group total into n member shares. Index 0 is the creator, who
     absorbs the rounding remainder so the shares always sum to the total.
-    Each share: deposit = max(round(share * 0.20), 100) clamped to the share;
+    Each share: deposit = max(round(share * 0.10), 100) clamped to the share;
     balance = share - deposit."""
     if n < 1:
         raise ValueError("n must be >= 1")

@@ -233,7 +233,7 @@ def test_pay_charges_exactly_the_displayed_deposit(monkeypatch):
             pass
 
     flow.pay_share(DB(), b, sam, {"sub": "u-sam"}, _pay_body(sam.deposit_cents))
-    assert calls[0]["amount_cents"] == sam.deposit_cents == 620
+    assert calls[0]["amount_cents"] == sam.deposit_cents == 310
     assert calls[0]["nonce"] == "deposit-bk-1-sam-0"
     assert sam.deposit_status == "paid"
 

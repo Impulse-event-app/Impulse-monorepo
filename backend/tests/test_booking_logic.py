@@ -86,12 +86,12 @@ def test_creator_gets_remainder():
 
 
 def test_deposit_formula():
-    shares = compute_shares(10000, 2)   # 5000 each → 20% = 1000
-    assert all(s["deposit_cents"] == 1000 for s in shares)
+    shares = compute_shares(10000, 2)   # 5000 each → 10% = 500
+    assert all(s["deposit_cents"] == 500 for s in shares)
 
 
 def test_deposit_floor():
-    shares = compute_shares(800, 2)     # 400 each → 20% = 80 → floored to 100
+    shares = compute_shares(800, 2)     # 400 each → 10% = 40 → floored to 100
     assert all(s["deposit_cents"] == 100 for s in shares)
     assert all(s["balance_cents"] == 300 for s in shares)
 
@@ -112,7 +112,7 @@ def test_even_split_sums_exactly_across_prices_and_sizes():
 
 
 def test_deposit_split_is_the_share_rule():
-    assert deposit_split(5000) == (1000, 4000)
+    assert deposit_split(5000) == (500, 4500)
     assert deposit_split(400) == (100, 300)
     assert deposit_split(60) == (60, 0)
     assert deposit_split(0) == (0, 0)
