@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, type CSSProperties, type ReactNode, type SelectHTMLAttributes } from "react";
+import { Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode, type SelectHTMLAttributes } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -202,6 +202,48 @@ const pagerBtn = (disabled: boolean): CSSProperties => ({
   opacity: disabled ? 0.4 : 1,
 });
 
+const shimmer: CSSProperties = { borderRadius: 6, background: "var(--surface2)", animation: "pm-glow 1.4s ease-in-out infinite" };
+
+function BookingsSkeleton({ slow }: { slow: boolean }) {
+  return (
+    <div aria-busy="true" aria-label="Loading bookings">
+      <div style={{ ...card, borderRadius: 14, display: "flex", marginBottom: 20, overflow: "hidden" }}>
+        {[...Array(4)].map((_, i) => (
+          <div key={i} style={{ flex: "1 1 120px", padding: "14px 20px", borderLeft: i ? "1px solid var(--line)" : "none" }}>
+            <div style={{ ...shimmer, width: 56, height: 9, marginBottom: 10 }} />
+            <div style={{ ...shimmer, width: 72, height: 18 }} />
+          </div>
+        ))}
+      </div>
+      {slow && (
+        <p style={{ fontSize: 13, color: "var(--muted)", margin: "0 0 16px" }}>
+          Still loading — the server can take up to a minute to wake up after a quiet spell.
+        </p>
+      )}
+      <div style={{ ...shimmer, width: 110, height: 10, marginBottom: 14 }} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {[4, 3].map((rows, c) => (
+          <div key={c} style={{ ...card, borderRadius: 16, overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "18px 22px", background: "var(--surface2)" }}>
+              <div style={{ ...shimmer, background: "var(--line2)", width: 160, height: 12 }} />
+              <div style={{ ...shimmer, background: "var(--line2)", width: 180, height: 12 }} />
+            </div>
+            {[...Array(rows)].map((_, i) => (
+              <div key={i} style={{ display: "grid", gridTemplateColumns: COLS, gap: 14, alignItems: "center", padding: "17px 22px", borderTop: "1px solid var(--line)" }}>
+                <div style={{ ...shimmer, width: 60, height: 11 }} />
+                <div style={{ ...shimmer, width: 64, height: 11 }} />
+                <div style={{ ...shimmer, width: 56, height: 11 }} />
+                <div style={{ ...shimmer, width: 48, height: 11 }} />
+                <div style={{ ...shimmer, width: 84, height: 20, borderRadius: 999 }} />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function BookingsPage() {
   return (
     <Suspense fallback={<div style={{ padding: 44, color: "var(--faint)", fontSize: 14 }}>Loading…</div>}>
@@ -252,7 +294,7 @@ function BookingsContent() {
     status: status as VenueBookingsQuery["status"],
     q: code || undefined,
   };
-  const { data, isLoading, isPlaceholderData } = useQuery<VenueBookingsPage>({
+  const { data, isPending, isError, isFetching, isPlaceholderData, refetch } = useQuery<VenueBookingsPage>({
     queryKey: ["venue-bookings", venue?.id, request],
     queryFn: () => venueApi.bookings(venue!.id, request),
     // Wait for the deal so its tab is known before the first fetch.
@@ -261,7 +303,19 @@ function BookingsContent() {
     placeholderData: keepPreviousData,
   });
 
-  if (!venue) return null;
+  // Past a few seconds, say why: a cold backend takes a while to wake.
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!isFetching) return;
+    const t = setTimeout(() => setSlow(true), 4000);
+    return () => {
+      clearTimeout(t);
+      setSlow(false);
+    };
+  }, [isFetching]);
+
+  // The dashboard scrolls inside its <main>, not the window.
+  const topRef = useRef<HTMLDivElement>(null);
 
   /** Write filters to the URL so refresh and back keep them; any change but paging resets to page 1. */
   const set = (updates: Record<string, string | null>) => {
@@ -274,7 +328,7 @@ function BookingsContent() {
     const qs = next.toString();
     // The native history API updates useSearchParams without a router round trip, so controls respond instantly.
     window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
-    if ("page" in updates) window.scrollTo({ top: 0 });
+    if ("page" in updates) topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const dealsById = new Map((data?.deals ?? []).map((d) => [d.id, d]));
@@ -287,6 +341,10 @@ function BookingsContent() {
   const pages = data?.pages ?? 1;
   const totals = data?.totals;
   const titles = data?.deal_titles ?? [];
+  // Nothing real to show for these filters yet: still waiting on the venue or
+  // the deal, or the only thing on hand is a previous, empty result.
+  const waiting = isPending || (isPlaceholderData && rows.length === 0);
+  const failed = isError && (!data || isPlaceholderData);
   const filtersOn = !!title || status !== "all" || range !== (dealFilter ? "all" : DEFAULT_RANGE[view]);
 
   const dated = shown.filter((n) => n.key !== "undated").map((n) => n.key).sort();
@@ -317,7 +375,7 @@ function BookingsContent() {
   ];
 
   return (
-    <div style={{ padding: "38px 44px" }}>
+    <div ref={topRef} style={{ padding: "38px 44px" }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
         <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 32, letterSpacing: "-.02em", margin: 0 }}>Bookings</h1>
         <div style={{ position: "relative", display: "grid", gridTemplateColumns: "96px 96px", padding: 3, borderRadius: 12, background: "var(--sunken)", border: "1px solid var(--line)" }}>
@@ -383,8 +441,8 @@ function BookingsContent() {
       )}
 
       {/* Totals for whatever is filtered — cancelled bookings don't count. */}
-      {totals && rows.length > 0 && (
-        <div style={{ ...card, borderRadius: 14, display: "flex", flexWrap: "wrap", marginBottom: 20, overflow: "hidden" }}>
+      {!waiting && !failed && totals && rows.length > 0 && (
+        <div style={{ ...card, borderRadius: 14, display: "flex", flexWrap: "wrap", marginBottom: 20, overflow: "hidden", opacity: isPlaceholderData ? 0.55 : 1, transition: "opacity .15s ease" }}>
           {stats.map((s, i) => (
             <div key={s.label} style={{ flex: "1 1 120px", padding: "14px 20px", borderLeft: i ? "1px solid var(--line)" : "none" }}>
               <div style={{ ...eyebrow, fontSize: 10, marginBottom: 6 }}>{s.label}</div>
@@ -394,7 +452,7 @@ function BookingsContent() {
         </div>
       )}
 
-      {!!totals?.followups && (
+      {!waiting && !failed && !!totals?.followups && (
         <div style={{ ...card, borderRadius: 12, padding: "12px 16px", marginBottom: 20, fontSize: 13.5, display: "flex", alignItems: "center", gap: 10, borderColor: "var(--bad)" }}>
           <span style={toneBadge("danger").badge}>Follow up</span>
           {totals.followups === 1 ? "1 booking has" : `${totals.followups} bookings have`} a declined card — collect at the till.
@@ -404,12 +462,15 @@ function BookingsContent() {
         </div>
       )}
 
-      {isLoading ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {[...Array(4)].map((_, i) => (
-            <div key={i} style={{ ...card, borderRadius: 14, height: 56, animation: "pm-glow 1.4s ease-in-out infinite" }} />
-          ))}
+      {failed ? (
+        <div style={{ ...card, borderRadius: 16, padding: 48, textAlign: "center" }}>
+          <p style={{ color: "var(--muted)", margin: "0 0 14px" }}>Couldn&apos;t load bookings.</p>
+          <button onClick={() => refetch()} disabled={isFetching} style={pagerBtn(isFetching)}>
+            {isFetching ? "Trying again…" : "Try again"}
+          </button>
         </div>
+      ) : waiting ? (
+        <BookingsSkeleton slow={slow} />
       ) : shown.length === 0 ? (
         <div style={{ ...card, borderRadius: 16, padding: 48, textAlign: "center" }}>
           <p style={{ color: "var(--muted)", margin: 0 }}>
