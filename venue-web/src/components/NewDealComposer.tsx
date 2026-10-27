@@ -6,8 +6,8 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Check, ChevronDown, Clock, Eye, Infinity as InfinityIcon, Minus, Plus, TrendingUp, X } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, Clock, Eye, Infinity as InfinityIcon, Minus, Plus, Ticket, TrendingUp, X } from "lucide-react";
 import {
   MAX_GROUP_SIZE,
   UNLIMITED_SPOTS,
@@ -181,8 +181,9 @@ function dayRange(week: WeekHours | null, weekday: number) {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function NewDealComposer({ venue }: { venue: Venue }) {
+export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?: () => void }) {
   const router = useRouter();
+  const qc = useQueryClient();
   const [days] = useState(nextSevenDays);
 
   const hours = (() => {
@@ -235,6 +236,8 @@ export function NewDealComposer({ venue }: { venue: Venue }) {
 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Set once the deal is saved: whether it went live or stayed a draft.
+  const [published, setPublished] = useState<{ live: boolean } | null>(null);
 
   // ── Data ──
   const { data: deals = [] } = useQuery<Deal[]>({
@@ -502,17 +505,23 @@ export function NewDealComposer({ venue }: { venue: Venue }) {
       if (repeat || chosen.length > 1) {
         // One deal across several days: a schedule from the first picked day,
         // ending on the last one unless it repeats every week.
-        await scheduleApi.create({
+        const created = await scheduleApi.create({
           ...common,
           weekdays: pickedWeekdays,
           starts_on: day.iso,
           ends_on: repeat ? null : chosen[chosen.length - 1].iso,
           venue_id: venue.id,
         } satisfies DealScheduleInput & { venue_id: string });
+        setPublished({ live: created.is_active });
       } else {
-        await dealApi.create({ ...common, venue_id: venue.id, deal_date: day.iso } satisfies DealCreate);
+        // The backend keeps it a draft while Pinch is still verifying the venue.
+        const created = await dealApi.create({ ...common, venue_id: venue.id, deal_date: day.iso } satisfies DealCreate);
+        setPublished({ live: created.is_active });
       }
-      router.replace("/dashboard/deals");
+      setPreviewOpen(false);
+      setSaving(false);
+      qc.invalidateQueries({ queryKey: ["deals", venue.id] });
+      qc.invalidateQueries({ queryKey: ["schedules", venue.id] });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Couldn't save the deal.");
       setSaving(false);
@@ -547,6 +556,143 @@ export function NewDealComposer({ venue }: { venue: Venue }) {
   // Interior hours only (the ends are the groove's edges); every other hour when they'd crowd.
   const hourPx = trackWidth / Math.max(1, (range.end - range.start) / 60);
   const rulerMarks = hourMarks.filter((h, i) => h > range.start && (hourPx >= 46 || i % 2 === 0));
+
+  // The guest's card: in the preview, and again on the success screen with a status badge.
+  const guestCard = (badge?: "live" | "draft") => (
+      <div style={{ ...cardStyle, borderRadius: 20, overflow: "hidden", padding: 0 }}>
+        <div style={{ position: "relative", height: 196, background: venue.image_url ? undefined : "repeating-linear-gradient(135deg, var(--surface2), var(--surface2) 22px, var(--surface3) 22px, var(--surface3) 44px)" }}>
+          {venue.image_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={venue.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          )}
+          <span style={{ position: "absolute", left: 16, bottom: 14, padding: "4px 9px", borderRadius: 6, background: "var(--accent)", color: "#FFFFFF", fontSize: 12, fontWeight: 600, letterSpacing: ".1em" }}>
+            {discount}% OFF
+          </span>
+          {badge ? (
+            <span style={{ position: "absolute", right: 14, bottom: 13, display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 9px", borderRadius: 999, background: "rgba(0,0,0,.55)", fontSize: 12.5, fontWeight: 600, color: badge === "live" ? "var(--good)" : "var(--muted)" }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor" }} />
+              {badge === "live" ? "Live" : "Draft"}
+            </span>
+          ) : !venue.image_url && (
+            <span style={{ position: "absolute", right: 16, bottom: 14, fontSize: 12.5, color: "var(--muted)" }}>Venue hero photo</span>
+          )}
+        </div>
+        <div style={{ padding: "20px 22px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.015em", color: title.trim() ? "var(--text)" : "var(--faint)" }}>
+              {title.trim() || "Your deal title"}
+            </div>
+            <div style={{ fontSize: 14, color: "var(--muted)", marginTop: 3 }}>
+              {[venue.name, venue.suburb, category].filter(Boolean).join(" · ")}
+            </div>
+          </div>
+          {description.trim() && (
+            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "var(--text)" }}>{description.trim()}</p>
+          )}
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+            <span style={{ fontSize: 30, fontWeight: 600, letterSpacing: "-0.02em", color: "var(--accent-text)", ...numeric }}>
+              {guestPays !== null ? formatCurrency(guestPays) : "$—"}
+            </span>
+            {guestPays !== null && (
+              <span style={{ fontSize: 14, color: "var(--muted)", textDecoration: "line-through", ...numeric }}>{formatCurrency(usual)}</span>
+            )}
+            <span style={{ fontSize: 14, color: "var(--muted)" }}>{unitLabel}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "var(--muted)" }}>
+            <Clock size={15} strokeWidth={1.75} aria-hidden />
+            {whenLabel}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {slots.map((t) => (
+              <span key={t} style={{ padding: "6px 11px", borderRadius: 999, border: "1px solid var(--line2)", fontSize: 13.5, fontWeight: 600, ...numeric }}>{pillTime(t)}</span>
+            ))}
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 12, marginTop: 4, borderTop: "1px solid var(--line)", fontSize: 13.5, color: "var(--muted)" }}>
+            <span>{spotsUnlimited ? "Plenty of spots" : `${spots} spots left`}</span>
+            <span>{groupUnlimited ? "Any group size" : `Groups up to ${groupMax}`}</span>
+          </div>
+        </div>
+      </div>
+  );
+
+  if (published) {
+    const tonightOnly = tonightPicked && chosen.length === 1 && !repeat;
+    const from = shortTime(span.start);
+    const when = repeat
+      ? `every ${joinAnd(pickedWeekdays.map((w) => DAYS[w]))} from ${from}, starting ${shortDate(day.iso)}`
+      : tonightOnly
+        ? `tonight from ${from}`
+        : `on ${joinAnd(chosen.map((c) => (c.tab === "Tonight" ? "tonight" : c.tab)))} from ${from}`;
+    const steps: [string, string][] = [
+      ["Guests book in the app", " — alone or as a group."],
+      ["They show a 6-digit code", " at the door."],
+      ["You redeem it", " to charge their card."],
+    ];
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+        <header style={{ position: "sticky", top: 0, zIndex: 10, display: "flex", alignItems: "center", gap: 16, padding: "20px 40px", borderBottom: "1px solid var(--line)", background: "var(--surface)" }}>
+          <button type="button" aria-label="Back to deals" onClick={() => router.push("/dashboard/deals")} style={squareBtn}>
+            <ArrowLeft size={16} strokeWidth={2} aria-hidden />
+          </button>
+          <div>
+            <div style={eyebrowStyle}>Deals</div>
+            <h1 style={{ margin: "2px 0 0", fontSize: 22, fontWeight: 600, letterSpacing: "-0.015em" }}>{published.live ? "Deal published" : "Draft saved"}</h1>
+          </div>
+        </header>
+
+        <div className="nd-success" style={{ flex: 1, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 420px", gap: 64, alignItems: "center", width: "100%", maxWidth: 1180, margin: "0 auto", padding: "56px 40px", boxSizing: "border-box", animation: "fade-up .5s ease both" }}>
+          <div>
+            <div style={{ width: 70, height: 70, borderRadius: "50%", display: "grid", placeItems: "center", marginBottom: 28, background: published.live ? "color-mix(in oklab, var(--good) 16%, transparent)" : "var(--surface3)", color: published.live ? "var(--good)" : "var(--muted)" }}>
+              <Check size={30} strokeWidth={2.25} aria-hidden />
+            </div>
+            <h2 style={{ margin: "0 0 12px", fontSize: 40, lineHeight: 1.12, fontWeight: 600, letterSpacing: "-0.03em" }}>
+              {title.trim()}<br />{published.live ? "is live." : "is saved as a draft."}
+            </h2>
+            <p style={{ margin: "0 0 28px", maxWidth: 520, fontSize: 16, lineHeight: 1.6, color: "var(--muted)" }}>
+              {published.live
+                ? `Guests can book ${when}. New bookings land on your dashboard as they happen.`
+                : verifying
+                  ? "It goes live as soon as Pinch approves your payments. You'll find it under Deals."
+                  : "Guests can't see it yet. Switch it on from Deals when you're ready."}
+            </p>
+
+            <ol style={{ listStyle: "none", margin: "0 0 30px", padding: 0, maxWidth: 620, ...cardStyle, overflow: "hidden" }}>
+              {steps.map(([lead, rest], i) => (
+                <li key={lead} style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 18px", borderTop: i ? "1px solid var(--line)" : "none", fontSize: 15, color: "var(--muted)" }}>
+                  <span style={{ width: 26, height: 26, flexShrink: 0, borderRadius: "50%", display: "grid", placeItems: "center", background: "var(--accent-soft)", color: "var(--accent-text)", fontSize: 13, fontWeight: 600, ...numeric }}>{i + 1}</span>
+                  <span><b style={{ color: "var(--text)", fontWeight: 600 }}>{lead}</b>{rest}</span>
+                </li>
+              ))}
+            </ol>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <button type="button" onClick={() => router.push("/dashboard/deals")} style={headerPrimary}>Back to deals</button>
+              <button type="button" onClick={() => router.push("/dashboard/redeem")} style={{ ...headerGhost, display: "inline-flex", alignItems: "center", gap: 9 }}>
+                <Ticket size={17} strokeWidth={1.75} aria-hidden />
+                Redeem a code
+              </button>
+              {onAnother && (
+                <button type="button" onClick={onAnother} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 46, padding: "0 14px", border: 0, background: "none", color: "var(--muted)", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
+                  <Plus size={16} strokeWidth={2} aria-hidden />
+                  Another deal
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div style={{ boxShadow: "0 24px 60px rgba(0,0,0,.35)", borderRadius: 20 }}>
+            {guestCard(published.live ? "live" : "draft")}
+          </div>
+        </div>
+
+        <style>{`
+          @media (max-width: 1000px) {
+            .nd-success { grid-template-columns: 1fr !important; gap: 36px !important; }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
@@ -917,55 +1063,7 @@ export function NewDealComposer({ venue }: { venue: Venue }) {
         </div>
 
         <div className="app-scroll" style={{ flex: 1, overflowY: "auto", padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ ...cardStyle, borderRadius: 20, overflow: "hidden", padding: 0 }}>
-            <div style={{ position: "relative", height: 196, background: venue.image_url ? undefined : "repeating-linear-gradient(135deg, var(--surface2), var(--surface2) 22px, var(--surface3) 22px, var(--surface3) 44px)" }}>
-              {venue.image_url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={venue.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-              )}
-              <span style={{ position: "absolute", left: 16, bottom: 14, padding: "4px 9px", borderRadius: 6, background: "var(--accent)", color: "#FFFFFF", fontSize: 12, fontWeight: 600, letterSpacing: ".1em" }}>
-                {discount}% OFF
-              </span>
-              {!venue.image_url && (
-                <span style={{ position: "absolute", right: 16, bottom: 14, fontSize: 12.5, color: "var(--muted)" }}>Venue hero photo</span>
-              )}
-            </div>
-            <div style={{ padding: "20px 22px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
-              <div>
-                <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.015em", color: title.trim() ? "var(--text)" : "var(--faint)" }}>
-                  {title.trim() || "Your deal title"}
-                </div>
-                <div style={{ fontSize: 14, color: "var(--muted)", marginTop: 3 }}>
-                  {[venue.name, venue.suburb, category].filter(Boolean).join(" · ")}
-                </div>
-              </div>
-              {description.trim() && (
-                <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "var(--text)" }}>{description.trim()}</p>
-              )}
-              <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-                <span style={{ fontSize: 30, fontWeight: 600, letterSpacing: "-0.02em", color: "var(--accent-text)", ...numeric }}>
-                  {guestPays !== null ? formatCurrency(guestPays) : "$—"}
-                </span>
-                {guestPays !== null && (
-                  <span style={{ fontSize: 14, color: "var(--muted)", textDecoration: "line-through", ...numeric }}>{formatCurrency(usual)}</span>
-                )}
-                <span style={{ fontSize: 14, color: "var(--muted)" }}>{unitLabel}</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "var(--muted)" }}>
-                <Clock size={15} strokeWidth={1.75} aria-hidden />
-                {whenLabel}
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {slots.map((t) => (
-                  <span key={t} style={{ padding: "6px 11px", borderRadius: 999, border: "1px solid var(--line2)", fontSize: 13.5, fontWeight: 600, ...numeric }}>{pillTime(t)}</span>
-                ))}
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 12, marginTop: 4, borderTop: "1px solid var(--line)", fontSize: 13.5, color: "var(--muted)" }}>
-                <span>{spotsUnlimited ? "Plenty of spots" : `${spots} spots left`}</span>
-                <span>{groupUnlimited ? "Any group size" : `Groups up to ${groupMax}`}</span>
-              </div>
-            </div>
-          </div>
+          {guestCard()}
 
           <div style={{ ...cardStyle, padding: "16px 20px", display: "flex", alignItems: "center", gap: 16 }}>
             <div style={{ flex: 1 }}>

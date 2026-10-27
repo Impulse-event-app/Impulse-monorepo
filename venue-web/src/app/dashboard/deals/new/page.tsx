@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { NewDealComposer } from "@/components/NewDealComposer";
 import { useVenue } from "@/providers/VenueProvider";
@@ -8,6 +8,8 @@ import { useVenue } from "@/providers/VenueProvider";
 export default function NewDealPage() {
   const { venue } = useVenue();
   const qc = useQueryClient();
+  // Bumped by "Another deal" on the success screen, to start a fresh form.
+  const [round, setRound] = useState(0);
 
   // The composer navigates to Deals on save; leaving for any reason refreshes
   // the lists it may have added to. A schedule that runs today makes tonight's
@@ -22,5 +24,5 @@ export default function NewDealPage() {
 
   if (!venue) return null;
 
-  return <NewDealComposer venue={venue} />;
+  return <NewDealComposer key={round} venue={venue} onAnother={() => setRound((r) => r + 1)} />;
 }
