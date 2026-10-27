@@ -1,17 +1,18 @@
 from datetime import date as dt_date
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, exists, false, func, or_
+from sqlalchemy.orm import Session, joinedload
 
 import payments
 from auth import get_current_user
 from database import get_db
-from booking_logic import slot_at
+from booking_logic import VENUE_TZ, pack_nights, slot_at
 from models import Booking, BookingParticipant, Deal, Settlement, SettlementLine, Venue
 from schemas import (
+    BookingResponse,
     DealPerformanceItem,
     DealResponse,
     PayoutLine,
@@ -19,6 +20,8 @@ from schemas import (
     PayoutsResponse,
     PayoutSummary,
     StatsResponse,
+    VenueBookingsPage,
+    VenueBookingTotals,
     VenueCreate,
     VenueResponse,
     VenueUpdate,
@@ -133,6 +136,117 @@ def list_venue_deals(
         .filter(Deal.venue_id == venue_id)
         .order_by(Deal.created_at.desc())
         .all()
+    )
+
+
+DEAD_STATUSES = ("cancelled", "expired", "collapsed")
+@router.get("/{venue_id}/bookings", response_model=VenueBookingsPage)
+def list_venue_bookings(
+    venue_id: str,
+    view: Literal["upcoming", "past"] = "upcoming",
+    date_from: Optional[dt_date] = None,
+    date_to: Optional[dt_date] = None,
+    deal: Optional[str] = Query(None, description="Deal title — every night a weekly deal ran"),
+    deal_id: Optional[str] = None,
+    status: Literal["all", "redeemed", "confirmed", "pending", "dead", "followup"] = "all",
+    q: Optional[str] = Query(None, description="Part of a confirmation code; searches every booking, ignoring the other filters"),
+    sort: Literal["newest", "oldest"] = "newest",
+    page: int = Query(1, ge=1),
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Admin: one page of the venue's bookings, filtered, with totals across
+    every page. Pages hold whole nights (a deal's evening), never half of one."""
+    venue = _get_venue_or_404(venue_id, db)
+    _assert_owner(venue, user)
+
+    today = datetime.now(VENUE_TZ).date()
+    # A legacy deal with no date counts as upcoming while it's still active.
+    upcoming = or_(Deal.deal_date >= today, and_(Deal.deal_date.is_(None), Deal.is_active.is_(True)))
+    past = or_(Deal.deal_date < today, and_(Deal.deal_date.is_(None), Deal.is_active.is_(False)))
+    in_view = upcoming if view == "upcoming" else past
+    followup = exists().where(
+        BookingParticipant.booking_id == Booking.id, BookingParticipant.payment_followup.is_(True))
+
+    base = db.query(Booking).join(Deal, Deal.id == Booking.deal_id).filter(Deal.venue_id == venue_id)
+    code = "".join(c for c in (q or "") if c.isdigit())
+    if code:
+        base = base.filter(Booking.confirmation_code.contains(code))
+    else:
+        base = base.filter(in_view)
+        if deal_id:
+            base = base.filter(Deal.id == deal_id)
+        if deal:
+            base = base.filter(Deal.title == deal)
+        if date_from or date_to:
+            base = base.filter(Deal.deal_date.isnot(None))
+            if date_from:
+                base = base.filter(Deal.deal_date >= date_from)
+            if date_to:
+                base = base.filter(Deal.deal_date <= date_to)
+        if status == "redeemed":
+            base = base.filter(Booking.status == "redeemed")
+        elif status == "confirmed":
+            base = base.filter(Booking.status == "confirmed")
+        elif status == "pending":
+            base = base.filter(Booking.status.in_(("voting", "collecting")))
+        elif status == "dead":
+            base = base.filter(Booking.status.in_(DEAD_STATUSES))
+        elif status == "followup":
+            base = base.filter(followup)
+
+    live = Booking.status.notin_(DEAD_STATUSES)
+    t = base.with_entities(
+        func.count().filter(live),
+        func.coalesce(func.sum(Booking.num_people).filter(live), 0),
+        func.coalesce(func.sum(Booking.total_paid).filter(live), 0),
+        func.count().filter(Booking.status == "redeemed"),
+        func.count().filter(Booking.status.in_(("redeemed", "confirmed"))),
+        func.count().filter(followup),
+    ).one()
+    totals = VenueBookingTotals(
+        bookings=t[0], guests=t[1], revenue=float(t[2]), redeemed=t[3], redeemable=t[4], followups=t[5])
+
+    deal_titles = [
+        title for (title,) in db.query(Deal.title)
+        .filter(Deal.venue_id == venue_id, in_view).distinct().order_by(Deal.title).all()
+    ]
+
+    night_order = (Deal.deal_date.asc() if sort == "oldest" else Deal.deal_date.desc()).nulls_last()
+    counts = (
+        base.with_entities(Deal.deal_date, func.count())
+        .group_by(Deal.deal_date).order_by(night_order).all()
+    )
+    pages = pack_nights([(night, n) for night, n in counts])
+    page = min(page, max(1, len(pages)))
+    nights = pages[page - 1] if pages else []
+
+    bookings: List[Booking] = []
+    if nights:
+        dated = [n for n in nights if n is not None]
+        bookings = (
+            base.filter(or_(Deal.deal_date.in_(dated), Deal.deal_date.is_(None) if None in nights else false()))
+            .options(joinedload(Booking.participants))
+            .order_by(Booking.created_at.desc())
+            .all()
+        )
+    deal_ids = {b.deal_id for b in bookings}
+    deals = db.query(Deal).filter(Deal.id.in_(deal_ids)).all() if deal_ids else []
+
+    return VenueBookingsPage(
+        # A group booking needs following up if any seat's charge declined.
+        bookings=[
+            BookingResponse.model_validate(b).model_copy(update={
+                **BookingResponse.seat_fields(b, None),
+                "payment_followup": any(p.payment_followup for p in b.participants),
+            })
+            for b in bookings
+        ],
+        deals=[DealResponse.model_validate(d) for d in deals],
+        page=page,
+        pages=max(1, len(pages)),
+        totals=totals,
+        deal_titles=deal_titles,
     )
 
 
