@@ -4,9 +4,15 @@
 
 import type { CSSProperties } from "react";
 
-export const FONT_DISPLAY = "var(--font-display)";
-export const FONT_MONO = "var(--font-mono-sg)";
-export const FONT_BODY = "var(--font-body)";
+export const FONT_DISPLAY = "var(--font-system)";
+export const FONT_BODY = "var(--font-system)";
+
+/** Numbers: prices, counts, codes, timestamps. The system face with tabular
+ *  figures so digits don't jitter — mirrors `fontMono` in the mobile app. */
+export const numeric: CSSProperties = {
+  fontFamily: FONT_BODY,
+  fontVariantNumeric: "tabular-nums",
+};
 
 /** Standard card surface (18px radius). */
 export const card: CSSProperties = {
@@ -18,7 +24,7 @@ export const card: CSSProperties = {
 /** Uppercase mono field label. */
 export const fieldLabel: CSSProperties = {
   display: "block",
-  fontFamily: FONT_MONO,
+  ...numeric,
   fontSize: 11,
   letterSpacing: ".1em",
   textTransform: "uppercase",
@@ -46,7 +52,7 @@ export const requiredMark: CSSProperties = {
 
 /** Small mono eyebrow (accent-coloured section kicker). */
 export const eyebrow: CSSProperties = {
-  fontFamily: FONT_MONO,
+  ...numeric,
   fontSize: 11,
   letterSpacing: ".14em",
   textTransform: "uppercase",
@@ -61,7 +67,7 @@ export const btnPrimary: CSSProperties = {
   background: "var(--accent)",
   color: "var(--accent-ink)",
   fontFamily: FONT_DISPLAY,
-  fontWeight: 700,
+  fontWeight: 600,
   fontSize: 14,
   cursor: "pointer",
   boxShadow: "0 10px 30px var(--accent-soft)",

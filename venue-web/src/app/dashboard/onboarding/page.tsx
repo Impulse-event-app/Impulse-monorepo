@@ -6,7 +6,7 @@ import { venueApi, type VenueCreate } from "@/lib/api";
 import { VenueForm } from "@/components/VenueForm";
 import { useVenue } from "@/providers/VenueProvider";
 import { useTheme } from "@/providers/ThemeProvider";
-import { FONT_DISPLAY, FONT_MONO, card, btnPrimary } from "@/lib/ui";
+import { FONT_DISPLAY, numeric, card, btnPrimary } from "@/lib/ui";
 
 export default function VenueOnboardingPage() {
   const { venue, loading, error: venueLoadError, refetch, setVenue } = useVenue();
@@ -25,13 +25,13 @@ export default function VenueOnboardingPage() {
     return (
       <div style={{ display: "grid", placeItems: "center", minHeight: "70vh", padding: 24 }}>
         <div style={{ ...card, borderRadius: 18, padding: 32, maxWidth: 460, textAlign: "center" }}>
-          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 20, marginBottom: 8 }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 20, marginBottom: 8 }}>
             Can&apos;t confirm your venue
           </div>
           <p style={{ color: "var(--muted)", fontSize: 14, lineHeight: 1.6, margin: "0 0 20px" }}>
             We couldn&apos;t reach the server to check whether you already have a venue. To avoid
             creating a duplicate, we&apos;ve paused setup — retry once you&apos;re back online.
-            <span style={{ display: "block", marginTop: 8, fontFamily: FONT_MONO, fontSize: 11, color: "var(--faint)" }}>
+            <span style={{ display: "block", marginTop: 8, ...numeric, fontSize: 11, color: "var(--faint)" }}>
               {venueLoadError.status ? `Error ${venueLoadError.status}` : "Network error"} · {venueLoadError.message}
             </span>
           </p>
@@ -67,8 +67,8 @@ export default function VenueOnboardingPage() {
       </button>
 
       <div style={{ maxWidth: 840, margin: "0 auto", padding: "44px 32px 80px" }}>
-        <div style={{ fontFamily: FONT_MONO, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--accent)", marginBottom: 12 }}>Step 1 of 2 · Set up your venue</div>
-        <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 38, letterSpacing: "-.02em", margin: "0 0 8px" }}>Tell us about your venue</h1>
+        <div style={{ ...numeric, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--accent)", marginBottom: 12 }}>Step 1 of 2 · Set up your venue</div>
+        <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 38, letterSpacing: "-.02em", margin: "0 0 8px" }}>Tell us about your venue</h1>
         <p style={{ color: "var(--muted)", fontSize: 15, margin: "0 0 10px", maxWidth: 560 }}>This is what guests see when your deals surface. You can edit any of it later from Venue details. Next you&rsquo;ll set up payments so your takings reach your own account.</p>
         <VenueForm submitLabel="Create venue →" savingLabel="Creating venue…" onSubmit={handleSubmit} />
       </div>

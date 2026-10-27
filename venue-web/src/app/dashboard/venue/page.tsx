@@ -39,7 +39,7 @@ export default function VenueDetailsPage() {
 
   return (
     <div style={{ padding: "38px 44px 80px", maxWidth: 840 }}>
-      <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 32, letterSpacing: "-.02em", margin: "0 0 8px" }}>Venue details</h1>
+      <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 32, letterSpacing: "-.02em", margin: "0 0 8px" }}>Venue details</h1>
       <p style={{ color: "var(--muted)", fontSize: 15, margin: "0 0 10px", maxWidth: 560 }}>This is what guests see when your deals surface. Changes show in the app as soon as you save.</p>
       {saved && (
         <p role="status" style={{ borderRadius: 12, padding: "12px 16px", margin: "16px 0 8px", fontSize: 13, fontWeight: 600, background: "color-mix(in oklab, var(--good) 12%, transparent)", color: "var(--good)" }}>

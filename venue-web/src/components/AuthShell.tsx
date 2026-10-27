@@ -3,7 +3,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Wordmark } from "@/components/Logo";
-import { FONT_DISPLAY, FONT_MONO, fieldInput, fieldLabel } from "@/lib/ui";
+import { FONT_DISPLAY, numeric, fieldInput, fieldLabel } from "@/lib/ui";
 
 /** Brand panel + form panel layout shared by sign-in and the password screens. */
 export function AuthShell({ children }: { children: ReactNode }) {
@@ -47,10 +47,10 @@ export function AuthShell({ children }: { children: ReactNode }) {
           </div>
 
           <div style={{ position: "relative", maxWidth: 440 }}>
-            <div style={{ fontFamily: FONT_MONO, fontSize: 12, letterSpacing: ".16em", textTransform: "uppercase", color: "var(--accent)", marginBottom: 18 }}>
+            <div style={{ ...numeric, fontSize: 12, letterSpacing: ".16em", textTransform: "uppercase", color: "var(--accent)", marginBottom: 18 }}>
               Venue Partner Portal
             </div>
-            <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 52, lineHeight: 1.02, letterSpacing: "-.03em", margin: "0 0 20px" }}>
+            <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 52, lineHeight: 1.02, letterSpacing: "-.03em", margin: "0 0 20px" }}>
               Fill the room.<br />On impulse.
             </h1>
             <p style={{ fontSize: 16, lineHeight: 1.6, color: "var(--muted)", margin: 0 }}>
@@ -58,7 +58,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
             </p>
           </div>
 
-          <div style={{ position: "relative", display: "flex", gap: 28, fontFamily: FONT_MONO, fontSize: 12, color: "var(--faint)" }}>
+          <div style={{ position: "relative", display: "flex", gap: 28, ...numeric, fontSize: 12, color: "var(--faint)" }}>
             <span>2,400+ SEATS FILLED / WK</span>
             <span>·</span>
             <span>340 VENUES</span>
@@ -87,7 +87,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
 export function AuthHeading({ title, subtitle }: { title: string; subtitle: ReactNode }) {
   return (
     <>
-      <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 28, letterSpacing: "-.02em", margin: "0 0 6px" }}>
+      <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 28, letterSpacing: "-.02em", margin: "0 0 6px" }}>
         {title}
       </h2>
       <p style={{ color: "var(--muted)", fontSize: 14, lineHeight: 1.55, margin: "0 0 30px" }}>{subtitle}</p>
@@ -121,7 +121,7 @@ export function authSubmit(busy: boolean): CSSProperties {
   return {
     width: "100%", padding: 15, borderRadius: 12, border: "none",
     background: "var(--accent)", color: "var(--accent-ink)",
-    fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15, letterSpacing: ".01em",
+    fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, letterSpacing: ".01em",
     cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.6 : 1,
     boxShadow: "0 10px 30px var(--accent-soft)",
   };

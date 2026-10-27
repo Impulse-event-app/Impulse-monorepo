@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import type { Venue, VenueCreate } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
-import { FONT_DISPLAY, FONT_MONO, card, fieldLabel, fieldInput, btnPrimary, requiredMark, switchTrack, switchKnob } from "@/lib/ui";
+import { FONT_DISPLAY, numeric, card, fieldLabel, fieldInput, btnPrimary, requiredMark, switchTrack, switchKnob } from "@/lib/ui";
 
 const PHOTO_BUCKET = "venue-photos";
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -263,7 +263,7 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit }: Venue
           <label style={{ position: "relative", height: 220, borderRadius: 18, border: "1.5px dashed var(--line2)", background: "repeating-linear-gradient(135deg, var(--surface), var(--surface) 12px, var(--surface2) 12px, var(--surface2) 24px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, cursor: "pointer" }}>
             <div style={{ width: 46, height: 46, borderRadius: "50%", background: "var(--accent-soft)", display: "grid", placeItems: "center", color: "var(--accent)", fontSize: 22 }}>↑</div>
             <div style={{ fontWeight: 600 }}>{uploading ? "Uploading…" : "Drop a photo or click to upload"}</div>
-            <div style={{ fontFamily: FONT_MONO, fontSize: 11, color: "var(--faint)" }}>JPG / PNG · max 5MB</div>
+            <div style={{ ...numeric, fontSize: 11, color: "var(--faint)" }}>JPG / PNG · max 5MB</div>
             <input type="file" accept="image/*" onChange={handlePhotoChange} disabled={uploading} style={{ display: "none" }} />
           </label>
         )}
@@ -271,7 +271,7 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit }: Venue
 
       {/* The basics */}
       <div style={{ ...card, padding: 28, marginBottom: 24 }}>
-        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, marginBottom: 22 }}>The basics</div>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 17, marginBottom: 22 }}>The basics</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
           <div style={{ gridColumn: "1 / -1" }}>
             <label style={fieldLabel}>Venue name<span style={requiredMark}>*</span></label>
@@ -298,7 +298,7 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit }: Venue
 
       {/* Location & contact */}
       <div style={{ ...card, padding: 28, marginBottom: 24 }}>
-        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, marginBottom: 22 }}>Location &amp; contact</div>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 17, marginBottom: 22 }}>Location &amp; contact</div>
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 18 }}>
           <div>
             <label style={fieldLabel}>Street address<span style={requiredMark}>*</span></label>
@@ -324,7 +324,7 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit }: Venue
 
       {/* Opening hours */}
       <div style={{ ...card, padding: 28, marginBottom: 24 }}>
-        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, marginBottom: 6 }}>Opening hours</div>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 17, marginBottom: 6 }}>Opening hours</div>
         <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 20 }}>Toggle a day off to mark it closed.</div>
         {parsedHours.unread && (
           <p role="alert" style={{ borderRadius: 10, padding: "10px 14px", margin: "0 0 16px", fontSize: 13, lineHeight: 1.5, background: "var(--accent-soft)", color: "var(--accent)" }}>
@@ -349,7 +349,7 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit }: Venue
                       <input type="time" value={h.to} onChange={(e) => setDay(day, { to: e.target.value })} style={timeInput} />
                     </>
                   ) : (
-                    <span style={{ fontFamily: FONT_MONO, fontSize: 12, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)" }}>Closed</span>
+                    <span style={{ ...numeric, fontSize: 12, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)" }}>Closed</span>
                   )}
                 </div>
               </div>
@@ -360,7 +360,7 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit }: Venue
 
       {/* Accessibility */}
       <div style={{ ...card, padding: 28, marginBottom: 32 }}>
-        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, marginBottom: 6 }}>Accessibility features</div>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 17, marginBottom: 6 }}>Accessibility features</div>
         <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 20 }}>Guests filter on these to match their access needs. Select all that apply.</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 12 }}>
           {ACCESSIBILITY_FEATURES.map((feature) => {
@@ -372,7 +372,7 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit }: Venue
                 onClick={() => toggleFeature(feature)}
                 style={{ display: "flex", alignItems: "center", gap: 11, padding: "14px 16px", borderRadius: 12, cursor: "pointer", textAlign: "left", fontSize: 14, border: `1px solid ${on ? "var(--accent)" : "var(--line2)"}`, background: on ? "var(--accent-soft)" : "var(--surface)", color: "var(--text)" }}
               >
-                <span style={{ width: 18, height: 18, borderRadius: 6, flexShrink: 0, display: "grid", placeItems: "center", border: `1px solid ${on ? "var(--accent)" : "var(--line2)"}`, background: on ? "var(--accent)" : "transparent", color: "var(--accent-ink)", fontSize: 12, fontWeight: 700 }}>{on ? "✓" : ""}</span>
+                <span style={{ width: 18, height: 18, borderRadius: 6, flexShrink: 0, display: "grid", placeItems: "center", border: `1px solid ${on ? "var(--accent)" : "var(--line2)"}`, background: on ? "var(--accent)" : "transparent", color: "var(--accent-ink)", fontSize: 12, fontWeight: 600 }}>{on ? "✓" : ""}</span>
                 <span style={{ fontWeight: 500 }}>{feature}</span>
               </button>
             );
@@ -399,5 +399,5 @@ const timeInput: React.CSSProperties = {
   background: "var(--sunken)",
   color: "var(--text)",
   fontSize: 13,
-  fontFamily: FONT_MONO,
+  ...numeric,
 };

@@ -8,7 +8,7 @@ import { useVenue } from "@/providers/VenueProvider";
 import type { Venue } from "@/lib/api";
 import { useTheme } from "@/providers/ThemeProvider";
 import { PulseMark } from "@/components/Logo";
-import { FONT_DISPLAY, FONT_MONO } from "@/lib/ui";
+import { FONT_DISPLAY, numeric } from "@/lib/ui";
 
 const NAV: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: "/dashboard", label: "Dashboard", match: (p) => p === "/dashboard" },
@@ -36,7 +36,7 @@ export function Sidebar() {
       {/* Logo */}
       <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "6px 8px 20px" }}>
         <PulseMark size={30} />
-        <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 20, letterSpacing: "-.02em" }}>impulse</span>
+        <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 20, letterSpacing: "-.02em" }}>impulse</span>
       </div>
 
       {/* Venue chip — becomes a switcher when the owner has more than one */}
@@ -105,7 +105,7 @@ const chipShell: React.CSSProperties = {
 
 function VenueInitial({ name }: { name: string }) {
   return (
-    <div style={{ width: 34, height: 34, borderRadius: 9, flexShrink: 0, background: "var(--accent-soft)", color: "var(--accent)", display: "grid", placeItems: "center", fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15 }}>
+    <div style={{ width: 34, height: 34, borderRadius: 9, flexShrink: 0, background: "var(--accent-soft)", color: "var(--accent)", display: "grid", placeItems: "center", fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15 }}>
       {name.charAt(0).toUpperCase()}
     </div>
   );
@@ -148,7 +148,7 @@ function VenueSwitcher({
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{venue.name}</div>
           {venue.suburb && (
-            <div style={{ fontFamily: FONT_MONO, fontSize: 10, color: "var(--faint)", textTransform: "uppercase", letterSpacing: ".08em" }}>{venue.suburb}</div>
+            <div style={{ ...numeric, fontSize: 10, color: "var(--faint)", textTransform: "uppercase", letterSpacing: ".08em" }}>{venue.suburb}</div>
           )}
         </div>
       </div>
@@ -167,7 +167,7 @@ function VenueSwitcher({
         <VenueInitial name={venue.name} />
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{venue.name}</div>
-          <div style={{ fontFamily: FONT_MONO, fontSize: 10, color: "var(--faint)", textTransform: "uppercase", letterSpacing: ".08em" }}>
+          <div style={{ ...numeric, fontSize: 10, color: "var(--faint)", textTransform: "uppercase", letterSpacing: ".08em" }}>
             {venue.suburb ?? `${venues.length} venues`}
           </div>
         </div>
@@ -179,7 +179,7 @@ function VenueSwitcher({
           role="listbox"
           style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, zIndex: 30, padding: 6, background: "var(--surface)", border: "1px solid var(--line2)", borderRadius: 12, boxShadow: "0 16px 40px rgba(0,0,0,.28)", maxHeight: 320, overflowY: "auto" }}
         >
-          <div style={{ fontFamily: FONT_MONO, fontSize: 10, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--faint)", padding: "7px 10px 8px" }}>
+          <div style={{ ...numeric, fontSize: 10, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--faint)", padding: "7px 10px 8px" }}>
             Switch venue
           </div>
           {venues.map((v) => {
@@ -198,7 +198,7 @@ function VenueSwitcher({
                   {v.name}
                 </span>
                 {v.suburb && (
-                  <span style={{ fontFamily: FONT_MONO, fontSize: 9.5, color: "var(--faint)", textTransform: "uppercase", letterSpacing: ".08em", flexShrink: 0 }}>{v.suburb}</span>
+                  <span style={{ ...numeric, fontSize: 9.5, color: "var(--faint)", textTransform: "uppercase", letterSpacing: ".08em", flexShrink: 0 }}>{v.suburb}</span>
                 )}
               </button>
             );

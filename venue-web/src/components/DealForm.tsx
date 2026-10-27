@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/utils";
 import type { DealCreate, DealUpdate, Deal, DealSchedule, DealScheduleInput } from "@/lib/api";
-import { FONT_DISPLAY, card, fieldLabel, fieldInput, btnPrimary, btnGhost, switchTrack, switchKnob } from "@/lib/ui";
+import { FONT_DISPLAY, card, fieldLabel, fieldInput, btnPrimary, btnGhost, numeric, switchTrack, switchKnob } from "@/lib/ui";
 
 const CATEGORIES = [
   "Bar",
@@ -35,7 +35,7 @@ interface DealFormProps {
   submitLabel: string;
 }
 
-const sectionTitle: React.CSSProperties = { fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16, marginBottom: 20 };
+const sectionTitle: React.CSSProperties = { fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 16, marginBottom: 20 };
 
 /** "2026-11-03" for today in the browser's time zone (venues are in Sydney). */
 function todayIso() {
@@ -248,7 +248,7 @@ export function DealForm({ venueId, initial: initialDeal, initialSchedule, onSub
           </div>
           <div style={{ padding: "6px 4px" }}>
             <div style={{ ...fieldLabel, marginBottom: 6 }}>Deal price</div>
-            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 30, color: "var(--accent)", lineHeight: 1 }}>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 30, color: "var(--accent)", lineHeight: 1 }}>
               {computedPrice !== null ? formatCurrency(computedPrice) : "—"}
             </div>
           </div>
@@ -262,7 +262,7 @@ export function DealForm({ venueId, initial: initialDeal, initialSchedule, onSub
         {slots.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
             {slots.map((s) => (
-              <span key={s} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 999, background: "var(--accent-soft)", color: "var(--accent)", fontFamily: "var(--font-mono-sg)", fontSize: 13 }}>
+              <span key={s} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 999, background: "var(--accent-soft)", color: "var(--accent)", ...numeric, fontSize: 13 }}>
                 {s}
                 <button type="button" onClick={() => removeSlot(s)} style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
               </span>
@@ -296,7 +296,7 @@ export function DealForm({ venueId, initial: initialDeal, initialSchedule, onSub
       {/* Active toggle */}
       <div style={{ ...card, padding: "22px 28px", marginBottom: 26, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>{kind === "schedule" ? "Schedule on" : "Deal active"}</div>
+          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 2 }}>{kind === "schedule" ? "Schedule on" : "Deal active"}</div>
           <div style={{ color: "var(--muted)", fontSize: 13 }}>
             {kind === "schedule" ? "Turn off to pause the weekly deal." : "Visible to guests immediately."}
           </div>

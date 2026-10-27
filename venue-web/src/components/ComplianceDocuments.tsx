@@ -10,7 +10,7 @@ import {
   type MerchantContact,
   type MerchantDocument,
 } from "@/lib/api";
-import { FONT_MONO, card, fieldLabel, iconBtn, toneBadge } from "@/lib/ui";
+import { numeric, card, fieldLabel, iconBtn, toneBadge } from "@/lib/ui";
 
 // Mirrors the server-side allowlist in backend/routers/merchants.py. The server
 // also sniffs the leading bytes, so this is a courtesy to save a failed upload,
@@ -21,7 +21,7 @@ const MAX_BYTES = 20 * 1024 * 1024;
 
 const sectionTitle: React.CSSProperties = {
   fontSize: 15,
-  fontWeight: 700,
+  fontWeight: 600,
   margin: "0 0 4px",
 };
 
@@ -148,7 +148,7 @@ function UploadRow({
             <span
               key={d.id}
               style={{
-                fontFamily: FONT_MONO,
+                ...numeric,
                 fontSize: 11,
                 padding: "4px 10px",
                 borderRadius: 999,
