@@ -46,3 +46,7 @@ node_modules/
 .claude/settings.local.json
 .claude/skills/
 .agents/skills/
+
+# Local working notes — not part of the repo
+docs/user-journey/
+outreach/

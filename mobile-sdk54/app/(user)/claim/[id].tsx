@@ -29,10 +29,10 @@ import { Plus, RowIcons } from '../../../src/icons';
 import { PinchCardField } from '../../../src/PinchCardField';
 import { hapticError, hapticSuccess } from '../../../src/haptics';
 
-// Mirrors the server's deposit formula: 20% of the discounted total,
+// Mirrors the server's deposit formula: 10% of the discounted total,
 // floored at $1.00, clamped to the total.
 function depositSplit(totalCents: number): { depositCents: number; balanceCents: number } {
-  const depositCents = Math.min(Math.max(Math.round(totalCents * 0.2), 100), totalCents);
+  const depositCents = Math.min(Math.max(Math.round(totalCents * 0.1), 100), totalCents);
   return { depositCents, balanceCents: totalCents - depositCents };
 }
 
