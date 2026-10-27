@@ -1,38 +1,28 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { DealForm, type DealSubmission } from "@/components/DealForm";
-import { dealApi, scheduleApi, type DealCreate } from "@/lib/api";
+import { NewDealComposer } from "@/components/NewDealComposer";
 import { useVenue } from "@/providers/VenueProvider";
-import { FONT_DISPLAY } from "@/lib/ui";
 
 export default function NewDealPage() {
   const { venue } = useVenue();
-  const router = useRouter();
   const qc = useQueryClient();
+  // Bumped by "Another deal" on the success screen, to start a fresh form.
+  const [round, setRound] = useState(0);
+
+  // The composer navigates to Deals on save; leaving for any reason refreshes
+  // the lists it may have added to. A schedule that runs today makes tonight's
+  // deal straight away, so both go.
+  useEffect(() => {
+    if (!venue) return;
+    return () => {
+      qc.invalidateQueries({ queryKey: ["deals", venue.id] });
+      qc.invalidateQueries({ queryKey: ["schedules", venue.id] });
+    };
+  }, [venue, qc]);
 
   if (!venue) return null;
 
-  async function handleSubmit(s: DealSubmission) {
-    if (s.kind === "schedule") {
-      await scheduleApi.create({ ...s.data, venue_id: venue!.id });
-      qc.invalidateQueries({ queryKey: ["schedules", venue!.id] });
-    } else {
-      await dealApi.create(s.data as DealCreate);
-    }
-    // A schedule that runs today makes tonight's deal straight away.
-    qc.invalidateQueries({ queryKey: ["deals", venue!.id] });
-    router.replace(`/dashboard/deals`);
-  }
-
-  return (
-    <div style={{ padding: "38px 44px", maxWidth: 760 }}>
-      <button onClick={() => router.push("/dashboard/deals")} style={{ background: "none", border: "none", color: "var(--muted)", fontSize: 13, cursor: "pointer", marginBottom: 14, padding: 0 }}>
-        ← Back to deals
-      </button>
-      <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 32, letterSpacing: "-.02em", margin: "0 0 30px" }}>New deal</h1>
-      <DealForm venueId={venue.id} onSubmit={handleSubmit} submitLabel="Save deal" />
-    </div>
-  );
+  return <NewDealComposer key={round} venue={venue} onAnother={() => setRound((r) => r + 1)} />;
 }

@@ -58,10 +58,13 @@ export function AuthShell({ children }: { children: ReactNode }) {
             </p>
           </div>
 
-          <div style={{ position: "relative", display: "flex", gap: 28, ...numeric, fontSize: 12, color: "var(--faint)" }}>
-            <span>2,400+ SEATS FILLED / WK</span>
+          {/* What the product does, not traction numbers: there are none to quote yet. */}
+          <div style={{ position: "relative", display: "flex", flexWrap: "wrap", gap: "8px 18px", ...numeric, fontSize: 12, letterSpacing: ".06em", color: "var(--faint)" }}>
+            <span>PUBLISH IN A MINUTE</span>
             <span>·</span>
-            <span>340 VENUES</span>
+            <span>GROUPS BOOK TOGETHER</span>
+            <span>·</span>
+            <span>CHARGED AT THE DOOR</span>
           </div>
         </div>
 

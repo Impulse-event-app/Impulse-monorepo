@@ -15,7 +15,6 @@ const NAV: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: "/dashboard/venue", label: "Venue details", match: (p) => p === "/dashboard/venue" },
   { href: "/dashboard/deals", label: "Deals", match: (p) => p.startsWith("/dashboard/deals") },
   { href: "/dashboard/bookings", label: "Bookings", match: (p) => p.startsWith("/dashboard/bookings") },
-  { href: "/dashboard/payouts", label: "Payouts", match: (p) => p.startsWith("/dashboard/payouts") },
   { href: "/dashboard/payments-setup", label: "Payments setup", match: (p) => p.startsWith("/dashboard/payments-setup") },
   { href: "/dashboard/redeem", label: "Redeem", match: (p) => p.startsWith("/dashboard/redeem") },
 ];
