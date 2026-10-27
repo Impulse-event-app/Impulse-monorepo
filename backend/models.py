@@ -181,6 +181,11 @@ class MerchantDocument(Base):
     venue: "Venue" = relationship("Venue", back_populates="merchant_documents")
 
 
+# total_spots at or above this means "no limit": the venue portal stores an
+# unlimited deal as this many spots and shows it as "Unlimited".
+UNLIMITED_SPOTS = 9999
+
+
 class Deal(Base):
     __tablename__ = "deals"
 

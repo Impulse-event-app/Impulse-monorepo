@@ -10,7 +10,7 @@ import payments
 from auth import get_current_user
 from database import get_db
 from booking_logic import VENUE_TZ, pack_nights, slot_at
-from models import Booking, BookingParticipant, Deal, Settlement, SettlementLine, Venue
+from models import Booking, BookingParticipant, Deal, Settlement, SettlementLine, Venue, UNLIMITED_SPOTS
 from schemas import (
     BookingResponse,
     DealPerformanceItem,
@@ -406,14 +406,19 @@ def get_stats(
     )
 
     active_deal_rows = active_deals_q.all()
-    total_spots = sum(d.total_spots for d in active_deal_rows)
-    spots_remaining = sum(d.spots_remaining for d in active_deal_rows)
+    # An unlimited deal has no capacity to fill, so it counts only the spots it
+    # has taken; otherwise one would swamp the venue's capacity figure.
+    spots_filled = sum(d.total_spots - d.spots_remaining for d in active_deal_rows)
+    total_spots = sum(
+        d.total_spots - d.spots_remaining if d.total_spots >= UNLIMITED_SPOTS else d.total_spots
+        for d in active_deal_rows
+    )
 
     return StatsResponse(
         active_deals=active_deals_count,
         bookings_today=len(today_bookings),
         revenue_today=round(sum(b.total_paid for b in today_bookings), 2),
-        spots_filled=total_spots - spots_remaining,
+        spots_filled=spots_filled,
         total_spots=total_spots,
     )
 

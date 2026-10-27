@@ -209,6 +209,11 @@ export const venueApi = {
 
 // ── Deals ─────────────────────────────────────────────────────────────────────
 
+/** total_spots at or above this means no limit (mirrors UNLIMITED_SPOTS in backend/models.py). */
+export const UNLIMITED_SPOTS = 9999;
+/** The most people one booking can hold, whatever a deal says (MAX_GROUP in backend/routers/bookings.py). */
+export const MAX_GROUP_SIZE = 10;
+
 export interface Deal {
   id: string;
   venue_id: string;
