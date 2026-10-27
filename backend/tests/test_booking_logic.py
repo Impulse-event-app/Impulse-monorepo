@@ -1,10 +1,10 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
 from booking_logic import (
     SplitError, apply_cover, compute_shares, deal_cutoff, deposit_split, parse_slot_datetime,
-    recalc_unpaid, resolve_borda, slot_at, validate_custom,
+    pack_nights, recalc_unpaid, resolve_borda, slot_at, validate_custom,
 )
 
 T = datetime(2026, 7, 25, 12, 0)
@@ -247,3 +247,21 @@ def test_deal_cutoff_naive_expiry_is_utc():
 
 def test_deal_cutoff_unknown():
     assert deal_cutoff(None, "sometime", ["whenever"]) is None
+
+
+# ── Venue bookings pages ─────────────────────────────────────────────────────
+
+def test_pages_hold_whole_nights():
+    d = [date(2026, 10, n) for n in (24, 23, 22, 21)]
+    assert pack_nights([(d[0], 30), (d[1], 15), (d[2], 5), (d[3], 20)], per_page=40) == [
+        [d[0]], [d[1], d[2], d[3]]]
+
+
+def test_a_huge_night_gets_its_own_page():
+    d = [date(2026, 10, n) for n in (24, 23)]
+    assert pack_nights([(d[0], 90), (d[1], 3)], per_page=40) == [[d[0]], [d[1]]]
+
+
+def test_undated_night_and_empty():
+    assert pack_nights([(date(2026, 10, 24), 2), (None, 1)], per_page=40) == [[date(2026, 10, 24), None]]
+    assert pack_nights([]) == []

@@ -468,6 +468,27 @@ class BookingResponse(BaseModel):
         )
 
 
+class VenueBookingTotals(BaseModel):
+    """Across every page of the filtered set. Cancelled, expired and collapsed
+    bookings count in `followups` only — they never walk in."""
+    bookings: int
+    guests: int
+    revenue: float
+    redeemed: int
+    redeemable: int                    # redeemed + confirmed: the base for a redemption rate
+    followups: int
+
+
+class VenueBookingsPage(BaseModel):
+    """One page of the venue bookings screen: whole nights, never split."""
+    bookings: List[BookingResponse]
+    deals: List[DealResponse]          # every deal the page's bookings belong to
+    page: int
+    pages: int
+    totals: VenueBookingTotals
+    deal_titles: List[str]             # for the deal filter — a weekly deal appears once
+
+
 class BookingWithDetailsResponse(BookingResponse):
     """Extends BookingResponse with deal + venue info for the Plans screen."""
     venue_id: str

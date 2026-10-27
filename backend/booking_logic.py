@@ -3,7 +3,7 @@ Pure booking logic: Borda resolution, share math, split validation, deal
 cutoffs. Shared by every booking — solo, direct split and Huddle (a booking
 with a voting stage). No DB, no I/O — unit tested in tests/test_booking_logic.py.
 """
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Collection, Dict, List, Mapping, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
 
@@ -222,3 +222,25 @@ def deal_cutoff(
     if last_slot_cutoff is not None:
         candidates.append(last_slot_cutoff)
     return min(candidates) if candidates else None
+
+
+# A page holds whole nights until it reaches roughly this many bookings.
+PAGE_BOOKINGS = 40
+
+
+def pack_nights(counts: List[Tuple[Optional[date], int]], per_page: int = PAGE_BOOKINGS) -> List[List[Optional[date]]]:
+    """Group ordered (night, bookings) counts into pages without splitting a
+    night: a page closes once the next night would push it past `per_page`.
+    One huge night still gets a page to itself."""
+    pages: List[List[Optional[date]]] = []
+    page: List[Optional[date]] = []
+    rows = 0
+    for night, n in counts:
+        if page and rows + n > per_page:
+            pages.append(page)
+            page, rows = [], 0
+        page.append(night)
+        rows += n
+    if page:
+        pages.append(page)
+    return pages

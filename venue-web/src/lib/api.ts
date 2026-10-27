@@ -195,6 +195,12 @@ export const venueApi = {
     request<StatsResponse>("GET", `/venues/${id}/stats`),
   deals: (id: string) =>
     request<Deal[]>("GET", `/venues/${id}/deals`),
+  /** One page of the venue's bookings — whole nights, filtered server-side. */
+  bookings: (id: string, query: VenueBookingsQuery) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== "") qs.set(k, String(v));
+    return request<VenueBookingsPage>("GET", `/venues/${id}/bookings?${qs}`);
+  },
   dealPerformance: (id: string, limit = 10) =>
     request<DealPerformanceItem[]>("GET", `/venues/${id}/deal-performance?limit=${limit}`),
   payouts: (id: string) =>
@@ -339,6 +345,28 @@ export interface Booking {
   created_at: string;
   has_voting: boolean;
   payment_followup: boolean;        // some seat's charge declined — collect directly
+}
+
+export interface VenueBookingsQuery {
+  view: "upcoming" | "past";
+  date_from?: string;               // "2026-10-01", inclusive
+  date_to?: string;
+  deal?: string;                    // deal title — every night a weekly deal ran
+  deal_id?: string;
+  status?: "all" | "redeemed" | "confirmed" | "pending" | "dead" | "followup";
+  q?: string;                       // part of a code; searches everything, ignoring the other filters
+  sort?: "newest" | "oldest";
+  page?: number;
+}
+
+export interface VenueBookingsPage {
+  bookings: Booking[];
+  deals: Deal[];                    // the deals this page's bookings belong to
+  page: number;
+  pages: number;
+  // Across every page. Cancelled/expired bookings only count in followups.
+  totals: { bookings: number; guests: number; revenue: number; redeemed: number; redeemable: number; followups: number };
+  deal_titles: string[];
 }
 
 // One verify/redeem path for every code — solo, group split or Huddle.

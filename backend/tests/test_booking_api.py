@@ -156,6 +156,30 @@ def test_per_unit_deal_is_one_price_for_the_group(env):
     assert b["deposit_amount_cents"] + b["balance_amount_cents"] == 3600
 
 
+def test_venue_bookings_span_every_deal_owner_only(env):
+    pp = new_booking(env, who="jo", n=1, split=False)
+    room = new_booking(env, who="jo", n=2, split=False, key="room")
+    venue_id = ok(env["as"]("owner").get(f"/deals/{env['deals']['pp']}"))["venue_id"]
+    owner = env["as"]("owner")
+    # The fixture's deals are undated and active, so they count as upcoming.
+    page = ok(owner.get(f"/venues/{venue_id}/bookings", params={"view": "upcoming"}))
+    listed = {b["id"]: b for b in page["bookings"]}
+    assert pp["id"] in listed and room["id"] in listed
+    assert listed[room["id"]]["deal_id"] == env["deals"]["room"]
+    assert {d["id"] for d in page["deals"]} >= {env["deals"]["pp"], env["deals"]["room"]}
+    assert {"deal pp", "deal room"} <= set(page["deal_titles"])
+    assert page["page"] == 1 and page["totals"]["bookings"] >= 2
+
+    one_deal = ok(owner.get(f"/venues/{venue_id}/bookings", params={"view": "upcoming", "deal": "deal room"}))
+    assert {b["deal_id"] for b in one_deal["bookings"]} == {env["deals"]["room"]}
+    # A date range only covers dated deals.
+    ranged = ok(owner.get(f"/venues/{venue_id}/bookings", params={"view": "upcoming", "date_from": "2026-01-01"}))
+    assert ranged["bookings"] == [] and ranged["totals"]["bookings"] == 0
+    assert ok(owner.get(f"/venues/{venue_id}/bookings", params={"view": "past"}))["bookings"] == []
+
+    assert env["as"]("jo").get(f"/venues/{venue_id}/bookings").status_code == 403
+
+
 def test_share_deadline_is_slot_minus_an_hour_in_sydney(env):
     b = new_booking(env, n=2)
     v = ok(env["as"]("host").get(f"/bookings/{b['id']}/split"))
