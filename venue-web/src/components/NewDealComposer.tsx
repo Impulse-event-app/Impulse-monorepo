@@ -11,12 +11,10 @@ import { ArrowLeft, ArrowRight, Check, ChevronDown, Clock, Eye, Infinity as Infi
 import {
   MAX_GROUP_SIZE,
   UNLIMITED_SPOTS,
-  bookingApi,
   dealApi,
   merchantApi,
   scheduleApi,
   venueApi,
-  type Booking,
   type Deal,
   type DealCreate,
   type DealSchedule,
@@ -252,19 +250,16 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
     queryKey: ["merchant-status", venue.id],
     queryFn: () => merchantApi.status(venue.id),
   });
-  // Every booking that went ahead, across the venue's deals. There's no
-  // per-venue endpoint, so this is one request per deal, as on the dashboard.
-  const { data: history = [] } = useQuery<(Booking & { dealDate: string | null })[]>({
-    queryKey: ["booking-history-by-date", venue.id, deals.map((d) => d.id).join(",")],
-    queryFn: async () => {
-      const lists = await Promise.all(deals.map((d) =>
-        bookingApi.listForDeal(d.id)
-          .then((bs) => bs.map((b) => ({ ...b, dealDate: d.deal_date })))
-          .catch(() => []),
-      ));
-      return lists.flat().filter((b) => b.status === "confirmed" || b.status === "redeemed");
-    },
-    enabled: deals.length > 0,
+  // Every booking that went ahead across the venue's deals, as when and how many — one request.
+  const { data: history = [] } = useQuery({
+    queryKey: ["booked-slots", venue.id],
+    queryFn: async () =>
+      (await venueApi.bookedSlots(venue.id)).map((s) => ({
+        dealDate: s.deal_date,
+        slot_time: s.slot_time ?? "",
+        num_people: s.num_people,
+        created_at: s.created_at,
+      })),
   });
 
   // A typical day: average guests per half-hour, from past days on the same

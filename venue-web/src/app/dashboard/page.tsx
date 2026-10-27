@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { bookingApi, merchantApi, venueApi, type ApiError, type Booking, type DealPerformanceItem, type Deal, type MerchantCompliance, type StatsResponse } from "@/lib/api";
+import { merchantApi, venueApi, type ApiError, type DealPerformanceItem, type MerchantCompliance, type RecentBooking, type StatsResponse } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useVenue } from "@/providers/VenueProvider";
 import { formatCurrency } from "@/lib/utils";
@@ -208,21 +208,10 @@ function DashboardContent({ venueId, venueName }: { venueId: string; venueName: 
     queryFn: () => venueApi.dealPerformance(venueId, 10),
   });
 
-  // Aggregate recent bookings across the venue's deals for the "tonight" feed.
-  const { data: recent = [] } = useQuery<Array<Booking & { dealTitle: string }>>({
+  // The newest bookings across the venue's deals for the "tonight" feed — one request.
+  const { data: recent = [] } = useQuery<RecentBooking[]>({
     queryKey: ["recent-bookings", venueId],
-    queryFn: async () => {
-      const deals = await venueApi.deals(venueId);
-      const titleFor = new Map(deals.map((d: Deal) => [d.id, d.title]));
-      const lists = await Promise.all(
-        deals.map((d) => bookingApi.listForDeal(d.id).catch(() => [] as Booking[]))
-      );
-      return lists
-        .flat()
-        .map((b) => ({ ...b, dealTitle: titleFor.get(b.deal_id) ?? "Deal" }))
-        .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))
-        .slice(0, 4);
-    },
+    queryFn: () => venueApi.recentBookings(venueId, 4),
     refetchInterval: 60_000,
   });
 
@@ -302,7 +291,7 @@ function DashboardContent({ venueId, venueName }: { venueId: string; venueName: 
             recent.map((r) => (
               <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 0", borderBottom: "1px solid var(--line)" }}>
                 <span style={{ ...numeric, fontSize: 13, color: "var(--accent)", width: 64 }}>{r.confirmation_code ?? "—"}</span>
-                <span style={{ flex: 1, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.dealTitle}</span>
+                <span style={{ flex: 1, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.deal_title}</span>
                 <span style={{ fontSize: 13, color: "var(--muted)" }}>{r.slot_time} · {r.num_people}p</span>
                 <span style={{ fontWeight: 600, fontSize: 14 }}>{formatCurrency(r.total_paid)}</span>
               </div>

@@ -12,6 +12,7 @@ from database import get_db
 from booking_logic import VENUE_TZ, pack_nights, slot_at
 from models import Booking, BookingParticipant, Deal, Settlement, SettlementLine, Venue, UNLIMITED_SPOTS
 from schemas import (
+    BookedSlot,
     BookingResponse,
     DealPerformanceItem,
     DealResponse,
@@ -19,6 +20,7 @@ from schemas import (
     PayoutResponse,
     PayoutsResponse,
     PayoutSummary,
+    RecentBooking,
     StatsResponse,
     VenueBookingsPage,
     VenueBookingTotals,
@@ -140,6 +142,49 @@ def list_venue_deals(
 
 
 DEAD_STATUSES = ("cancelled", "expired", "collapsed")
+@router.get("/{venue_id}/bookings/recent", response_model=List[RecentBooking])
+def recent_venue_bookings(
+    venue_id: str,
+    limit: int = Query(4, ge=1, le=50),
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Admin: the newest bookings across every deal, for the dashboard. One
+    query — the dashboard used to ask once per deal, which drained the
+    connection pool once weekly schedules multiplied the deals."""
+    venue = _get_venue_or_404(venue_id, db)
+    _assert_owner(venue, user)
+    rows = (
+        db.query(Booking, Deal.title)
+        .join(Deal, Deal.id == Booking.deal_id)
+        .filter(Deal.venue_id == venue_id)
+        .order_by(Booking.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [RecentBooking.model_validate({**BookingResponse.model_validate(b).model_dump(), "deal_title": title})
+            for b, title in rows]
+
+
+@router.get("/{venue_id}/booked-slots", response_model=List[BookedSlot])
+def venue_booked_slots(
+    venue_id: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Admin: every booking that went ahead (confirmed or redeemed), reduced to
+    when and how many — what the new-deal composer charts busy times from."""
+    venue = _get_venue_or_404(venue_id, db)
+    _assert_owner(venue, user)
+    rows = (
+        db.query(Deal.deal_date, Booking.slot_time, Booking.num_people, Booking.created_at)
+        .join(Deal, Deal.id == Booking.deal_id)
+        .filter(Deal.venue_id == venue_id, Booking.status.in_(("confirmed", "redeemed")))
+        .all()
+    )
+    return [BookedSlot(deal_date=d, slot_time=s, num_people=n, created_at=c) for d, s, n, c in rows]
+
+
 @router.get("/{venue_id}/bookings", response_model=VenueBookingsPage)
 def list_venue_bookings(
     venue_id: str,
