@@ -195,6 +195,12 @@ export const venueApi = {
     request<StatsResponse>("GET", `/venues/${id}/stats`),
   deals: (id: string) =>
     request<Deal[]>("GET", `/venues/${id}/deals`),
+  /** The newest bookings across every deal, labelled with their deal. */
+  recentBookings: (id: string, limit = 4) =>
+    request<RecentBooking[]>("GET", `/venues/${id}/bookings/recent?limit=${limit}`),
+  /** Every booking that went ahead, reduced to when and how many. */
+  bookedSlots: (id: string) =>
+    request<BookedSlot[]>("GET", `/venues/${id}/booked-slots`),
   /** One page of the venue's bookings — whole nights, filtered server-side. */
   bookings: (id: string, query: VenueBookingsQuery) => {
     const qs = new URLSearchParams();
@@ -364,6 +370,17 @@ export interface VenueBookingsQuery {
   page?: number;
 }
 
+export interface RecentBooking extends Booking {
+  deal_title: string;
+}
+
+export interface BookedSlot {
+  deal_date: string | null;
+  slot_time: string | null;
+  num_people: number;
+  created_at: string;
+}
+
 export interface VenueBookingsPage {
   bookings: Booking[];
   deals: Deal[];                    // the deals this page's bookings belong to
@@ -416,8 +433,6 @@ export interface RedeemResponse {
 }
 
 export const bookingApi = {
-  listForDeal: (dealId: string) =>
-    request<Booking[]>("GET", `/bookings?deal_id=${dealId}`),
   // Preview before charging. rawRequest so 404/403 map to screen states.
   verify: (code: string) =>
     rawRequest("GET", `/bookings/verify/${encodeURIComponent(code)}`),

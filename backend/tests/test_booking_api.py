@@ -180,6 +180,25 @@ def test_venue_bookings_span_every_deal_owner_only(env):
     assert env["as"]("jo").get(f"/venues/{venue_id}/bookings").status_code == 403
 
 
+def test_recent_bookings_and_booked_slots_are_one_call_each(env):
+    paid = new_booking(env, who="jo", n=2, split=False, key="room")
+    ok(env["as"]("jo").post(f"/bookings/{paid['id']}/pay", json=card(paid["deposit_amount_cents"])))
+    newest = new_booking(env, who="jo", n=1, split=False)
+    venue_id = ok(env["as"]("owner").get(f"/deals/{env['deals']['pp']}"))["venue_id"]
+    owner = env["as"]("owner")
+
+    recent = ok(owner.get(f"/venues/{venue_id}/bookings/recent", params={"limit": 2}))
+    assert len(recent) == 2 and recent[0]["id"] == newest["id"] and recent[0]["deal_title"] == "deal pp"
+
+    # Only bookings that went ahead feed the busy-times chart.
+    slots = ok(owner.get(f"/venues/{venue_id}/booked-slots"))
+    assert {"slot_time": "7:00 PM", "num_people": 2} in [{k: s[k] for k in ("slot_time", "num_people")} for s in slots]
+    assert all(set(s) == {"deal_date", "slot_time", "num_people", "created_at"} for s in slots)
+
+    assert env["as"]("jo").get(f"/venues/{venue_id}/bookings/recent").status_code == 403
+    assert env["as"]("jo").get(f"/venues/{venue_id}/booked-slots").status_code == 403
+
+
 def test_share_deadline_is_slot_minus_an_hour_in_sydney(env):
     b = new_booking(env, n=2)
     v = ok(env["as"]("host").get(f"/bookings/{b['id']}/split"))

@@ -479,6 +479,19 @@ class VenueBookingTotals(BaseModel):
     followups: int
 
 
+class RecentBooking(BookingResponse):
+    """A booking on the dashboard's recent list, labelled with its deal."""
+    deal_title: str
+
+
+class BookedSlot(BaseModel):
+    """Who came when — the deal composer's busy-times chart needs nothing more."""
+    deal_date: Optional[Date]
+    slot_time: Optional[str]
+    num_people: int
+    created_at: datetime
+
+
 class VenueBookingsPage(BaseModel):
     """One page of the venue bookings screen: whole nights, never split."""
     bookings: List[BookingResponse]
