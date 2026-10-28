@@ -179,6 +179,16 @@ export interface DealPerformanceItem {
   minutes_to_last_booking: number | null;
 }
 
+export interface UserProfile {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+}
+
+export const userApi = {
+  me: () => request<UserProfile>("GET", "/users/me"),
+};
+
 export const venueApi = {
   create: (body: VenueCreate) =>
     request<Venue>("POST", "/venues", body),

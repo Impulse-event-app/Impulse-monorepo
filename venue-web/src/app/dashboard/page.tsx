@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { merchantApi, venueApi, type ApiError, type DealPerformanceItem, type MerchantCompliance, type RecentBooking, type StatsResponse } from "@/lib/api";
+import { merchantApi, userApi, venueApi, type ApiError, type DealPerformanceItem, type MerchantCompliance, type RecentBooking, type StatsResponse } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useVenue } from "@/providers/VenueProvider";
 import { formatCurrency } from "@/lib/utils";
@@ -194,8 +194,15 @@ function DashboardContent({ venueId, venueName }: { venueId: string; venueName: 
   const router = useRouter();
   const { user } = useAuth();
 
+  // The name on the account, else a guess from the email address.
+  const { data: profile } = useQuery({
+    queryKey: ["me", user?.id],
+    queryFn: userApi.me,
+    enabled: !!user,
+  });
   const firstName =
-    user?.email?.split("@")[0]?.split(/[.\-_]/)[0]?.replace(/^\w/, (c) => c.toUpperCase()) ?? venueName;
+    profile?.full_name?.trim().split(/\s+/)[0] ||
+    (user?.email?.split("@")[0]?.split(/[.\-_]/)[0]?.replace(/^\w/, (c) => c.toUpperCase()) ?? venueName);
 
   const { data: stats, isLoading } = useQuery<StatsResponse>({
     queryKey: ["stats", venueId],
