@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { merchantApi, venueApi, type ApiError, type DealPerformanceItem, type MerchantCompliance, type RecentBooking, type StatsResponse } from "@/lib/api";
+import { merchantApi, venueApi, type ApiError, type DealPerformanceItem, type PaymentsStatus, type RecentBooking, type StatsResponse } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useVenue } from "@/providers/VenueProvider";
 import { formatCurrency } from "@/lib/utils";
@@ -122,39 +122,35 @@ function trimPct(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
-/** Nudges a venue through Pinch verification from the page they actually open.
- *  Hidden only once the merchant is active. Note that acting on this prompt is
- *  what switches the publish gate on for a venue: until Pinch approves them,
- *  deals can be drafted but not published. */
+/** Nudges a venue through Stripe verification from the page they actually
+ *  open. Hidden once the account can take money; until then deals can be
+ *  drafted but not published. */
 function PaymentsSetupBanner({
   compliance,
   onOpen,
 }: {
-  compliance: MerchantCompliance | undefined;
+  compliance: PaymentsStatus | undefined;
   onOpen: () => void;
 }) {
-  if (!compliance) return null;
+  if (!compliance || compliance.can_publish_deals) return null;
 
-  const started = !!compliance.pinch_merchant_id;
-  const approved = compliance.merchant_status === "active";
-  const rejected = compliance.submission_status === "rejected";
-  if (approved) return null;
+  const started = !!compliance.stripe_account_id;
+  const rejected = compliance.transfers_status === "restricted";
 
   const tone = rejected ? "danger" : started ? "info" : "soft";
   const { badge, dot } = toneBadge(tone);
 
   const heading = rejected
-    ? "Pinch needs something corrected"
+    ? "Stripe needs a little more information"
     : started
       ? "Verification in progress"
-      : "Set up payments to get paid directly";
+      : "Set up payments to start taking bookings";
 
   const detail = rejected
-    ? compliance.compliance_notes ??
-      "One of your documents could not be accepted. Replace it and it goes back for review automatically."
+    ? "Finish the outstanding steps and your deals can go live."
     : started
-      ? "Your deals can be drafted now and published as soon as Pinch approves you."
-      : "Pinch needs to verify your business before takings can settle to your bank account. Takes about 10 minutes, plus their review.";
+      ? "Your deals can be drafted now and published as soon as Stripe verifies you."
+      : "Stripe verifies your business once, which takes about five minutes. After that, each booking reaches your bank within minutes of check-in.";
 
   return (
     <div
@@ -215,7 +211,7 @@ function DashboardContent({ venueId, venueName }: { venueId: string; venueName: 
     refetchInterval: 60_000,
   });
 
-  const { data: compliance } = useQuery<MerchantCompliance>({
+  const { data: compliance } = useQuery<PaymentsStatus>({
     queryKey: ["merchant-status", venueId],
     queryFn: () => merchantApi.status(venueId),
     refetchInterval: 60_000,

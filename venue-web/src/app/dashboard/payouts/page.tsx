@@ -9,25 +9,21 @@ import { FONT_DISPLAY, numeric, card, toneBadge, type Tone } from "@/lib/ui";
 
 const COLS = "1.1fr 1.5fr 1fr 1fr 40px";
 
-/** Pinch transfer statuses, mapped to how alarming they should look. */
+/** Stripe payout statuses, mapped to how alarming they should look. */
 const STATUS_TONE: Record<string, Tone> = {
-  complete: "good",
-  processing: "info",
-  "pending-return": "neutral",
-  withheld: "neutral",
-  "negative-balance": "danger",
+  paid: "good",
+  pending: "info",
+  in_transit: "info",
+  canceled: "neutral",
   failed: "danger",
-  "failed-return": "danger",
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  complete: "Paid",
-  processing: "On its way",
-  "pending-return": "Pending return",
-  withheld: "Withheld",
-  "negative-balance": "Negative balance",
+  paid: "Paid",
+  pending: "On its way",
+  in_transit: "On its way",
+  canceled: "Cancelled",
   failed: "Failed",
-  "failed-return": "Failed return",
 };
 
 function money(cents: number): string {
@@ -58,7 +54,7 @@ export default function PayoutsPage() {
     ? [
         { label: "Paid out", value: money(summary.paid_cents), sub: summary.last_payout_date ? `Last ${payoutDate(summary.last_payout_date)}` : "No payouts yet" },
         { label: "On its way", value: money(summary.in_transit_cents), sub: "Sent, not yet cleared" },
-        { label: "Awaiting payout", value: money(summary.awaiting_cents), sub: "Earned, not yet sent" },
+        { label: "Awaiting payout", value: money(summary.awaiting_cents), sub: "In your Stripe balance" },
         { label: "Payouts", value: String(summary.payout_count), sub: "All time" },
       ]
     : [];
@@ -72,8 +68,8 @@ export default function PayoutsPage() {
         Payouts
       </h1>
       <p style={{ color: "var(--muted)", fontSize: 14, margin: "0 0 26px", maxWidth: 620 }}>
-        Money on its way to your bank account. A booking being paid isn&apos;t the same as the
-        cash arriving — this is the second one.
+        Money sent to your bank. Each booking is paid out within minutes of you checking the
+        group in, or on the next daily payout if your bank can&apos;t take instant payments.
       </p>
 
       {/* Summary */}
@@ -105,14 +101,14 @@ export default function PayoutsPage() {
         <div style={{ ...card, borderRadius: 16, padding: 48, textAlign: "center" }}>
           <p style={{ color: "var(--text)", fontWeight: 600, margin: "0 0 6px" }}>No payouts yet</p>
           <p style={{ color: "var(--muted)", fontSize: 14, margin: 0, maxWidth: 420, marginInline: "auto" }}>
-            Once a guest redeems a booking and the funds clear, the transfer shows up here with
-            the bookings it covers.
+            When you check a group in with their code, the payout shows up here with the bookings
+            it covers.
           </p>
         </div>
       ) : (
         <div style={{ ...card, borderRadius: 16, overflow: "hidden" }}>
           <div style={{ display: "grid", gridTemplateColumns: COLS, gap: 14, padding: "14px 22px", background: "var(--surface2)", ...numeric, fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--faint)" }}>
-            <span>Date</span><span>Reference</span><span>Status</span><span style={{ textAlign: "right" }}>Amount</span><span />
+            <span>Arrives</span><span>Type</span><span>Status</span><span style={{ textAlign: "right" }}>Amount</span><span />
           </div>
           {payouts.map((p) => (
             <PayoutRow key={p.id} payout={p} />
@@ -148,9 +144,9 @@ function PayoutRow({ payout }: { payout: Payout }) {
         }}
         style={{ display: "grid", gridTemplateColumns: COLS, gap: 14, alignItems: "center", padding: "16px 22px", cursor: "pointer" }}
       >
-        <span style={{ fontSize: 14, fontWeight: 600 }}>{payoutDate(payout.transfer_date)}</span>
-        <span style={{ ...numeric, fontSize: 12.5, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {payout.reference ?? payout.pinch_transfer_id}
+        <span style={{ fontSize: 14, fontWeight: 600 }}>{payoutDate(payout.arrival_date)}</span>
+        <span style={{ fontSize: 12.5, color: "var(--muted)" }}>
+          {payout.method === "instant" ? "Instant" : "Standard"}
         </span>
         <span>
           <span style={tone.badge}><span style={tone.dot} />{label}</span>
@@ -164,13 +160,7 @@ function PayoutRow({ payout }: { payout: Payout }) {
       {open && (
         <div style={{ padding: "0 22px 18px", background: "var(--surface2)" }}>
           <div style={{ display: "flex", gap: 22, flexWrap: "wrap", padding: "14px 0 12px", fontSize: 12.5, color: "var(--muted)" }}>
-            {payout.account_name && (
-              <span>
-                To <strong style={{ color: "var(--text)" }}>{payout.account_name}</strong>
-                {payout.account_number ? ` · ${payout.bsb ?? ""} ${payout.account_number}` : ""}
-              </span>
-            )}
-            <span style={{ ...numeric }}>{payout.pinch_transfer_id}</span>
+            <span style={{ ...numeric }}>{payout.id}</span>
           </div>
 
           {payout.lines.length === 0 ? (
@@ -178,7 +168,7 @@ function PayoutRow({ payout }: { payout: Payout }) {
           ) : (
             payout.lines.map((ln, i) => (
               <div
-                key={`${ln.booking_id ?? "line"}-${i}`}
+                key={`${ln.booking_id}-${i}`}
                 style={{ display: "grid", gridTemplateColumns: "90px 1fr 100px 90px", gap: 14, alignItems: "center", padding: "9px 0", borderTop: i === 0 ? "none" : "1px solid var(--line)", fontSize: 13 }}
               >
                 <span style={{ ...numeric, fontWeight: 600, letterSpacing: ".05em" }}>
@@ -188,7 +178,7 @@ function PayoutRow({ payout }: { payout: Payout }) {
                   {ln.deal_title ?? "—"}
                 </span>
                 <span style={{ color: "var(--faint)", fontSize: 12 }}>
-                  {ln.transaction_date ? formatDate(ln.transaction_date) : "—"}
+                  {ln.redeemed_at ? formatDate(ln.redeemed_at) : "—"}
                 </span>
                 <span style={{ fontWeight: 600, textAlign: "right" }}>{money(ln.amount_cents)}</span>
               </div>

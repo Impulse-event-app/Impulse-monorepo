@@ -126,28 +126,23 @@ export interface StatsResponse {
 // ── Payouts ───────────────────────────────────────────────────────────────────
 
 export interface PayoutLine {
-  booking_id: string | null;
+  booking_id: string;
   confirmation_code: string | null;
   deal_title: string | null;
-  kind: "deposit" | "balance" | null;
-  line_type: string | null;
+  /** What was captured for the booking. */
   amount_cents: number;
-  transaction_date: string | null;
+  redeemed_at: string | null;
 }
 
+/** A Stripe payout from the venue's account to its bank. */
 export interface Payout {
   id: string;
-  pinch_transfer_id: string;
-  status: string;
-  reference: string | null;
+  status: "paid" | "pending" | "in_transit" | "failed" | "canceled" | string;
+  method: "instant" | "standard" | string;
   currency: string;
-  /** This venue's share of the transfer, not the whole transfer. */
   amount_cents: number;
-  transfer_net_cents: number;
-  transfer_date: string | null;
-  account_name: string | null;
-  bsb: string | null;
-  account_number: string | null;
+  arrival_date: string | null;
+  created: string | null;
   lines: PayoutLine[];
 }
 
@@ -440,138 +435,29 @@ export const bookingApi = {
     rawRequest("POST", `/bookings/redeem/${encodeURIComponent(code)}`),
 };
 
-// ── Pinch managed merchant onboarding ────────────────────────────────────────
+// ── Payments (Stripe Connect) ────────────────────────────────────────────────
 
-export type ContactType = "owner" | "director" | "shareholder" | "executive";
-
-export type DocumentType =
-  | "identity-document"
-  | "financial-document"
-  | "business-registration"
-  | "additional-verification";
-
-export interface MerchantContactInput {
-  first_name: string | null;
-  last_name: string | null;
-  email: string;
-  phone: string | null;
-  contact_type: ContactType;
-  is_primary_contact: boolean;
-  is_ubo: boolean;
-  ownership: number | null;
-  dob: string | null;
-  street_address: string | null;
-  suburb: string | null;
-  state: string | null;
-  postcode: string | null;
-  country: string | null;
-}
-
-export interface OnboardingDraft {
-  company_name: string | null;
-  legal_entity_name: string | null;
-  company_email: string | null;
-  company_phone: string | null;
-  company_website_url: string | null;
-  abn: string | null;
-  nature_of_business: string | null;
-  organisation_type: string | null;
-  legal_street_address: string | null;
-  legal_suburb: string | null;
-  legal_state: string | null;
-  legal_postcode: string | null;
-  legal_country: string | null;
-  bank_account_name: string | null;
-  bank_bsb: string | null;
-  /** Write-only. Always null when read back — the API never returns it. */
-  bank_account_number: string | null;
-  bank_account_last3?: string | null;
-  afsl_held: boolean | null;
-  afsl_number: string | null;
-  austrac_registered: boolean | null;
-  shares_held_in_trust: boolean | null;
-  contacts: MerchantContactInput[];
-  completed_steps: string[];
-}
-
-export interface MerchantDocument {
-  id: string;
-  document_type: DocumentType;
-  pinch_contact_id: string | null;
-  label: string;
-  created_at: string;
-}
-
-export interface MerchantContact {
-  contact_id: string;
-  contact_type: ContactType;
-  first_name: string | null;
-  last_name: string | null;
-  ownership: number | null;
-  is_ubo: boolean;
-  is_primary_contact: boolean;
-}
-
-export interface MerchantCompliance {
+/** The venue's Stripe account, whether it can take money, and its free pilot. */
+export interface PaymentsStatus {
   venue_id: string;
-  pinch_merchant_id: string | null;
-  compliance_status: string | null;
-  submission_status: string | null;
-  merchant_status: string | null;
-  compliance_notes: string | null;
-  updated_at: string | null;
-  live_enabled: boolean;
-  transactions_enabled: boolean;
-  settlements_enabled: boolean;
+  stripe_account_id: string | null;
+  /** stripe_transfers capability: active | pending | restricted | unsupported */
+  transfers_status: string | null;
   can_publish_deals: boolean;
-  contacts: MerchantContact[];
-  documents: MerchantDocument[];
+  /** What Stripe still needs, in plain words. */
   outstanding: string[];
+  updated_at: string | null;
+  pilot_ends_at: string | null;
+  in_pilot: boolean;
 }
 
 export const merchantApi = {
-  getDraft: (venueId: string) =>
-    request<OnboardingDraft>("GET", `/merchants/venues/${venueId}/onboarding`),
-  saveDraft: (venueId: string, body: Partial<OnboardingDraft>) =>
-    request<OnboardingDraft>("PUT", `/merchants/venues/${venueId}/onboarding`, body),
+  /** Create the venue's Stripe account (idempotent). */
   create: (venueId: string) =>
-    request<MerchantCompliance>("POST", `/merchants/venues/${venueId}`),
+    request<PaymentsStatus>("POST", `/merchants/venues/${venueId}`),
+  /** Client secret for Stripe's embedded onboarding / payouts components. */
+  accountSession: (venueId: string) =>
+    request<{ client_secret: string }>("POST", `/merchants/venues/${venueId}/account-session`),
   status: (venueId: string) =>
-    request<MerchantCompliance>("GET", `/merchants/venues/${venueId}/status`),
-
-  /**
-   * Multipart upload. Deliberately not routed through request(): getHeaders()
-   * sets Content-Type: application/json, and for a FormData body the browser has
-   * to set it itself so it can append the multipart boundary.
-   */
-  uploadDocument: async (
-    venueId: string,
-    documentType: DocumentType,
-    file: File,
-    contactId?: string | null
-  ): Promise<MerchantDocument> => {
-    const form = new FormData();
-    form.append("document_type", documentType);
-    if (contactId) form.append("contact_id", contactId);
-    form.append("file", file);
-
-    const headers: Record<string, string> = {};
-    if (_accessToken) headers["Authorization"] = `Bearer ${_accessToken}`;
-
-    const res = await fetch(`${BASE}/merchants/venues/${venueId}/documents`, {
-      method: "POST",
-      headers,
-      body: form,
-    });
-    if (!res.ok) {
-      let detail = res.statusText;
-      try {
-        detail = (await res.json()).detail ?? detail;
-      } catch {
-        // ignore parse errors
-      }
-      throw new ApiError(res.status, detail);
-    }
-    return res.json() as Promise<MerchantDocument>;
-  },
+    request<PaymentsStatus>("GET", `/merchants/venues/${venueId}/status`),
 };

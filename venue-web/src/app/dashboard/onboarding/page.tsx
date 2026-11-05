@@ -44,7 +44,7 @@ export default function VenueOnboardingPage() {
   async function handleSubmit(payload: VenueCreate) {
     const created = await venueApi.create(payload);
     setVenue(created);
-    // Straight into Pinch verification rather than the dashboard. It reads as
+    // Straight into Stripe verification rather than the dashboard. It reads as
     // part of signing up this way; left as a dashboard banner it is the kind of
     // thing a venue never gets round to, and until it is done their takings
     // cannot settle to their own account.

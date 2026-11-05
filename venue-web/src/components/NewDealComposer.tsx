@@ -19,7 +19,7 @@ import {
   type DealCreate,
   type DealSchedule,
   type DealScheduleInput,
-  type MerchantCompliance,
+  type PaymentsStatus,
   type Venue,
 } from "@/lib/api";
 import { DAYS, parseHours, type WeekHours } from "@/lib/hours";
@@ -246,7 +246,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
     queryKey: ["schedules", venue.id],
     queryFn: () => scheduleApi.list(venue.id),
   });
-  const { data: compliance } = useQuery<MerchantCompliance>({
+  const { data: compliance } = useQuery<PaymentsStatus>({
     queryKey: ["merchant-status", venue.id],
     queryFn: () => merchantApi.status(venue.id),
   });
@@ -443,8 +443,8 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
   const guestPays = !isNaN(usual) ? Math.max(0, usual * (1 - discount / 100)) : null;
   const unitLabel = UNITS.find((u) => u.value === unit)?.label ?? "per person";
 
-  // Pinch hasn't cleared the venue yet: the backend saves any deal as a draft.
-  const verifying = !!compliance?.pinch_merchant_id && compliance.merchant_status !== "active";
+  // Stripe hasn't cleared the venue yet: the backend saves any deal as a draft.
+  const verifying = !!compliance && !compliance.can_publish_deals;
   const goesLive = live && !verifying;
 
   // ── Preview + submit ──
@@ -509,7 +509,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
         } satisfies DealScheduleInput & { venue_id: string });
         setPublished({ live: created.is_active });
       } else {
-        // The backend keeps it a draft while Pinch is still verifying the venue.
+        // The backend keeps it a draft until Stripe has verified the venue.
         const created = await dealApi.create({ ...common, venue_id: venue.id, deal_date: day.iso } satisfies DealCreate);
         setPublished({ live: created.is_active });
       }
@@ -647,7 +647,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
               {published.live
                 ? `Guests can book ${when}. New bookings land on your dashboard as they happen.`
                 : verifying
-                  ? "It goes live as soon as Pinch approves your payments. You'll find it under Deals."
+                  ? "It goes live as soon as Stripe verifies your payments. You'll find it under Deals."
                   : "Guests can't see it yet. Switch it on from Deals when you're ready."}
             </p>
 
@@ -1064,7 +1064,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 15, fontWeight: 600 }}>Live as soon as you publish</div>
               <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>
-                {verifying ? "Saves as a draft until Pinch approves your payments" : "Turn off to save as a draft"}
+                {verifying ? "Saves as a draft until Stripe verifies your payments" : "Turn off to save as a draft"}
               </div>
             </div>
             <button type="button" aria-pressed={goesLive} aria-label="Live as soon as you publish" disabled={verifying} onClick={() => setLive((v) => !v)} style={{ ...switchTrack(goesLive), opacity: verifying ? 0.5 : 1, cursor: verifying ? "not-allowed" : "pointer" }}>
