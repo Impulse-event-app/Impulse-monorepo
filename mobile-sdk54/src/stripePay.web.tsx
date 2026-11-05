@@ -6,7 +6,7 @@ import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-
 import { loadStripe, type Stripe } from '@stripe/stripe-js';
 import { useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Modal, Pressable, Text, View } from 'react-native';
-import { ApiBooking, confirmHold, startCardSetup, startHold } from './api';
+import { ApiBooking, confirmCardUpdate, confirmHold, startCardSetup, startCardUpdate, startHold } from './api';
 import { Btn } from './components';
 import { fontUI, useApp } from './theme';
 
@@ -56,6 +56,7 @@ function Form({ open, close }: { open: Open; close: (done: boolean, err?: Error)
 
 export function useStripePay(): {
   holdShare: (bookingId: string, shareCents: number) => Promise<ApiBooking | null>;
+  updateCard: (bookingId: string) => Promise<ApiBooking | null>;
   addCard: () => Promise<boolean>;
   overlay: ReactNode;
 } {
@@ -85,6 +86,12 @@ export function useStripePay(): {
     return done ? confirmHold(bookingId, intent.intent_id) : null;
   };
 
+  const updateCard = async (bookingId: string) => {
+    const intent = await startCardUpdate(bookingId);
+    const done = await present(intent.client_secret, intent.customer_session_client_secret, intent.intent_type);
+    return done ? confirmCardUpdate(bookingId, intent.intent_id) : null;
+  };
+
   const addCard = async () => {
     const setup = await startCardSetup();
     return present(setup.setup_intent_client_secret, setup.customer_session_client_secret, 'setup');
@@ -112,5 +119,5 @@ export function useStripePay(): {
     </Modal>
   ) : null;
 
-  return { holdShare, addCard, overlay };
+  return { holdShare, updateCard, addCard, overlay };
 }

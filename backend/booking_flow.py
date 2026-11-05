@@ -524,6 +524,114 @@ def confirm_hold_from_webhook(db: Session, intent_id: str) -> None:
         logger.warning("Webhook could not finalise %s for booking %s: %s", intent_id, b.id, e.detail)
 
 
+# ── Updating the card on a held seat ─────────────────────────────────────────
+
+CARD_FAILED_NOTE = "We couldn't hold your card for this booking — update your card in the app."
+
+
+def card_needs_update(p: BookingParticipant) -> bool:
+    """A seat whose own card could not be held (declined, expired, removed)."""
+    return p.deposit_status == "paid" and p.hold_status == "failed"
+
+
+def _check_card_updatable(b: Booking, p: BookingParticipant) -> None:
+    if b.status not in ("collecting", "confirmed"):
+        raise HTTPException(status_code=409, detail=f"This booking can't change cards (status={b.status})")
+    if p.deposit_status != "paid":
+        raise HTTPException(status_code=409, detail="There's no card held on your spot to change")
+
+
+def start_card_update(db: Session, b: Booking, p: BookingParticipant, user: dict) -> dict:
+    """Hold (or, for a far-off booking, save) a different card for a seat that
+    is already in — the fix for a seat whose hold failed. Same PaymentSheet
+    flow as claiming a spot; the old hold is only released once the new card
+    is confirmed. The key is tied to the seat's current intent, so asking
+    twice returns the same new intent."""
+    _check_card_updatable(b, p)
+    destination = venue_account(b)
+    sheet = wallet.sheet_params(_ensure_user(db, user))
+    key = f"recard-{b.id}-{p.id}-{p.deposit_payment_id}"
+    meta = _metadata(b, p, "card_update", shareTotalCents=p.share_amount_cents)
+    try:
+        if payments.needs_setup_first(slot_start(b)):
+            intent = payments.create_setup(customer_id=sheet["customer_id"], metadata=meta,
+                                           idempotency_key=f"setup-{key}")
+            kind = "setup"
+        else:
+            intent = payments.create_hold(
+                customer_id=sheet["customer_id"], amount_cents=p.share_amount_cents, destination=destination,
+                description=f"Impulse — {b.deal.venue.name} {slot_label(b)}", metadata=meta,
+                idempotency_key=key,
+            )
+            kind = "payment"
+    except PaymentError as e:
+        logger.error("Starting a card update failed for booking %s seat %s: %s", b.id, p.id, e)
+        raise HTTPException(status_code=502, detail="Couldn't start the card update. Try again.")
+    db.commit()
+    return {"intent_type": kind, "intent_id": intent["id"], "client_secret": intent["client_secret"],
+            "amount_cents": p.share_amount_cents, **sheet}
+
+
+def confirm_card_update(db: Session, b: Booking, p: BookingParticipant, user: dict, intent_id: str) -> None:
+    """PaymentSheet finished: read the new intent back from Stripe, check it is
+    this seat's and this user's, then swap it in and release the old hold."""
+    _check_card_updatable(b, p)
+    row = _ensure_user(db, user)
+    try:
+        intent = (payments.retrieve_setup(intent_id) if intent_id.startswith("seti_")
+                  else payments.retrieve_hold(intent_id))
+    except PaymentError as e:
+        logger.error("Reading card update %s for booking %s failed: %s", intent_id, b.id, e)
+        raise HTTPException(status_code=502, detail="Couldn't confirm the new card. Try again.")
+    meta = intent.get("metadata") or {}
+    customer = intent.get("customer")
+    customer = customer.get("id") if isinstance(customer, dict) else customer
+    if (meta.get("impulseBookingId") != str(b.id) or meta.get("impulseMemberId") != str(p.id)
+            or not row.stripe_customer_id or customer != row.stripe_customer_id):
+        raise HTTPException(status_code=409, detail="That card update isn't for this spot")
+
+    if intent_id.startswith("seti_"):
+        if intent.get("status") != "succeeded":
+            raise HTTPException(status_code=402, detail="Your card wasn't saved. Try again.")
+        hold_status, expires = "saved", None
+    else:
+        if intent.get("status") != "requires_capture" or intent.get("amount") != p.share_amount_cents:
+            raise HTTPException(status_code=402, detail="Your card wasn't authorised. Try again.")
+        hold_status, expires = "held", payments.hold_expires_at(intent)
+
+    old = p.deposit_payment_id
+    if old and old != intent_id and old.startswith("pi_"):
+        try:
+            payments.cancel_hold(intent_id=old, idempotency_key=f"cancel-{old}")
+        except PaymentError as e:
+            logger.error("Releasing replaced hold %s on booking %s failed: %s", old, b.id, e)
+    p.deposit_payment_id = intent_id
+    p.stripe_payment_method_id = payments.payment_method_of(intent)
+    p.hold_status = hold_status
+    p.hold_expires_at = expires
+    if p.payment_note == CARD_FAILED_NOTE:
+        p.payment_note = None
+    p.payment_followup = False
+    touch(b)
+    db.commit()
+    logger.info("Booking %s: seat %s card updated (%s)", b.id, p.id, hold_status)
+
+
+def push_card_failed(db: Session, b: Booking, p: BookingParticipant) -> None:
+    """Tell the guest straight away — they have days to fix it before the door."""
+    token = member_push_tokens(db, [p]).get(p.user_id or "")
+    if not token:
+        return
+    venue = b.deal.venue.name if b.deal and b.deal.venue else "your booking"
+    push.send_push_many([{
+        "to": token,
+        "title": "Your card couldn't be held",
+        "body": f"{venue}, {slot_label(b)} — update your card so your spot stays booked.",
+        "data": push_data(b, "card_failed"),
+        **push.URGENT,
+    }])
+
+
 # ── Decline handler (the one) ────────────────────────────────────────────────
 
 def handle_decline(p: BookingParticipant, kind: str, amount_cents: int, payer_name: str) -> str:
@@ -788,8 +896,12 @@ def _hold_later(db: Session, b: Booking, p: BookingParticipant, counts: dict, ke
         logger.error("Off-session hold failed for booking %s seat %s: %s", b.id, p.id, e)
         p.hold_status = "failed"
         p.payment_followup = True
-        p.payment_note = "We couldn't hold your card for this booking — update your card in the app."
+        p.payment_note = CARD_FAILED_NOTE
         counts["hold_failures"] += 1
+        touch(b)
+        db.commit()
+        push_card_failed(db, b, payer)
+        return
     touch(b)
     db.commit()
 
@@ -953,6 +1065,7 @@ def my_share(b: Booking, p: BookingParticipant):
         balance_cents=p.balance_cents or 0,
         status=p.deposit_status,
         covered_by_name=display_name(coverer) if coverer else None,
+        card_needs_update=card_needs_update(p),
     )
 
 

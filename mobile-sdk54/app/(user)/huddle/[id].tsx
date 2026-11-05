@@ -21,6 +21,7 @@ import { Check, ShareGlyph } from '../../../src/icons';
 import { hapticError } from '../../../src/haptics';
 import { Completion, LiveMeter, SplitSelector, fmtCents, useLiveBooking } from '../../../src/split';
 import { SharePay, shareTerms } from '../../../src/SharePay';
+import { CardUpdate } from '../../../src/CardUpdate';
 
 // Vote → Pay → Code. Highlights the current stage.
 function HuddleJourney({ stage }: { stage: number }) {
@@ -105,7 +106,7 @@ function AvatarSlot({ name, voted, empty }: { name?: string; voted?: boolean; em
 
 export default function HuddlePopup() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { T, startVoting, setActiveHuddle } = useApp();
+  const { T, startVoting, setActiveHuddle, refreshBookings } = useApp();
   const router = useRouter();
   const { view: huddle, setView: setHuddle, refresh } = useLiveBooking(id, getHuddle);
   const [copied, setCopied] = useState(false);
@@ -184,6 +185,12 @@ export default function HuddlePopup() {
       bodyStyle={{ paddingHorizontal: 16 }}
     >
       {huddle && <HuddleJourney stage={stage} />}
+
+      {huddle?.my_share?.card_needs_update && (
+        <View style={{ marginTop: 16 }}>
+          <CardUpdate bookingId={huddle.id} onUpdated={() => { refresh(); refreshBookings(); }} />
+        </View>
+      )}
 
       {!!huddle && !resolved && (
         <Text style={{ marginTop: 16, ...fontUI(400), fontSize: 15, lineHeight: 21, letterSpacing: -0.12, color: T.muted }}>

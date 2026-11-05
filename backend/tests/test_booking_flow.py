@@ -447,6 +447,75 @@ def test_saved_card_is_held_four_days_before_the_slot(stripe_stub, monkeypatch):
     assert b.participants[0].deposit_payment_id.startswith("pi_hold-")
 
 
+# ── Updating a card that couldn't be held ─────────────────────────────────────
+
+def _failed_seat_booking(monkeypatch):
+    b = _booking([_seat("ini", 2500, "paid", intent="pi_old", pm="pm_old", hold="failed")], status="confirmed")
+    p = b.participants[0]
+    p.payment_followup, p.payment_note = True, flow.CARD_FAILED_NOTE
+    monkeypatch.setattr(flow, "_ensure_user", lambda db, user: SimpleNamespace(id=user["sub"], stripe_customer_id="cus_ini"))
+    monkeypatch.setattr(flow.wallet, "sheet_params", lambda row: {
+        "customer_id": "cus_ini", "customer_session_client_secret": "cuss"})
+    monkeypatch.setattr(payments, "needs_setup_first", lambda start, at=None: False)
+    return b, p
+
+
+def test_failed_hold_is_flagged_for_the_guest_and_pushed(stripe_stub, monkeypatch):
+    b = _booking([_seat("ini", 2500, "paid", intent="seti_x", pm="pm_x", hold="saved")], status="confirmed")
+
+    def declined(**kw):
+        raise payments.PaymentNotApproved(402, "Your card was declined.")
+    pushed = []
+    monkeypatch.setattr(payments, "place_offsession_hold", declined)
+    monkeypatch.setattr(flow, "push_card_failed", lambda db, b, p: pushed.append(p.id))
+    counts = {"held_later": 0, "hold_failures": 0}
+    flow._hold_later(StubDB(), b, b.participants[0], counts, "hold")
+    p = b.participants[0]
+    assert counts["hold_failures"] == 1 and p.hold_status == "failed" and flow.card_needs_update(p)
+    assert pushed == ["ini"]
+
+
+def test_card_update_holds_a_new_card_keyed_to_the_old_intent(monkeypatch):
+    b, p = _failed_seat_booking(monkeypatch)
+    sent = {}
+    monkeypatch.setattr(payments, "create_hold", lambda **kw: sent.update(kw) or {"id": "pi_new", "client_secret": "s"})
+    out = flow.start_card_update(StubDB(), b, p, {"sub": "u-ini"})
+    assert out["intent_id"] == "pi_new" and sent["amount_cents"] == 2500
+    assert sent["idempotency_key"] == "recard-bk-1-ini-pi_old" and sent["metadata"]["type"] == "card_update"
+    assert p.deposit_payment_id == "pi_old"            # nothing swapped until the new card is confirmed
+
+
+def test_confirming_the_new_card_swaps_it_in_and_releases_the_old_hold(monkeypatch):
+    b, p = _failed_seat_booking(monkeypatch)
+    cancelled = []
+    monkeypatch.setattr(payments, "retrieve_hold", lambda pi: {
+        **_held(pi, 2500), "customer": "cus_ini",
+        "metadata": {"impulseBookingId": "bk-1", "impulseMemberId": "ini"}})
+    monkeypatch.setattr(payments, "cancel_hold", lambda **kw: cancelled.append(kw["intent_id"]))
+    flow.confirm_card_update(StubDB(), b, p, {"sub": "u-ini"}, "pi_new")
+    assert p.deposit_payment_id == "pi_new" and p.hold_status == "held" and p.stripe_payment_method_id == "pm_card"
+    assert cancelled == ["pi_old"] and not p.payment_followup and p.payment_note is None
+    assert not flow.card_needs_update(p)
+
+
+def test_a_card_update_for_someone_elses_seat_is_refused(monkeypatch):
+    b, p = _failed_seat_booking(monkeypatch)
+    monkeypatch.setattr(payments, "retrieve_hold", lambda pi: {
+        **_held(pi, 2500), "customer": "cus_someone_else",
+        "metadata": {"impulseBookingId": "bk-1", "impulseMemberId": "ini"}})
+    with pytest.raises(HTTPException) as e:
+        flow.confirm_card_update(StubDB(), b, p, {"sub": "u-ini"}, "pi_new")
+    assert e.value.status_code == 409 and p.deposit_payment_id == "pi_old"
+
+
+def test_card_update_needs_a_seat_that_is_in(monkeypatch):
+    b, p = _failed_seat_booking(monkeypatch)
+    p.deposit_status = "unpaid"
+    with pytest.raises(HTTPException) as e:
+        flow.start_card_update(StubDB(), b, p, {"sub": "u-ini"})
+    assert e.value.status_code == 409
+
+
 # ── Fee model ─────────────────────────────────────────────────────────────────
 
 def test_pilot_venue_pays_no_fee_and_unset_pilot_counts_as_pilot():

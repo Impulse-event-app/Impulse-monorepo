@@ -435,6 +435,7 @@ class BookingResponse(BaseModel):
     payment_status: str = "unpaid"          # unpaid | deposit_paid | fully_paid
     payment_note: Optional[str] = None      # customer-facing charge outcome
     payment_followup: bool = False
+    card_needs_update: bool = False         # the caller's own card couldn't be held
     has_voting: bool = False
     is_split: bool = False                  # Huddle Pay: one seat per person
     my_member_id: Optional[str] = None
@@ -456,6 +457,8 @@ class BookingResponse(BaseModel):
             payment_status=status,
             payment_note=me.payment_note,
             payment_followup=me.payment_followup,
+            card_needs_update=bool(user_id and me.user_id == user_id and me.deposit_status == "paid"
+                                   and getattr(me, "hold_status", None) == "failed"),
             my_member_id=me.id,
             is_split=len(seats) > 1,
         )
@@ -713,6 +716,7 @@ class MyShare(BaseModel):
     balance_cents: int              # charged when the venue scans the code
     status: str                     # unpaid | paid | guaranteed | settled | refunded | declined
     covered_by_name: Optional[str] = None
+    card_needs_update: bool = False   # my card couldn't be held — show "Update card"
 
 
 class ParticipantPublic(BaseModel):

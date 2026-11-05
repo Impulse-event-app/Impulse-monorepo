@@ -5,12 +5,14 @@
 // useStripePay() returns:
 //   holdShare(bookingId, shareCents) — hold my share for a booking. Resolves
 //     with the updated booking, or null if the person closed the sheet.
+//   updateCard(bookingId) — hold a different card on a spot whose card
+//     couldn't be held. Resolves with the updated booking, or null if closed.
 //   addCard() — save a card to the wallet. Resolves true once saved.
 //   overlay — always null here (the native sheet presents itself); the web
 //     version renders its form through it, so callers render it either way.
 import { useStripe } from '@stripe/stripe-react-native';
 import type { ReactNode } from 'react';
-import { ApiBooking, confirmHold, startCardSetup, startHold } from './api';
+import { ApiBooking, confirmCardUpdate, confirmHold, startCardSetup, startCardUpdate, startHold } from './api';
 import { useApp } from './theme';
 
 type SheetIntent =
@@ -21,6 +23,7 @@ export class SheetError extends Error {}
 
 export function useStripePay(): {
   holdShare: (bookingId: string, shareCents: number) => Promise<ApiBooking | null>;
+  updateCard: (bookingId: string) => Promise<ApiBooking | null>;
   addCard: () => Promise<boolean>;
   overlay: ReactNode;
 } {
@@ -70,6 +73,18 @@ export function useStripePay(): {
     return done ? confirmHold(bookingId, intent.intent_id) : null;
   };
 
+  const updateCard = async (bookingId: string) => {
+    const intent = await startCardUpdate(bookingId);
+    const done = await present(
+      intent.customer_id,
+      intent.customer_session_client_secret,
+      intent.intent_type === 'setup'
+        ? { setupIntentClientSecret: intent.client_secret }
+        : { paymentIntentClientSecret: intent.client_secret },
+    );
+    return done ? confirmCardUpdate(bookingId, intent.intent_id) : null;
+  };
+
   const addCard = async () => {
     const setup = await startCardSetup();
     return present(setup.customer_id, setup.customer_session_client_secret, {
@@ -77,5 +92,5 @@ export function useStripePay(): {
     });
   };
 
-  return { holdShare, addCard, overlay: null };
+  return { holdShare, updateCard, addCard, overlay: null };
 }

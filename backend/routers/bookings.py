@@ -270,6 +270,33 @@ def pay_share(
     return _details(db, booking_id, user)
 
 
+@router.post("/{booking_id}/card/start", response_model=HoldIntentResponse)
+def start_card_update(
+    booking_id: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """My spot is in but my card couldn't be held: start holding a different
+    card. Returns what PaymentSheet needs; the old hold stays until confirmed."""
+    b = flow.load(db, booking_id, lock=True)
+    me = flow.member_of(b, user)
+    return flow.start_card_update(db, b, me, user)
+
+
+@router.post("/{booking_id}/card", response_model=BookingWithDetailsResponse)
+def confirm_card_update(
+    booking_id: str,
+    body: BookingHoldConfirm,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """PaymentSheet finished: swap the new card in and release the old hold."""
+    b = flow.load(db, booking_id, lock=True)
+    me = flow.member_of(b, user)
+    flow.confirm_card_update(db, b, me, user, body.intent_id)
+    return _details(db, booking_id, user)
+
+
 @router.post("/seat/{seat_token}/claim", response_model=SeatLanding)
 def claim_seat(
     seat_token: str,

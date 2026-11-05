@@ -138,6 +138,7 @@ export type ApiBooking = {
   payment_status: 'unpaid' | 'deposit_paid' | 'fully_paid';
   payment_note: string | null;        // charge outcome shown in-app
   payment_followup: boolean;
+  card_needs_update: boolean;         // my card couldn't be held — show "Update card"
   has_voting: boolean;
   is_split: boolean;                  // Huddle Pay: one seat per person
   my_member_id: string | null;
@@ -302,6 +303,19 @@ export async function confirmHold(bookingId: string, intentId: string): Promise<
   });
 }
 
+/** My spot is in but my card couldn't be held: hold a different card. Same
+ *  two steps as claiming a spot; the old hold stays until the new one is in. */
+export async function startCardUpdate(bookingId: string): Promise<HoldIntent> {
+  return request<HoldIntent>(`/bookings/${bookingId}/card/start`, { method: 'POST' });
+}
+
+export async function confirmCardUpdate(bookingId: string, intentId: string): Promise<ApiBooking> {
+  return request<ApiBooking>(`/bookings/${bookingId}/card`, {
+    method: 'POST',
+    body: JSON.stringify({ intent_id: intentId }),
+  });
+}
+
 // ── Saved cards ──────────────────────────────────────────────────────────────
 
 export async function listPaymentMethods(): Promise<PaymentMethod[]> {
@@ -363,6 +377,7 @@ export type MyShare = {
   balance_cents: number;          // the rest; the whole share is held, then charged at check-in
   status: 'unpaid' | 'paid' | 'guaranteed' | 'settled' | 'refunded' | 'declined';
   covered_by_name: string | null;
+  card_needs_update?: boolean;    // my card couldn't be held — show "Update card"
 };
 
 export type ParticipantState = 'waiting' | 'paid' | 'covered' | 'settled' | 'guaranteed' | 'refunded' | 'declined';

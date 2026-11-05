@@ -353,6 +353,7 @@ export type Plan = {
   total: number;
   status: BookingStatus;
   paymentNote: string | null;  // balance-charge outcome, set when the venue scans the code
+  needsCard?: boolean;         // my card couldn't be held — show "Update card"
   hasVoting?: boolean;         // a Huddle — opens the huddle sheet
   isSplit?: boolean;           // Huddle Pay — opens the split view
 };
@@ -426,6 +427,7 @@ export function apiBookingToPlan(b: ApiBooking): Plan {
     total: b.total_paid,
     status: b.status,
     paymentNote: b.payment_note,
+    needsCard: b.card_needs_update,
     hasVoting: b.has_voting,
     isSplit: b.is_split,
   };
