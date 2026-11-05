@@ -388,7 +388,7 @@ export default function HomeScreen() {
                 ) : (
                   <HuddleCard
                     title="Start a huddle"
-                    sub="Vote with friends, split the deposit"
+                    sub="Vote with friends, split the bill"
                     onPress={() => requireAuth(() => router.push('/(user)/huddle/new'))}
                   />
                 )}

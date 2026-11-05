@@ -20,6 +20,10 @@
       ["expo-widgets", { "enablePushNotifications": true, "frequentUpdates": true }],
       "expo-status-bar",
       [
+        "@stripe/stripe-react-native",
+        { "merchantIdentifier": "merchant.au.impulseapp.impulse", "enableGooglePay": true }
+      ],
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#F1F1F4",

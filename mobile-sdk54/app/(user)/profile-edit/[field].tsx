@@ -103,7 +103,7 @@ function PaymentEditor({ close }: EditorProps) {
   const wallet = useWallet();
   return (
     <SheetFrame native={NATIVE_SHEETS} onClose={close} title="Payment" subtitle="Saved cards book in one tap." bodyStyle={{ paddingHorizontal: 16 }}>
-      <WalletPanel wallet={wallet} depositLabel="Save card" />
+      <WalletPanel wallet={wallet} depositLabel="Add a card" />
       <Label style={{ marginTop: 14, marginHorizontal: 16, lineHeight: 18 }}>
         Cards are held by our payment provider. Impulse never sees the number.
       </Label>

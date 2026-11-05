@@ -4,10 +4,7 @@ import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { money, apiDealToDrop, apiBookingToPlan } from '../../../src/data';
 import { fontMono, fontUI, useApp } from '../../../src/theme';
-import {
-  createBooking, getMe, payBooking, listPaymentMethods, describeCard,
-  ApiError, ApiBooking, PaymentMethod,
-} from '../../../src/api';
+import { createBooking, ApiError, ApiBooking } from '../../../src/api';
 import {
   BackButton,
   Btn,
@@ -22,11 +19,9 @@ import {
   Row,
   ScreenTitle,
   Stepper,
-  Switch,
   unitLabel,
 } from '../../../src/components';
-import { Plus, RowIcons } from '../../../src/icons';
-import { PinchCardField } from '../../../src/PinchCardField';
+import { useStripePay } from '../../../src/stripePay';
 import { hapticError, hapticSuccess } from '../../../src/haptics';
 
 // Mirrors the server's deposit formula: 10% of the discounted total,
@@ -54,18 +49,10 @@ export default function ClaimScreen() {
   const [huddlePay, setHuddlePay] = useState(false);
   const [time, setTime] = useState(times[0]);
   const [loading, setLoading] = useState(false);
-  // Once the slot is reserved we hold the unpaid booking and collect card details.
+  // Once the slot is reserved we keep the unpaid booking and hold the card.
   const [pendingBooking, setPendingBooking] = useState<ApiBooking | null>(null);
-  // Cards on file. `null` = not loaded yet; a saved card short-circuits the
-  // card form entirely, so it's fetched up front rather than at payment time.
-  const [savedCards, setSavedCards] = useState<PaymentMethod[] | null>(null);
-  const [useNewCard, setUseNewCard] = useState(false);
-  // Opt-in, not assumed — keeping a card on file needs explicit consent.
-  const [saveCard, setSaveCard] = useState(false);
-
-  useEffect(() => {
-    listPaymentMethods().then(setSavedCards).catch(() => setSavedCards([]));
-  }, []);
+  // Stripe's sheet: saved cards, a new card, Apple Pay and Google Pay.
+  const stripePay = useStripePay();
 
   // While a slot is held, on-screen Back steps from payment to the booking
   // form. Disable the iOS edge swipe then, so the two can't disagree.
@@ -73,8 +60,6 @@ export default function ClaimScreen() {
   useEffect(() => {
     navigation.setOptions({ gestureEnabled: !pendingBooking });
   }, [navigation, pendingBooking]);
-
-  const defaultCard = savedCards?.find((c) => c.is_default) ?? savedCards?.[0] ?? null;
 
   if (!d || !apiDeal) {
     return (
@@ -128,7 +113,10 @@ export default function ClaimScreen() {
     hapticSuccess();
     addPlan(apiBookingToPlan(paid));
     router.replace(
-      `/(user)/confirm?code=${encodeURIComponent(paid.confirmation_code ?? '')}&balance=${paid.balance_amount_cents ?? balanceCents}`,
+      // The whole amount is held now and charged at the door, so that's what
+      // the confirmation says will be charged.
+      `/(user)/confirm?code=${encodeURIComponent(paid.confirmation_code ?? '')}&balance=${
+        (paid.deposit_amount_cents ?? depositCents) + (paid.balance_amount_cents ?? balanceCents)}`,
     );
   };
 
@@ -139,46 +127,14 @@ export default function ClaimScreen() {
     Alert.alert('Payment failed', message);
   };
 
-  /** Charge a card already on file — no card form, no re-entry. */
-  const onPayWithSavedCard = async () => {
-    if (!pendingBooking || !defaultCard) return;
-    setLoading(true);
-    try {
-      finishPayment(await payBooking(pendingBooking.id, {
-        expected_deposit_cents: depositCents,
-        payment_method_id: defaultCard.id,
-      }));
-    } catch (err) {
-      // A saved card the server won't charge (expired, detached, never
-      // authorised) comes back 409 — drop straight to the card form.
-      if (err instanceof ApiError && err.status === 409) {
-        hapticError();
-        setUseNewCard(true);
-        Alert.alert('Card unavailable', err.message);
-      } else {
-        onPaymentError(err);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const onCardToken = async (token: string, cardHolderName: string) => {
+  /** Hold the whole booking on the card. Nothing is charged until the code
+   *  is scanned at the venue. */
+  const onHold = async () => {
     if (!pendingBooking) return;
     setLoading(true);
     try {
-      const profile = await getMe().catch(() => null);
-      const fullName = (profile?.full_name ?? cardHolderName).trim();
-      const [firstName, ...rest] = fullName.split(/\s+/);
-      finishPayment(await payBooking(pendingBooking.id, {
-        expected_deposit_cents: depositCents,
-        token,
-        save_card: saveCard,
-        card_holder_name: cardHolderName,
-        email: profile?.email ?? `no-email-${pendingBooking.id.slice(0, 8)}@impulse.app`,
-        first_name: firstName || 'Impulse',
-        last_name: rest.join(' ') || 'Customer',
-      }));
+      const paid = await stripePay.holdShare(pendingBooking.id, depositCents + balanceCents);
+      if (paid) finishPayment(paid);
     } catch (err) {
       onPaymentError(err);
     } finally {
@@ -206,7 +162,7 @@ export default function ClaimScreen() {
         contentContainerStyle={{ paddingTop: insets.top + 60, paddingHorizontal: 16, paddingBottom: 170 }}
       >
         <ReadableColumn>
-          <ScreenTitle>{pendingBooking ? 'Pay the deposit' : 'Your booking'}</ScreenTitle>
+          <ScreenTitle>{pendingBooking ? 'Hold your spot' : 'Your booking'}</ScreenTitle>
           <Text style={{ ...fontUI(400), fontSize: 17, letterSpacing: -0.19, color: T.muted, marginTop: 7 }}>
             {d.venue}{d.suburb ? ` · ${d.suburb}` : ''}
           </Text>
@@ -248,47 +204,14 @@ export default function ClaimScreen() {
                 </Group>
               )}
             </>
-          ) : savedCards === null ? (
-            <ActivityIndicator color={T.accent} style={{ height: 80 }} accessibilityLabel="Loading saved cards" />
-          ) : defaultCard && !useNewCard ? (
-            <Group label="Pay with">
-              <Row
-                icon={RowIcons.card(T.muted)}
-                label={describeCard(defaultCard)}
-                sublabel={defaultCard.expiry_date ? `Expires ${defaultCard.expiry_date}` : undefined}
-                trailing={<Radio on />}
-              />
-              <Row icon={<Plus size={13} color={T.accent} />} label="Use a different card" accent chevron={false} onPress={() => setUseNewCard(true)} />
-            </Group>
-          ) : (
-            <View style={{ marginTop: 32 }}>
-              <Label style={{ marginHorizontal: 16, marginBottom: 7 }}>Card details</Label>
-              <PinchCardField
-                depositLabel={fmtCents(depositCents)}
-                colors={{ bg: T.bg, text: T.text, muted: T.muted, line: T.line, accent: T.accent, surface: T.surface, fill: T.fill }}
-                onToken={({ token, cardHolderName }) => onCardToken(token, cardHolderName)}
-                onError={(message) => { hapticError(); Alert.alert('Card error', message); }}
-              />
-              <Group style={{ marginTop: 16 }} inset={16}>
-                <Row
-                  label="Save this card"
-                  sublabel="Remove it any time in You."
-                  trailing={<Switch on={saveCard} onChange={setSaveCard} accessibilityLabel="Save this card" />}
-                />
-                {defaultCard && (
-                  <Row label={`Use ${describeCard(defaultCard)}`} accent chevron={false} onPress={() => setUseNewCard(false)} />
-                )}
-              </Group>
-            </View>
-          )}
+          ) : null}
 
           <View style={{ marginTop: 40 }}>
             {line("Tonight's price", `${money(d.now)} ${unitLabel(d.unit)}`)}
             {line(perPerson ? 'People' : 'Slot', perPerson ? `× ${party}` : '× 1')}
             {splitting
               ? line('Split between', `${party} people`)
-              : line('Pay now', fmtCents(depositCents))}
-            {!splitting && line('Pay at the venue', fmtCents(balanceCents))}
+              : line('Charged at check-in', fmtCents(depositCents + balanceCents))}
             <View
               accessible
               accessibilityLabel={`Total, ${money(total)}`}
@@ -299,8 +222,8 @@ export default function ClaimScreen() {
             </View>
             <Label style={{ marginTop: 14, lineHeight: 18 }}>
               {splitting
-                ? 'Next, invite everyone and set the split. Each person pays a deposit on their share now and the rest at the venue.'
-                : `The ${fmtCents(depositCents)} deposit is non-refundable. ${fmtCents(balanceCents)} is charged when your code is scanned at the venue.`}
+                ? 'Next, invite everyone and set the split. Each person holds their share on their card, and it’s charged when your code is scanned at the venue.'
+                : `We hold ${fmtCents(depositCents + balanceCents)} on your card now and charge it when your code is scanned at the venue. If nobody shows, ${fmtCents(depositCents)} (10%) is kept and the rest is released.`}
             </Label>
           </View>
         </ReadableColumn>
@@ -319,16 +242,16 @@ export default function ClaimScreen() {
           )}
         </FloatingFooter>
       )}
-      {/* The card form carries its own pay button; the saved-card path needs one. */}
-      {pendingBooking && (loading || (defaultCard && !useNewCard)) && (
+      {pendingBooking && (
         <FloatingFooter>
           {loading ? (
-            <ActivityIndicator color={T.accent} style={{ height: 52 }} accessibilityLabel="Processing payment" />
+            <ActivityIndicator color={T.accent} style={{ height: 52 }} accessibilityLabel="Holding your spot" />
           ) : (
-            <Btn full onPress={onPayWithSavedCard}>{`Pay ${fmtCents(depositCents)} deposit`}</Btn>
+            <Btn full onPress={onHold}>{`Hold my spot · ${fmtCents(depositCents + balanceCents)}`}</Btn>
           )}
         </FloatingFooter>
       )}
+      {stripePay.overlay}
     </View>
   );
 }

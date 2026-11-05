@@ -245,7 +245,7 @@ export default function HuddlePayScreen() {
                 <SharePay
                   bookingId={v.id}
                   share={myShare}
-                  label={`Pay my ${fmtCents(myShare.deposit_cents)} and lock it in`}
+                  label="Hold my share and lock it in"
                   onPaid={() => { hapticSuccess(); refresh(); }}
                   onShareChanged={refresh}
                 />

@@ -163,19 +163,16 @@ export type BookingCreate = {
   seat_labels?: (string | null)[];
 };
 
-/** Pay with a card on file, or with a new one. Exactly one of
- *  `payment_method_id` / `token` — the server rejects both or neither.
- *  `expected_deposit_cents` is the amount on screen when the person tapped
- *  confirm; the server charges it only if it still matches their share. */
-export type BookingPay = {
-  expected_deposit_cents: number;
-  payment_method_id?: string;
-  token?: string;             // CaptureJs card token — never raw card details
-  save_card?: boolean;        // keep a new card on file for next time
-  card_holder_name?: string;
-  email?: string;
-  first_name?: string;
-  last_name?: string;
+/** What PaymentSheet needs to hold my share (POST /bookings/{id}/pay/start).
+ *  intent_type "payment" = hold the card now; "setup" = the booking is more
+ *  than six days out, so the card is saved now and held closer to the slot. */
+export type HoldIntent = {
+  intent_type: 'payment' | 'setup';
+  intent_id: string;
+  client_secret: string;
+  amount_cents: number;
+  customer_id: string;
+  customer_session_client_secret: string;
 };
 
 /** A card the user has kept on file. `display_card_number` is the bare last 4
@@ -188,15 +185,18 @@ export type PaymentMethod = {
   card_holder_name: string | null;
   funding: string | null;
   is_default: boolean;
-  created_at: string;
+  /** "apple_pay" / "google_pay" when the card came from a wallet. */
+  wallet: string | null;
 };
 
-/** "visa" + "4654" → "Visa •••• 4654". */
+/** "visa" + "4654" → "Visa •••• 4654" (or "Apple Pay · Visa •••• 4654"). */
 export function describeCard(m: PaymentMethod): string {
   const scheme = m.card_scheme
     ? m.card_scheme.charAt(0).toUpperCase() + m.card_scheme.slice(1)
     : 'Card';
-  return m.display_card_number ? `${scheme} •••• ${m.display_card_number}` : scheme;
+  const card = m.display_card_number ? `${scheme} •••• ${m.display_card_number}` : scheme;
+  const wallet = m.wallet === 'apple_pay' ? 'Apple Pay' : m.wallet === 'google_pay' ? 'Google Pay' : null;
+  return wallet ? `${wallet} · ${card}` : card;
 }
 
 export type InteractionType = 'view' | 'save' | 'booking' | 'rating';
@@ -275,7 +275,7 @@ export async function getDeal(dealId: string): Promise<ApiDeal> {
 
 // ── bookings ─────────────────────────────────────────────────
 
-/** Reserve a slot. The booking is unpaid and has NO code until payBooking succeeds. */
+/** Reserve a slot. The booking is unpaid and has NO code until its hold is confirmed. */
 export async function createBooking(body: BookingCreate): Promise<ApiBooking> {
   return request<ApiBooking>('/bookings', {
     method: 'POST',
@@ -283,12 +283,22 @@ export async function createBooking(body: BookingCreate): Promise<ApiBooking> {
   });
 }
 
-/** Pay my deposit share via Pinch. A solo booking comes back WITH its 6-digit code;
- *  a split booking gets its code once every share is in. */
-export async function payBooking(bookingId: string, body: BookingPay): Promise<ApiBooking> {
+/** Step 1 of claiming my spot: create a hold for exactly the share on screen.
+ *  A 409 means the share changed (or the booking moved on) — show the new one. */
+export async function startHold(bookingId: string, expectedShareCents: number): Promise<HoldIntent> {
+  return request<HoldIntent>(`/bookings/${bookingId}/pay/start`, {
+    method: 'POST',
+    body: JSON.stringify({ expected_share_cents: expectedShareCents }),
+  });
+}
+
+/** Step 2, once PaymentSheet is done: the server reads the hold back from
+ *  Stripe. A solo booking comes back WITH its 6-digit code; a split booking
+ *  gets its code once every share is in. Nothing is charged until check-in. */
+export async function confirmHold(bookingId: string, intentId: string): Promise<ApiBooking> {
   return request<ApiBooking>(`/bookings/${bookingId}/pay`, {
     method: 'POST',
-    body: JSON.stringify(body),
+    body: JSON.stringify({ intent_id: intentId }),
   });
 }
 
@@ -298,17 +308,19 @@ export async function listPaymentMethods(): Promise<PaymentMethod[]> {
   return request<PaymentMethod[]>('/users/me/payment-methods');
 }
 
-export async function addPaymentMethod(body: {
-  token: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  make_default?: boolean;
-}): Promise<PaymentMethod> {
-  return request<PaymentMethod>('/users/me/payment-methods', {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
+/** Add a card from the wallet screen: PaymentSheet in setup mode. */
+export type CardSetup = {
+  setup_intent_client_secret: string;
+  customer_id: string;
+  customer_session_client_secret: string;
+};
+
+export async function startCardSetup(): Promise<CardSetup> {
+  return request<CardSetup>('/users/me/payment-methods/setup', { method: 'POST' });
+}
+
+export async function makeDefaultPaymentMethod(methodId: string): Promise<void> {
+  await request<void>(`/users/me/payment-methods/${encodeURIComponent(methodId)}/default`, { method: 'POST' });
 }
 
 export async function deletePaymentMethod(methodId: string): Promise<void> {
@@ -347,8 +359,8 @@ export async function logInteraction(
 
 export type MyShare = {
   share_cents: number;
-  deposit_cents: number;          // charged on confirm — exactly this
-  balance_cents: number;          // charged when the venue scans the code
+  deposit_cents: number;          // the 10% kept if nobody shows (Impulse's cut after the pilot)
+  balance_cents: number;          // the rest; the whole share is held, then charged at check-in
   status: 'unpaid' | 'paid' | 'guaranteed' | 'settled' | 'refunded' | 'declined';
   covered_by_name: string | null;
 };

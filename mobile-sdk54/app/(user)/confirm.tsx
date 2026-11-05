@@ -96,7 +96,7 @@ export default function ConfirmScreen() {
 
           {!verified && balanceCents !== null && balanceCents > 0 && (
             <Label style={{ marginTop: 18, lineHeight: 19, textAlign: 'center', maxWidth: 320 }}>
-              ${(balanceCents / 100).toFixed(2)} is charged to your card when the code is scanned.
+              ${(balanceCents / 100).toFixed(2)} is held on your card and charged when the code is scanned.
             </Label>
           )}
         </ReadableColumn>
