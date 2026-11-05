@@ -102,18 +102,26 @@ def detach_payment_method(payment_method_id: str) -> None:
 
 
 def create_customer_session(customer_id: str) -> dict:
-    """Lets PaymentSheet show, save and remove the customer's cards without the
-    app ever holding a secret key."""
+    """Lets PaymentSheet (app) and the Payment Element (web) show and remove the
+    customer's saved cards without the client ever holding a secret key.
+
+    Every hold saves its card (setup_future_usage), and Stripe marks those
+    allow_redisplay="limited", which it hides by default. The filters show
+    them again: that card reuse at any venue is the point of the platform
+    Customer, and the sheet's own terms line covers it. The save checkbox is
+    off because the card is always saved; a checkbox would suggest otherwise."""
+    features = {
+        "payment_method_redisplay": "enabled",
+        "payment_method_allow_redisplay_filters": ["always", "limited", "unspecified"],
+        "payment_method_remove": "enabled",
+        "payment_method_save": "disabled",
+    }
     return _d(client().v1.customer_sessions.create({
         "customer": customer_id,
-        "components": {"mobile_payment_element": {
-            "enabled": True,
-            "features": {
-                "payment_method_save": "enabled",
-                "payment_method_redisplay": "enabled",
-                "payment_method_remove": "enabled",
-            },
-        }},
+        "components": {
+            "mobile_payment_element": {"enabled": True, "features": features},
+            "payment_element": {"enabled": True, "features": features},
+        },
     }))
 
 
