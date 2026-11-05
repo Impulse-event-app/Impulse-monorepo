@@ -343,9 +343,7 @@ def test_after_the_pilot_impulse_takes_its_ten_percent_at_capture(stripe_stub):
     flow.redeem(StubDB(), b)
     fees = [kw["application_fee_cents"] for kind, kw in stripe_stub if kind == "capture"]
     ini, sam = b.participants
-    assert fees[0] == payments.impulse_fee(venue=b.deal.venue, deposit_cents=ini.deposit_cents,
-                                           captured_cents=2500, card_country="AU")
-    assert fees[0] > ini.deposit_cents and fees[1] > sam.deposit_cents   # 10% + the venue's card/payout fees
+    assert fees == [ini.deposit_cents, sam.deposit_cents] == [250, 150]   # a flat 10%; Impulse absorbs Stripe's fees
 
 
 def test_lapsed_hold_is_recharged_on_the_same_card_at_the_door(stripe_stub, monkeypatch):
@@ -452,16 +450,15 @@ def test_saved_card_is_held_four_days_before_the_slot(stripe_stub, monkeypatch):
 # ── Fee model ─────────────────────────────────────────────────────────────────
 
 def test_pilot_venue_pays_no_fee_and_unset_pilot_counts_as_pilot():
-    assert payments.impulse_fee(venue=_venue(FUTURE), deposit_cents=250, captured_cents=2500, card_country="AU") == 0
-    assert payments.impulse_fee(venue=_venue(None), deposit_cents=250, captured_cents=2500, card_country="AU") == 0
+    assert payments.impulse_fee(venue=_venue(FUTURE), deposit_cents=250, captured_cents=2500) == 0
+    assert payments.impulse_fee(venue=_venue(None), deposit_cents=250, captured_cents=2500) == 0
 
 
-def test_post_pilot_fee_is_deposit_plus_venue_share_of_costs():
+def test_post_pilot_fee_is_a_flat_ten_percent():
     v = _venue(PAST)
-    # 10% = 250; card fee on 2500 = 42 + 30 = 72, the venue's 90% of it = 65; 1% instant on 2250 = 22.
-    assert payments.impulse_fee(venue=v, deposit_cents=250, captured_cents=2500, card_country="AU") == 250 + 65 + 22
-    assert payments.impulse_fee(venue=v, deposit_cents=250, captured_cents=250, card_country="AU") == 250  # no-show
-    assert payments.impulse_fee(venue=v, deposit_cents=250, captured_cents=2500, card_country="US") > 337
+    assert payments.impulse_fee(venue=v, deposit_cents=250, captured_cents=2500) == 250
+    assert payments.impulse_fee(venue=v, deposit_cents=250, captured_cents=250) == 250   # no-show: the whole 10%
+    assert payments.impulse_fee(venue=v, deposit_cents=250, captured_cents=100) == 100   # never more than captured
 
 
 def test_needs_setup_first_only_beyond_the_hold_window():

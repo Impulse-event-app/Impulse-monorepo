@@ -619,7 +619,6 @@ def _capture_seat(db: Session, b: Booking, p: BookingParticipant, amount_cents: 
 
     fee = payments.impulse_fee(
         venue=venue, deposit_cents=p.deposit_cents or 0, captured_cents=amount_cents,
-        card_country=payments.card_country_of(intent),
     )
     captured = payments.capture(
         intent_id=intent["id"], amount_cents=amount_cents, application_fee_cents=fee,

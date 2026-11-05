@@ -21,13 +21,10 @@ Every booking is a Stripe **destination charge**: it lives on Impulse's platform
 
 ## Fees (`payments.impulse_fee`, the only place this lives)
 
-- **Pilot** (`venues.pilot_ends_at` in the future, or unset): `application_fee_amount = 0`. The venue gets 100%. Impulse pays Stripe's card fee (1.7% + 30c domestic) and the 1% Instant Payout fee.
+- **Pilot** (`venues.pilot_ends_at` in the future, or unset): `application_fee_amount = 0`. The venue gets 100%.
   - `pilot_ends_at` defaults to 3 months after the venue creates its Stripe account. Set it by hand to change it.
-- **After the pilot:** the application fee is three parts, capped at the amount captured:
-  - the seat's 10% deposit;
-  - the venue's pro-rata share of the card fee;
-  - the 1% instant-payout fee on the venue's part.
-- With destination charges Stripe bills every fee to the platform, which is why the venue's share is passed on through the application fee.
+- **After the pilot:** a flat 10%. The application fee is the seat's `deposit_cents`, capped at the amount captured, so venues receive exactly 90%.
+- **Impulse always absorbs Stripe's fees:** the card fee (1.7% + 30c domestic, 3.5% + 30c international) and the 1% Instant Payout fee. With destination charges Stripe bills them to the platform, so after the pilot they come out of Impulse's 10% and during the pilot Impulse pays them outright. Decided 5 Nov 2026.
 
 ## Venue onboarding
 

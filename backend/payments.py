@@ -19,10 +19,11 @@ Fee model (impulse_fee):
 - During a venue's free pilot (venue.pilot_ends_at in the future, or unset),
   Impulse takes nothing: the venue gets 100%, and Impulse quietly pays
   Stripe's card fee and the 1% Instant Payout fee.
-- After the pilot, Impulse's cut is the seat's 10% deposit, plus the card fee
-  and instant-payout fee on the venue's 90%, so the venue bears the cost of
-  its own portion (with destination charges Stripe bills every fee to the
-  platform, so it has to be passed on through the application fee).
+- After the pilot, Impulse's cut is a flat 10%: the seat's deposit_cents.
+  Impulse keeps absorbing Stripe's card fee and the Instant Payout fee
+  (decided 2026-11-05), so venues see exactly 90% of every booking. With
+  destination charges Stripe bills those fees to the platform, so absorbing
+  them needs no extra code; they simply come out of Impulse's 10%.
 
 Card holds last 7 days for a customer-initiated authorisation (Visa about
 4d18h for merchant-initiated), and allow one capture. Bookings further out than
@@ -41,12 +42,6 @@ HOLD_AHEAD = timedelta(days=6)
 # When the sweep places a merchant-initiated hold for a far-off booking. Visa's
 # MIT window is 4 days 18 hours, so this keeps a margin past the slot.
 OFFSESSION_HOLD_LEAD = timedelta(days=4)
-
-# Stripe AU card pricing (stripe.com/au/pricing), used to pass the venue's
-# share of the card fee through the application fee once the pilot ends.
-CARD_FEE_DOMESTIC = (0.017, 30)       # 1.7% + 30c
-CARD_FEE_INTERNATIONAL = (0.035, 30)  # 3.5% + 30c
-INSTANT_PAYOUT_RATE = 0.01            # Stripe charges the platform 1% per Instant Payout
 
 
 class PaymentError(Exception):
@@ -86,26 +81,14 @@ def in_pilot(venue, at: Optional[datetime] = None) -> bool:
     return at < ends
 
 
-def card_fee_cents(amount_cents: int, card_country: Optional[str]) -> int:
-    rate, fixed = CARD_FEE_DOMESTIC if (card_country or "AU").upper() == "AU" else CARD_FEE_INTERNATIONAL
-    return round(amount_cents * rate) + fixed
-
-
 def impulse_fee(*, venue, deposit_cents: int, captured_cents: int,
-                card_country: Optional[str], at: Optional[datetime] = None) -> int:
+                at: Optional[datetime] = None) -> int:
     """The application_fee_amount for one capture — the only place the fee
-    model lives. See the module docstring."""
+    model lives: 0 during the venue's pilot, a flat 10% (the seat's deposit)
+    after it, never more than what was captured. See the module docstring."""
     if captured_cents <= 0 or in_pilot(venue, at):
         return 0
-    deposit = min(deposit_cents or 0, captured_cents)
-    venue_part = captured_cents - deposit
-    if venue_part <= 0:
-        return deposit
-    # The venue's slice of the one card fee on this capture, pro rata.
-    card_fee = card_fee_cents(captured_cents, card_country)
-    venue_card_fee = round(card_fee * venue_part / captured_cents)
-    instant_fee = round(venue_part * INSTANT_PAYOUT_RATE)
-    return min(captured_cents, deposit + venue_card_fee + instant_fee)
+    return min(deposit_cents or 0, captured_cents)
 
 
 # ── Holds ────────────────────────────────────────────────────────────────────
@@ -185,16 +168,6 @@ def _id(value) -> Optional[str]:
 
 def payment_method_of(intent: dict) -> Optional[str]:
     return _id(intent.get("payment_method"))
-
-
-def card_country_of(intent: dict) -> Optional[str]:
-    pm = intent.get("payment_method")
-    if isinstance(pm, dict):
-        return (pm.get("card") or {}).get("country")
-    charge = intent.get("latest_charge")
-    if isinstance(charge, dict):
-        return ((charge.get("payment_method_details") or {}).get("card") or {}).get("country")
-    return None
 
 
 def hold_expires_at(intent: dict) -> Optional[datetime]:
