@@ -308,9 +308,9 @@ def cancel_huddle(
     user: dict = Depends(get_current_user),
 ):
     """Creator calls off the huddle. Before it's confirmed this is a clean
-    cancel: nothing was charged while voting; any deposit shares paid while
-    collecting are refunded through the shared refund path (the plan never
-    became a real booking) and the spots go back. A confirmed huddle can't be
+    cancel: nothing was charged while voting; any card holds placed while
+    collecting are released (the plan never became a real booking, and nothing
+    was ever charged) and the spots go back. A confirmed huddle can't be
     cancelled."""
     b = _load(db, huddle_id, lock=True)
     me = flow.member_of(b, user)
@@ -331,9 +331,9 @@ def cancel_huddle(
     flow.touch(b)
     db.commit()
 
-    body = "The huddle was called off — you've been refunded." if refunded else "The huddle was called off. Nobody was charged."
+    body = "The huddle was called off — the hold on your card has been released." if refunded else "The huddle was called off. Nobody was charged."
     flow.push_all(db, b, "Huddle cancelled", body, "huddle_cancelled")
-    logger.info("Huddle %s cancelled by creator (%d refund(s))", b.id, refunded)
+    logger.info("Huddle %s cancelled by creator (%d hold(s) released)", b.id, refunded)
 
     b = _load(db, huddle_id)
     return flow.view(b, me)

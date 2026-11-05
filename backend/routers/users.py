@@ -8,16 +8,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-import payments
 import push
-import pinch_client
+import stripe_client
 import wallet
 from auth import SUPABASE_URL, get_current_user
 from database import get_db
 from models import Booking, BookingParticipant, PaymentMethod, User, UserVenueInteraction, Venue
 from schemas import (
     UserSearchResult,
-    PaymentMethodCreate,
+    CardSetupResponse,
     PaymentMethodResponse,
     PushTokenRegister,
     UserResponse,
@@ -170,18 +169,17 @@ def delete_me(
 
     row = db.query(User).filter(User.id == uid).first()
 
-    # 1. Detach saved cards at Pinch first. Nothing will point at them once the
-    #    user row is gone, so a failure here must stop the deletion. A source
-    #    Pinch no longer knows about (400) is already detached.
-    if row and row.pinch_payer_id:
-        for method in db.query(PaymentMethod).filter(PaymentMethod.user_id == uid).all():
-            try:
-                pinch_client.delete_source(row.pinch_payer_id, method.pinch_source_id, wallet.PINCH_MERCHANT_ID)
-            except payments.PinchError as exc:
-                if exc.status_code != 400:
-                    logger.error("Detaching source %s during account deletion failed: %s %s",
-                                 method.pinch_source_id, exc.status_code, exc.body)
-                    raise HTTPException(status_code=502, detail="Couldn't remove your saved cards. Try again.")
+    # 1. Delete the Stripe Customer first, which detaches every saved card.
+    #    Nothing will point at it once the user row is gone, so a failure here
+    #    must stop the deletion. One Stripe no longer knows about is gone already.
+    if row and row.stripe_customer_id:
+        try:
+            stripe_client.delete_customer(row.stripe_customer_id)
+        except stripe_client.StripeError as exc:
+            if getattr(exc, "http_status", None) != 404:
+                logger.error("Deleting Stripe customer %s during account deletion failed: %s",
+                             row.stripe_customer_id, exc)
+                raise HTTPException(status_code=502, detail="Couldn't remove your saved cards. Try again.")
 
     # 2. Anonymise what we keep, then remove what we don't — one transaction.
     #    Unlinking explicitly (rather than relying on the FK's ON DELETE SET
@@ -264,55 +262,49 @@ def list_payment_methods(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """The caller's saved cards, default first then newest."""
-    return (
-        db.query(PaymentMethod)
-        .filter(PaymentMethod.user_id == user["sub"])
-        .order_by(PaymentMethod.is_default.desc(), PaymentMethod.created_at.desc())
-        .all()
-    )
+    """The caller's saved cards, read from their Stripe Customer — default
+    first, then newest. The same cards work at every venue."""
+    row = db.query(User).filter(User.id == user["sub"]).first()
+    return wallet.list_cards(row)
 
 
-@router.post("/me/payment-methods", response_model=PaymentMethodResponse, status_code=201)
-def add_payment_method(
-    body: PaymentMethodCreate,
+@router.post("/me/payment-methods/setup", response_model=CardSetupResponse, status_code=201)
+def start_card_setup(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Vault a CaptureJs token against the caller's payer and keep it on file."""
+    """Add a card from the wallet screen: returns what PaymentSheet needs in
+    setup mode. Stripe saves the card to the user's Customer when the sheet
+    completes; the list endpoint shows it from then on."""
     row = _get_or_create_user(db, user)
-    payer_id = wallet.ensure_payer(
-        row, first_name=body.first_name, last_name=body.last_name, email=body.email,
-    )
-
+    sheet = wallet.sheet_params(row)
     try:
-        source = payments.vault_source(
-            payer_id=payer_id, token=body.token, merchant_id=wallet.PINCH_MERCHANT_ID,
+        intent = stripe_client.create_setup_intent(
+            {"customer": sheet["customer_id"], "usage": "off_session",
+             "metadata": {"impulseUserId": row.id, "type": "wallet_add"}},
+            None,
         )
-    except payments.PinchError as exc:
-        # Roll back the payer we may have just created rather than leaving the
-        # user pointing at one with no usable card.
-        db.rollback()
-        logger.warning("Vaulting a card failed for user %s: %s %s",
-                       user["sub"], exc.status_code, exc.body)
-        raise HTTPException(status_code=402, detail="That card couldn't be saved.")
-
-    # save_source() always makes the new card default, which is right for the
-    # first one and for an explicit request; otherwise keep the existing default.
-    previous_default = (
-        db.query(PaymentMethod)
-        .filter(PaymentMethod.user_id == row.id, PaymentMethod.is_default == True)
-        .first()
-    )
-    method = wallet.save_source(db, row, source)
-    if previous_default and not body.make_default:
-        method.is_default = False
-        db.flush()
-        previous_default.is_default = True
-
+    except stripe_client.StripeError as exc:
+        logger.error("Card setup for user %s failed: %s", row.id, exc)
+        raise HTTPException(status_code=502, detail="Couldn't start adding a card. Try again.")
     db.commit()
-    db.refresh(method)
-    return method
+    return CardSetupResponse(setup_intent_client_secret=intent["client_secret"], **sheet)
+
+
+@router.post("/me/payment-methods/{method_id}/default", status_code=204)
+def make_default_payment_method(
+    method_id: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    row = db.query(User).filter(User.id == user["sub"]).first()
+    if not row or not wallet.owns_card(row, method_id):
+        raise HTTPException(status_code=404, detail="Payment method not found")
+    try:
+        stripe_client.set_default_payment_method(row.stripe_customer_id, method_id)
+    except stripe_client.StripeError as exc:
+        logger.error("Setting default card for user %s failed: %s", row.id, exc)
+        raise HTTPException(status_code=502, detail="Couldn't update your default card. Try again.")
 
 
 @router.delete("/me/payment-methods/{method_id}", status_code=204)
@@ -321,44 +313,12 @@ def delete_payment_method(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Detach a saved card from Pinch and forget it locally."""
-    method = (
-        db.query(PaymentMethod)
-        .filter(PaymentMethod.id == method_id, PaymentMethod.user_id == user["sub"])
-        .first()
-    )
-    if not method:
-        raise HTTPException(status_code=404, detail="Payment method not found")
-
+    """Detach a saved card from the user's Stripe Customer."""
     row = db.query(User).filter(User.id == user["sub"]).first()
-    if row and row.pinch_payer_id:
-        try:
-            pinch_client.delete_source(
-                row.pinch_payer_id, method.pinch_source_id, wallet.PINCH_MERCHANT_ID,
-            )
-        except payments.PinchError as exc:
-            # A source Pinch no longer knows about (400 "not found") should
-            # still disappear from the user's wallet — anything else is a real
-            # failure and must not silently leave a card the user believes is gone.
-            if exc.status_code != 400:
-                logger.error("Detaching source %s failed: %s %s",
-                             method.pinch_source_id, exc.status_code, exc.body)
-                raise HTTPException(status_code=502, detail="Couldn't remove that card. Try again.")
-            logger.info("Source %s already gone from Pinch; removing locally", method.pinch_source_id)
-
-    was_default = method.is_default
-    db.delete(method)
-    db.flush()
-
-    # Promote the newest survivor so the user always has a default to pay with.
-    if was_default:
-        survivor = (
-            db.query(PaymentMethod)
-            .filter(PaymentMethod.user_id == user["sub"])
-            .order_by(PaymentMethod.created_at.desc())
-            .first()
-        )
-        if survivor:
-            survivor.is_default = True
-
-    db.commit()
+    if not row or not wallet.owns_card(row, method_id):
+        raise HTTPException(status_code=404, detail="Payment method not found")
+    try:
+        stripe_client.detach_payment_method(method_id)
+    except stripe_client.StripeError as exc:
+        logger.error("Detaching card %s failed: %s", method_id, exc)
+        raise HTTPException(status_code=502, detail="Couldn't remove that card. Try again.")

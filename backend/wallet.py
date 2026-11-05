@@ -1,104 +1,89 @@
 """
-Saved-card logic — the DB-aware half of the Pinch integration.
+Saved-card logic — the DB-aware half of the Stripe integration.
 
-payments.py stays pure orchestration (it talks to Pinch and nothing else);
-this module owns the mapping between Impulse users and their Pinch payer and
-vaulted sources. Both the single-booking flow and the huddle flow resolve a
-card through resolve_source() so "pay with a saved card" behaves identically
-in each.
+Each Impulse user has one Stripe Customer on the platform account
+(users.stripe_customer_id), created on first need and reused forever. Because
+every charge is a destination charge on the platform, that one Customer's cards
+work at every venue.
+
+Stripe is the source of truth for the cards themselves: PaymentSheet saves them
+when a guest holds a spot, and the wallet endpoints list and detach them
+straight from Stripe. Nothing card-shaped is stored locally beyond the
+PaymentMethod id a seat was held with.
 """
 import logging
-import os
-from typing import Optional, Tuple
+from typing import List, Optional
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
 
-import payments
-from models import PaymentMethod, User
+import stripe_client
+from models import User
 
 logger = logging.getLogger("impulse.wallet")
 
-PINCH_MERCHANT_ID: str = os.environ["PINCH_TEST_MERCHANT_ID"]
 
-
-def ensure_payer(row: User, *, first_name: str, last_name: str, email: str) -> str:
-    """The user's Pinch payer id, created once and reused for every later card."""
-    if not row.pinch_payer_id:
-        row.pinch_payer_id = payments.create_payer(
-            first_name=first_name, last_name=last_name, email=email,
-            merchant_id=PINCH_MERCHANT_ID,
-        )
-    return row.pinch_payer_id
-
-
-def save_source(db: Session, row: User, source: dict) -> PaymentMethod:
-    """Persist a freshly vaulted Pinch source as a card on file, made default."""
-    method = PaymentMethod(
-        user_id=row.id,
-        pinch_source_id=source["id"],
-        card_scheme=source.get("cardScheme"),
-        display_card_number=source.get("displayCardNumber"),
-        expiry_date=source.get("expiryDate"),
-        card_holder_name=source.get("cardHolderName"),
-        funding=source.get("funding"),
-    )
-    db.add(method)
-    db.flush()
-    db.query(PaymentMethod).filter(
-        PaymentMethod.user_id == row.id, PaymentMethod.id != method.id
-    ).update({"is_default": False})
-    method.is_default = True
-    return method
-
-
-def resolve_source(
-    db: Session,
-    row: User,
-    *,
-    payment_method_id: Optional[str],
-    token: Optional[str],
-    save_card: bool,
-    first_name: Optional[str],
-    last_name: Optional[str],
-    email: Optional[str],
-) -> Tuple[str, str]:
-    """Return (payer_id, source_id) ready to charge.
-
-    Saved card  → verified chargeable, then reused.
-    New token   → vaulted against the user's payer, kept only if save_card.
-
-    Raises HTTPException on anything the caller should surface to the user;
-    PinchError propagates for the caller's existing 402 handling."""
-    if payment_method_id:
-        method = (
-            db.query(PaymentMethod)
-            .filter(PaymentMethod.id == payment_method_id, PaymentMethod.user_id == row.id)
-            .first()
-        )
-        if not method:
-            raise HTTPException(status_code=404, detail="Saved card not found")
-        if not row.pinch_payer_id:
-            # Shouldn't happen — a saved card implies a payer. Treat as corrupt
-            # rather than charging against a payer id we don't have.
-            logger.error("User %s has a saved card but no pinch_payer_id", row.id)
-            raise HTTPException(status_code=409, detail="Saved card is unusable. Add the card again.")
-
-        if not payments.source_is_chargeable(
-            payer_id=row.pinch_payer_id,
-            source_id=method.pinch_source_id,
-            merchant_id=PINCH_MERCHANT_ID,
-        ):
-            # Vaulted fine at some point but can't be charged synchronously now
-            # (expired, detached at Pinch's end, never authorised).
-            raise HTTPException(
-                status_code=409,
-                detail="That saved card can no longer be charged. Please use another card.",
+def ensure_customer(row: User) -> str:
+    """The user's Stripe Customer id, created once. The idempotency key is the
+    user id, so two racing requests end up with the same Customer."""
+    if not row.stripe_customer_id:
+        try:
+            customer = stripe_client.create_customer(
+                email=row.email, name=row.full_name, user_id=row.id,
             )
-        return row.pinch_payer_id, method.pinch_source_id
+        except stripe_client.StripeError as e:
+            logger.error("Creating a Stripe customer for user %s failed: %s", row.id, e)
+            raise HTTPException(status_code=502, detail="Couldn't set up payments. Try again.")
+        row.stripe_customer_id = customer["id"]
+    return row.stripe_customer_id
 
-    payer_id = ensure_payer(row, first_name=first_name, last_name=last_name, email=email)
-    source = payments.vault_source(payer_id=payer_id, token=token, merchant_id=PINCH_MERCHANT_ID)
-    if save_card:
-        save_source(db, row, source)
-    return payer_id, source["id"]
+
+def sheet_params(row: User) -> dict:
+    """What PaymentSheet needs to show and save this user's cards."""
+    customer_id = ensure_customer(row)
+    try:
+        session = stripe_client.create_customer_session(customer_id)
+    except stripe_client.StripeError as e:
+        logger.error("Creating a customer session for user %s failed: %s", row.id, e)
+        raise HTTPException(status_code=502, detail="Couldn't open payments. Try again.")
+    return {"customer_id": customer_id, "customer_session_client_secret": session["client_secret"]}
+
+
+def card_view(pm: dict, default_id: Optional[str]) -> dict:
+    """A Stripe card PaymentMethod in the shape the app already renders:
+    bare last 4, lowercase brand, MM/YY expiry."""
+    card = pm.get("card") or {}
+    month, year = card.get("exp_month"), card.get("exp_year")
+    return {
+        "id": pm["id"],
+        "card_scheme": card.get("display_brand") or card.get("brand"),
+        "display_card_number": card.get("last4"),
+        "expiry_date": f"{month:02d}/{year % 100:02d}" if month and year else None,
+        "card_holder_name": (pm.get("billing_details") or {}).get("name"),
+        "funding": card.get("funding"),
+        "is_default": pm["id"] == default_id,
+        "wallet": (card.get("wallet") or {}).get("type"),
+    }
+
+
+def list_cards(row: Optional[User]) -> List[dict]:
+    """The user's saved cards, default first then newest."""
+    if not row or not row.stripe_customer_id:
+        return []
+    try:
+        customer = stripe_client.retrieve_customer(row.stripe_customer_id)
+        methods = stripe_client.list_cards(row.stripe_customer_id)
+    except stripe_client.StripeError as e:
+        logger.error("Listing cards for user %s failed: %s", row.id, e)
+        raise HTTPException(status_code=502, detail="Couldn't load your cards. Try again.")
+    default_id = ((customer.get("invoice_settings") or {}).get("default_payment_method"))
+    if isinstance(default_id, dict):
+        default_id = default_id.get("id")
+    if not default_id and methods:
+        default_id = max(methods, key=lambda m: m.get("created") or 0)["id"]
+    cards = [card_view(m, default_id) for m in methods]
+    return sorted(cards, key=lambda c: (not c["is_default"],
+                                        -next(m.get("created") or 0 for m in methods if m["id"] == c["id"])))
+
+
+def owns_card(row: User, payment_method_id: str) -> bool:
+    return any(c["id"] == payment_method_id for c in list_cards(row))

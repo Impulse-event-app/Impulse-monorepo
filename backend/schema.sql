@@ -28,6 +28,8 @@ create table if not exists public.users (
   age_bracket            integer,
   -- Onboarding: step 7
   notifications_enabled  boolean     not null default false,
+  -- One Stripe Customer per user on the platform; saved cards work at every venue.
+  stripe_customer_id     text        unique,
   created_at             timestamptz not null default now(),
   updated_at             timestamptz not null default now()
 );
@@ -98,7 +100,13 @@ create table if not exists public.venues (
   -- full bank account number passes through here between the bank step and
   -- submission, is stripped from every API read, and is deleted once the
   -- merchant exists.
-  onboarding_draft            jsonb
+  onboarding_draft            jsonb,
+  -- Stripe connected account (Accounts v2, recipient configuration).
+  stripe_account_id           text unique,   -- acct_XXX
+  stripe_transfers_status     text,          -- stripe_balance.stripe_transfers status; "active" = can take money
+  stripe_requirements         jsonb,         -- currently-due requirements, for the checklist
+  stripe_status_updated_at    timestamptz,
+  pilot_ends_at               timestamptz    -- end of the free pilot; NULL = still in the pilot
 );
 
 -- One venue per Pinch merchant. Partial, so the many un-onboarded venues can all
@@ -236,7 +244,7 @@ create table if not exists public.bookings (
   num_people              integer        not null,
   total_paid              numeric(10,2)  not null,
   confirmation_code       text           unique,                   -- set once every share is in
-  -- voting | collecting | confirmed | redeemed | cancelled | expired | collapsed
+  -- voting | collecting | confirmed | redeemed | no_show | cancelled | expired | collapsed
   status                  text           not null default 'collecting',
   redeemed_at             timestamptz,
   created_at              timestamptz    not null default now(),
@@ -248,6 +256,8 @@ create table if not exists public.bookings (
   initiator_member_id     uuid,                                     -- fk added below
   share_deadline          timestamptz,
   split_confirmed_at      timestamptz,
+  stripe_payout_id        text,                                     -- instant payout after redemption (po_XXX)
+  payout_status           text,                                     -- pending | paid | standard | failed
   spots_held              boolean        not null default false,
   join_token              text           unique,                   -- Huddle invite
   voting_deadline         timestamptz,
@@ -269,9 +279,12 @@ create table if not exists public.booking_participants (
   deposit_cents        integer,
   balance_cents        integer,
   covered_by_member_id uuid        references public.booking_participants(id),
-  pinch_payer_id       text,
-  pinch_source_id      text,
-  deposit_payment_id   text,
+  pinch_payer_id       text,                        -- retired (Pinch)
+  pinch_source_id      text,                        -- retired (Pinch)
+  deposit_payment_id   text,                        -- the hold: PaymentIntent pi_ (or SetupIntent seti_ for far-off bookings)
+  stripe_payment_method_id text,                    -- card the seat is held with
+  hold_status          text,                        -- saved | held | captured | released | failed
+  hold_expires_at      timestamptz,
   deposit_status       text        not null default 'unpaid',  -- unpaid | paid | guaranteed | settled | refunded | declined
   deposit_attempt      integer     not null default 0,         -- nonce suffix; moves on after a decline / share change
   balance_payment_id   text,

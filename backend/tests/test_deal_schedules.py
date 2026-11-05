@@ -112,9 +112,10 @@ def env():
     owner, stranger = str(uuid.uuid4()), str(uuid.uuid4())
     with Session() as db:
         db.add_all([User(id=owner, email="owner@example.test"), User(id=stranger, email="x@example.test")])
-        lanes = Venue(owner_id=owner, name="Test Lanes", category="Bowling")
+        lanes = Venue(owner_id=owner, name="Test Lanes", category="Bowling",
+                      stripe_account_id="acct_lanes", stripe_transfers_status="active")
         pending = Venue(owner_id=owner, name="Pending Bar", category="Bar",
-                        pinch_merchant_id="m_1", pinch_merchant_status="pending")
+                        stripe_account_id="acct_pending", stripe_transfers_status="pending")
         db.add_all([lanes, pending])
         db.commit()
         ids = SimpleNamespace(owner=owner, stranger=stranger, lanes=lanes.id, pending=pending.id)

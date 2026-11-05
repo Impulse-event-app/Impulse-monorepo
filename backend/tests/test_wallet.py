@@ -1,84 +1,51 @@
-"""Saved-card guards. Pinch is stubbed — these cover the decisions Impulse
-makes about a stored source, not Pinch's own behaviour."""
-import pytest
+"""Saved cards on the user's Stripe Customer. Stripe is stubbed — these cover
+the decisions Impulse makes (one Customer per user, how a card is shown),
+not Stripe's own behaviour."""
+from types import SimpleNamespace
 
-import payments
-import pinch_client
-
-
-def _payer(sources):
-    return {"id": "pyr_1", "sources": sources}
+import stripe_client
+import wallet
 
 
-# ── supportsRealtime guard ────────────────────────────────────────────────────
-# Pinch has no list-sources endpoint; the payer object embeds `sources`, and a
-# source can vault fine yet still not be chargeable via /payments/realtime.
-
-def test_chargeable_when_source_supports_realtime(monkeypatch):
-    monkeypatch.setattr(
-        pinch_client, "get_payer",
-        lambda pid, mid: _payer([{"id": "src_1", "supportsRealtime": True}]),
-    )
-    assert payments.source_is_chargeable(
-        payer_id="pyr_1", source_id="src_1", merchant_id="m"
-    ) is True
+def _pm(pm_id, created, last4="4242", brand="visa", wallet_type=None):
+    return {"id": pm_id, "created": created, "billing_details": {"name": "Sam Ng"},
+            "card": {"brand": brand, "last4": last4, "exp_month": 3, "exp_year": 2029,
+                     "funding": "credit", "wallet": {"type": wallet_type} if wallet_type else None}}
 
 
-def test_not_chargeable_when_realtime_unsupported(monkeypatch):
-    monkeypatch.setattr(
-        pinch_client, "get_payer",
-        lambda pid, mid: _payer([{"id": "src_1", "supportsRealtime": False}]),
-    )
-    assert payments.source_is_chargeable(
-        payer_id="pyr_1", source_id="src_1", merchant_id="m"
-    ) is False
+def test_customer_is_created_once_and_reused(monkeypatch):
+    made = []
+    monkeypatch.setattr(stripe_client, "create_customer",
+                        lambda **kw: made.append(kw) or {"id": "cus_1"})
+    row = SimpleNamespace(id="u-1", email="sam@example.com", full_name="Sam Ng", stripe_customer_id=None)
+    assert wallet.ensure_customer(row) == "cus_1"
+    assert wallet.ensure_customer(row) == "cus_1"
+    assert len(made) == 1 and made[0]["user_id"] == "u-1"
 
 
-def test_not_chargeable_when_source_absent(monkeypatch):
-    """Detached at Pinch's end but still in our table — must not be charged."""
-    monkeypatch.setattr(
-        pinch_client, "get_payer",
-        lambda pid, mid: _payer([{"id": "src_other", "supportsRealtime": True}]),
-    )
-    assert payments.source_is_chargeable(
-        payer_id="pyr_1", source_id="src_1", merchant_id="m"
-    ) is False
+def test_card_view_matches_what_the_app_renders():
+    view = wallet.card_view(_pm("pm_1", 1, wallet_type="apple_pay"), default_id="pm_1")
+    assert view == {"id": "pm_1", "card_scheme": "visa", "display_card_number": "4242",
+                    "expiry_date": "03/29", "card_holder_name": "Sam Ng", "funding": "credit",
+                    "is_default": True, "wallet": "apple_pay"}
 
 
-def test_not_chargeable_when_payer_has_no_sources(monkeypatch):
-    """`sources` missing entirely — treat as unusable rather than crashing."""
-    monkeypatch.setattr(pinch_client, "get_payer", lambda pid, mid: {"id": "pyr_1"})
-    assert payments.source_is_chargeable(
-        payer_id="pyr_1", source_id="src_1", merchant_id="m"
-    ) is False
+def test_list_puts_the_default_first_then_newest(monkeypatch):
+    monkeypatch.setattr(stripe_client, "retrieve_customer",
+                        lambda cid: {"invoice_settings": {"default_payment_method": "pm_old"}})
+    monkeypatch.setattr(stripe_client, "list_cards",
+                        lambda cid: [_pm("pm_mid", 2), _pm("pm_old", 1), _pm("pm_new", 3)])
+    row = SimpleNamespace(id="u-1", stripe_customer_id="cus_1")
+    assert [c["id"] for c in wallet.list_cards(row)] == ["pm_old", "pm_new", "pm_mid"]
 
 
-# ── payer reuse ───────────────────────────────────────────────────────────────
-
-def test_vault_source_reuses_the_given_payer(monkeypatch):
-    """The whole point: vaulting a second card must not mint a second payer."""
-    created_payers = []
-    monkeypatch.setattr(
-        pinch_client, "create_payer",
-        lambda body, mid: created_payers.append(body) or {"id": "pyr_new"},
-    )
-    monkeypatch.setattr(
-        pinch_client, "create_payment_source",
-        lambda pid, body, mid: {"id": "src_2", "cardScheme": "visa", "displayCardNumber": "4654"},
-    )
-
-    source = payments.vault_source(payer_id="pyr_existing", token="tkn_2", merchant_id="m")
-
-    assert source["id"] == "src_2"
-    assert created_payers == [], "vault_source must not create a payer"
+def test_newest_card_is_default_when_none_is_set(monkeypatch):
+    monkeypatch.setattr(stripe_client, "retrieve_customer", lambda cid: {"invoice_settings": {}})
+    monkeypatch.setattr(stripe_client, "list_cards", lambda cid: [_pm("pm_a", 1), _pm("pm_b", 2)])
+    cards = wallet.list_cards(SimpleNamespace(id="u-1", stripe_customer_id="cus_1"))
+    assert cards[0]["id"] == "pm_b" and cards[0]["is_default"]
 
 
-def test_vault_card_still_creates_a_payer_for_the_throwaway_path(monkeypatch):
-    monkeypatch.setattr(pinch_client, "create_payer", lambda body, mid: {"id": "pyr_one_off"})
-    monkeypatch.setattr(
-        pinch_client, "create_payment_source", lambda pid, body, mid: {"id": "src_one_off"},
-    )
-    payer_id, source_id = payments.vault_card(
-        first_name="A", last_name="B", email="a@b.c", token="tkn", merchant_id="m",
-    )
-    assert (payer_id, source_id) == ("pyr_one_off", "src_one_off")
+def test_no_customer_means_no_cards():
+    assert wallet.list_cards(SimpleNamespace(id="u-1", stripe_customer_id=None)) == []
+    assert wallet.list_cards(None) == []

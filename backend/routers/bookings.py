@@ -13,7 +13,9 @@ from database import get_db
 from models import Booking, BookingParticipant, Deal, User, Venue
 from schemas import (
     BookingCreate,
-    BookingPay,
+    BookingHoldConfirm,
+    BookingHoldStart,
+    HoldIntentResponse,
     BookingResponse,
     BookingView,
     BookingWithDetailsResponse,
@@ -232,22 +234,39 @@ def create_booking(
     return _details(db, b.id, user)
 
 
-@router.post("/{booking_id}/pay", response_model=BookingWithDetailsResponse)
-def pay_share(
+@router.post("/{booking_id}/pay/start", response_model=HoldIntentResponse)
+def start_pay(
     booking_id: str,
-    body: BookingPay,
+    body: BookingHoldStart,
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
     """
-    Any participant: pay my deposit share via Pinch — exactly the amount I was
-    shown (body.expected_deposit_cents), or a 409 if it has since changed.
-    The initiator's payment locks the slot. When the last share lands the
-    code is issued to everyone at once.
+    Any participant, step 1 of claiming my spot: create the hold on my card
+    for exactly the share I was shown (body.expected_share_cents), or a 409 if
+    it has since changed. Returns what PaymentSheet needs; nothing is held
+    until the app confirms. Nothing is charged until the venue redeems the code.
     """
     b = flow.load(db, booking_id, lock=True)
     me = flow.member_of(b, user)
-    flow.pay_share(db, b, me, user, body)
+    return flow.start_hold(db, b, me, user, body.expected_share_cents)
+
+
+@router.post("/{booking_id}/pay", response_model=BookingWithDetailsResponse)
+def pay_share(
+    booking_id: str,
+    body: BookingHoldConfirm,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """
+    Step 2: PaymentSheet finished. The server reads the hold back from Stripe;
+    the initiator's hold locks the slot, and when the last share is in the code
+    is issued to everyone at once.
+    """
+    b = flow.load(db, booking_id, lock=True)
+    me = flow.member_of(b, user)
+    flow.confirm_hold(db, b, me, user, body.intent_id)
     return _details(db, booking_id, user)
 
 

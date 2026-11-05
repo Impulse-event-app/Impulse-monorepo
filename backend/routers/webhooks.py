@@ -1,295 +1,174 @@
-import hashlib
-import hmac
-import json
+"""Stripe webhook receivers.
+
+Three endpoints, one per Stripe event destination, each with its own signing
+secret:
+
+  POST /webhooks/stripe           platform events (snapshot): a hold finished
+                                  confirming, a payment failed, a dispute opened
+  POST /webhooks/stripe/connect   connected-account events (snapshot): a venue's
+                                  payout arrived or failed
+  POST /webhooks/stripe/accounts  Accounts v2 events (thin): a venue's
+                                  capabilities or requirements changed
+
+A bad signature is a 400, as Stripe expects. Processing runs after the 2xx so
+Stripe never retries an event we have already applied.
+"""
 import logging
-import os
-import time
-from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Request
-from sqlalchemy import or_
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
-import settlements
+import booking_flow as flow
+import stripe_client
 from database import SessionLocal
 from mailer import MailNotConfigured, MailSendFailed, is_configured, send_email
-from models import BookingParticipant, User, Venue
-from pinch_client import PinchError
+from models import Booking, User, Venue
 
 router = APIRouter()
 logger = logging.getLogger("impulse.webhooks")
 
-# Which merchant a transfer settled for. Every charge currently runs through
-# the one Impulse merchant; once venues are managed merchants the event itself
-# identifies the merchant and this becomes the fallback.
-DEFAULT_MERCHANT_ID: str = os.environ["PINCH_TEST_MERCHANT_ID"]
 
-
-def _process_transfer(payload: dict, data: dict) -> None:
-    """A transfer means funds actually left Pinch for a bank account — the
-    event a venue reads as "the money went in". The webhook only carries the
-    id, so the detail is fetched and written to the settlements ledger."""
-    transfer_id = data.get("id") or data.get("transferId") or payload.get("transferId")
-    if not transfer_id or not str(transfer_id).startswith("tra_"):
-        logger.warning("transfer webhook without a tra_ id: %s", json.dumps(payload))
-        return
-
-    merchant_id = (
-        data.get("merchantId") or payload.get("merchantId")
-        or data.get("currentMerchant") or DEFAULT_MERCHANT_ID
-    )
-
-    db = SessionLocal()
+async def _verified_event(request: Request, secret: str) -> dict:
+    if not secret:
+        logger.error("Stripe webhook received but its signing secret is not configured")
+        raise HTTPException(status_code=400, detail="Webhook not configured")
+    raw = await request.body()
     try:
-        settlement = settlements.ingest_transfer(db, str(transfer_id), str(merchant_id))
-        logger.info(
-            "Transfer %s ingested as settlement %s (%s, net %sc)",
-            transfer_id, settlement.id, settlement.status, settlement.amount_cents,
-        )
-    except PinchError as e:
-        # Leave it un-ingested rather than half-written; Pinch retries, and the
-        # transfer can also be back-filled from List all transfers.
-        db.rollback()
-        logger.error("Failed to fetch transfer %s: %s %s", transfer_id, e.status_code, e.body)
-    except Exception:
-        db.rollback()
-        logger.exception("Failed to ingest transfer %s", transfer_id)
-    finally:
-        db.close()
+        return stripe_client.construct_event(raw, request.headers.get("stripe-signature", ""), secret)
+    except (stripe_client.SignatureVerificationError, ValueError):
+        logger.warning("Rejected Stripe webhook: bad or missing signature")
+        raise HTTPException(status_code=400, detail="Invalid signature")
 
 
-def _process_event(payload: dict) -> None:
-    """Async webhook processing — runs after the 200 has been returned."""
-    event_type = payload.get("event") or payload.get("type") or ""
-    data = payload.get("data") or payload
+# ── Platform events ──────────────────────────────────────────────────────────
 
-    if event_type == "transfer":
-        _process_transfer(payload, data)
-        return
-    if event_type != "realtime-payment":
-        logger.info("Ignoring Pinch webhook event type %r", event_type)
-        return
-
-    payment_id = data.get("id")
-    status = str(data.get("status", "")).lower()
-    if not payment_id:
-        logger.warning("realtime-payment webhook without a payment id: %s", json.dumps(payload))
-        return
-
-    db = SessionLocal()
-    try:
-        seat = (
-            db.query(BookingParticipant)
-            .filter(
-                or_(
-                    BookingParticipant.deposit_payment_id == payment_id,
-                    BookingParticipant.balance_payment_id == payment_id,
-                )
-            )
-            .first()
-        )
-        if not seat:
-            logger.info("Pinch webhook for unknown payment %s — no matching booking seat", payment_id)
-            return
-
-        if status == "approved":
-            if payment_id == seat.deposit_payment_id and seat.deposit_status == "unpaid":
-                seat.deposit_status = "paid"
-            elif payment_id == seat.balance_payment_id and seat.balance_status != "paid":
-                seat.balance_status = "paid"
-            db.commit()
-        logger.info(
-            "Pinch webhook processed: payment %s status %s → booking %s seat %s deposit=%s balance=%s",
-            payment_id, status, seat.booking_id, seat.id, seat.deposit_status, seat.balance_status,
-        )
-    finally:
-        db.close()
+def _process_platform(event: dict) -> None:
+    kind = event.get("type")
+    obj = (event.get("data") or {}).get("object") or {}
+    if kind in ("payment_intent.amount_capturable_updated", "setup_intent.succeeded"):
+        db = SessionLocal()
+        try:
+            flow.confirm_hold_from_webhook(db, obj.get("id"))
+        except Exception:
+            db.rollback()
+            logger.exception("Finalising %s from webhook failed", obj.get("id"))
+        finally:
+            db.close()
+    elif kind == "payment_intent.payment_failed":
+        err = obj.get("last_payment_error") or {}
+        logger.info("Payment %s failed: %s (%s)", obj.get("id"), err.get("message"), err.get("decline_code"))
+    elif kind == "charge.dispute.created":
+        # Impulse is liable for disputes on destination charges. A human handles
+        # these; the log line is the alert until there's a dashboard for it.
+        logger.error("DISPUTE opened: %s on charge %s for %s cents (reason %s) — respond in the Stripe Dashboard",
+                     obj.get("id"), obj.get("charge"), obj.get("amount"), obj.get("reason"))
+    else:
+        logger.info("Ignoring Stripe event %s", kind)
 
 
-@router.post("/pinch")
-async def pinch_webhook(request: Request, background_tasks: BackgroundTasks):
-    """
-    Pinch event receiver. Always returns 200 immediately; processing is async.
-    Every payload is logged in full.
-    """
-    try:
-        payload = await request.json()
-    except Exception:
-        raw = (await request.body()).decode(errors="replace")
-        logger.warning("Pinch webhook with non-JSON body: %s", raw)
-        return {"received": True}
-
-    logger.info("Pinch webhook payload: %s", json.dumps(payload))
-    background_tasks.add_task(_process_event, payload)
+@router.post("/stripe")
+async def stripe_webhook(request: Request, background_tasks: BackgroundTasks):
+    event = await _verified_event(request, stripe_client.STRIPE_WEBHOOK_SECRET)
+    background_tasks.add_task(_process_platform, event)
     return {"received": True}
 
 
-# ── Compliance (managed merchant onboarding) ─────────────────────────────────
-#
-# The compliance-updated payload carries no merchant id, only a submission id, so
-# the venue cannot be recovered from the body. Each managed merchant is instead
-# registered with its own webhook uri ending in that venue's id, and its own
-# whsec_ signing secret, so the URL identifies the venue and the signature proves
-# the caller is Pinch.
+# ── Connected-account events (payouts) ───────────────────────────────────────
 
-# Pinch's .NET SDK uses five minutes; matching it bounds replay of a captured POST.
-_SIGNATURE_TOLERANCE_SECONDS = 300
-
-
-def _verify_signature(header: str, raw_body: bytes, secret: str) -> bool:
-    """Check `pinch-signature: t=<unix>,v2=<hmac>` against HMAC-SHA256 of
-    "{t}.{raw body}". Compared with compare_digest so a wrong signature cannot be
-    recovered a byte at a time by timing the response."""
-    if not header or not secret:
-        return False
-    parts = dict(
-        piece.split("=", 1) for piece in header.split(",") if "=" in piece
-    )
-    timestamp, provided = parts.get("t", "").strip(), parts.get("v2", "").strip()
-    if not timestamp or not provided:
-        return False
-    try:
-        if abs(time.time() - int(timestamp)) > _SIGNATURE_TOLERANCE_SECONDS:
-            return False
-    except ValueError:
-        return False
-    expected = hmac.new(
-        secret.encode(), f"{timestamp}.".encode() + raw_body, hashlib.sha256
-    ).hexdigest()
-    return hmac.compare_digest(expected, provided)
-
-
-def _get(data: dict, *names):
-    """Pinch delivers PascalCase by default and camelCase when asked, and the two
-    are mixed across their docs — so read a key by any of its spellings."""
-    for name in names:
-        if name in data:
-            return data[name]
-    return None
-
-
-# Only these two are worth an email. pending/in-progress/in-review are noise —
-# the venue already knows they submitted, and the page shows live status.
-_NOTIFIABLE_STATUSES = ("approved", "rejected")
-
-
-def _notify_compliance_outcome(db, venue: Venue, status: str, notes) -> None:
-    """Tell the venue their verification finished.
-
-    Deliberately best-effort: a failed send must not fail the webhook, or Pinch
-    retries an update we have already applied. Unlike a venue enquiry there is
-    nothing lost by a missed email — the status is on the page either way — so
-    this logs and moves on rather than raising the way contact.py does.
-    """
-    if status not in _NOTIFIABLE_STATUSES:
+def _process_connect(event: dict) -> None:
+    kind = event.get("type")
+    obj = (event.get("data") or {}).get("object") or {}
+    if kind not in ("payout.paid", "payout.failed", "payout.canceled"):
+        logger.info("Ignoring connected-account event %s", kind)
         return
+    db = SessionLocal()
+    try:
+        b = db.query(Booking).filter(Booking.stripe_payout_id == obj.get("id")).first()
+        if b:
+            b.payout_status = {"payout.paid": "paid"}.get(kind, "failed")
+            db.commit()
+        log = logger.info if kind == "payout.paid" else logger.error
+        log("Payout %s on %s: %s (%s cents)", obj.get("id"), event.get("account"), kind, obj.get("amount"))
+    finally:
+        db.close()
 
+
+@router.post("/stripe/connect")
+async def stripe_connect_webhook(request: Request, background_tasks: BackgroundTasks):
+    event = await _verified_event(request, stripe_client.STRIPE_CONNECT_WEBHOOK_SECRET)
+    background_tasks.add_task(_process_connect, event)
+    return {"received": True}
+
+
+# ── Accounts v2 events (venue verification) ──────────────────────────────────
+
+def _notify_status_change(db, venue: Venue, previous: str) -> None:
+    """Tell the venue when it can take payments, or when Stripe needs more.
+
+    Best-effort: a failed send must not fail the webhook. The status is on the
+    Payments page either way."""
+    current = venue.stripe_transfers_status
+    if current == previous or current not in ("active", "restricted"):
+        return
     owner = db.query(User).filter(User.id == venue.owner_id).first()
     recipient = (owner.email if owner else None) or venue.email
-    if not recipient:
-        logger.warning("No email on file for venue %s; compliance outcome not sent", venue.id)
+    if not recipient or not is_configured():
+        logger.warning("Status email for venue %s not sent (no recipient or SMTP unset)", venue.id)
         return
-    if not is_configured():
-        logger.warning("SMTP not configured; compliance outcome for venue %s not sent", venue.id)
-        return
-
-    if status == "approved":
+    if current == "active":
         subject = f"{venue.name} is verified — you can publish deals"
         body = (
-            f"Good news — Pinch has verified {venue.name}.\n\n"
-            "Your deals can now go live, and takings will settle to your own "
-            "bank account.\n\n"
+            f"Good news — Stripe has verified {venue.name}.\n\n"
+            "Your deals can now go live, and each booking is paid to your bank "
+            "within minutes of you checking the group in.\n\n"
             "Publish a deal: https://impulseapp.au/dashboard/deals\n"
         )
     else:
-        detail = f"\n\nWhat they said:\n{notes}\n" if notes else "\n"
+        due = "\n".join(f"- {d.get('description')}" for d in (venue.stripe_requirements or []) if d.get("description"))
         body = (
-            f"Pinch could not verify {venue.name} yet.{detail}\n"
-            "This is usually a document that needs re-taking — most often a "
-            "licence photographed in black and white, or only one side of it.\n\n"
-            "Upload a replacement here: "
-            "https://impulseapp.au/dashboard/payments-setup\n"
+            f"Stripe needs a little more information to keep payments running for {venue.name}."
+            f"{chr(10) * 2 + due if due else ''}\n\n"
+            "Finish it here: https://impulseapp.au/dashboard/payments-setup\n"
         )
-        subject = f"Action needed to verify {venue.name}"
-
+        subject = f"Action needed for {venue.name}'s payments"
     try:
         send_email([recipient], subject, body)
-        logger.info("Compliance outcome (%s) emailed for venue %s", status, venue.id)
     except (MailNotConfigured, MailSendFailed, ValueError) as e:
-        logger.error("Compliance outcome email failed for venue %s: %s", venue.id, e)
+        logger.error("Status email for venue %s failed: %s", venue.id, e)
 
 
-def _process_compliance(venue_id: str, payload: dict) -> None:
-    """Write the new compliance state. Runs after the 200 has been returned."""
-    data = _get(payload, "Data", "data") or {}
-    submission = _get(data, "ComplianceSubmission", "complianceSubmission") or {}
-    metadata = _get(payload, "Metadata", "metadata") or {}
-
-    submission_status = (_get(submission, "SubmissionStatus", "submissionStatus")
-                         or _get(metadata, "Status", "status"))
-    merchant_status = (_get(submission, "MerchantStatus", "merchantStatus")
-                       or _get(metadata, "MerchantStatus", "merchantStatus"))
-    notes = _get(submission, "Notes", "notes")
-
+def _process_account(account_id: str) -> None:
+    from routers.merchants import sync_account
     db = SessionLocal()
     try:
-        venue = db.query(Venue).filter(Venue.id == venue_id).first()
+        venue = db.query(Venue).filter(Venue.stripe_account_id == account_id).first()
         if not venue:
-            logger.warning("Compliance webhook for unknown venue %s", venue_id)
+            logger.warning("Account event for unknown account %s", account_id)
             return
-        previous_status = venue.pinch_submission_status
-        if submission_status:
-            venue.pinch_submission_status = str(submission_status)
-        if merchant_status:
-            venue.pinch_merchant_status = str(merchant_status)
-        if notes:
-            venue.pinch_compliance_notes = str(notes)
-        venue.pinch_compliance_updated_at = datetime.now(timezone.utc)
-        db.commit()
-        logger.info("Compliance updated for venue %s: submission=%s merchant=%s",
-                    venue_id, submission_status, merchant_status)
-
-        # Only on a real transition — Pinch emits compliance-updated on every
-        # document upload too, and nobody needs an email for each one.
-        if submission_status and str(submission_status) != previous_status:
-            _notify_compliance_outcome(db, venue, str(submission_status), notes)
+        previous = venue.stripe_transfers_status
+        sync_account(db, venue)
+        _notify_status_change(db, venue, previous)
     except Exception:
         db.rollback()
-        logger.exception("Failed to apply compliance update for venue %s", venue_id)
+        logger.exception("Applying account update for %s failed", account_id)
     finally:
         db.close()
 
 
-@router.post("/pinch/compliance/{venue_id}")
-async def pinch_compliance_webhook(
-    venue_id: str, request: Request, background_tasks: BackgroundTasks
-):
-    """
-    compliance-updated receiver for one managed merchant.
-
-    Always answers 200, including when the signature fails — a 401 would tell an
-    attacker probing the endpoint whether a guess was close. The payload carries
-    only statuses and reviewer notes (no document contents and no ID numbers), so
-    logging it in full is safe and matches the existing handler.
-    """
+@router.post("/stripe/accounts")
+async def stripe_accounts_webhook(request: Request, background_tasks: BackgroundTasks):
+    secret = stripe_client.STRIPE_ACCOUNTS_WEBHOOK_SECRET
+    if not secret:
+        raise HTTPException(status_code=400, detail="Webhook not configured")
     raw = await request.body()
-
-    db = SessionLocal()
     try:
-        venue = db.query(Venue).filter(Venue.id == venue_id).first()
-        secret = venue.pinch_webhook_secret if venue else None
-    finally:
-        db.close()
-
-    if not _verify_signature(request.headers.get("pinch-signature", ""), raw, secret or ""):
-        logger.warning("Rejected compliance webhook for venue %s: bad or missing signature", venue_id)
-        return {"received": True}
-
-    try:
-        payload = json.loads(raw)
-    except Exception:
-        logger.warning("Compliance webhook for venue %s with non-JSON body", venue_id)
-        return {"received": True}
-
-    logger.info("Compliance webhook payload for venue %s: %s", venue_id, json.dumps(payload))
-    background_tasks.add_task(_process_compliance, venue_id, payload)
+        notification = stripe_client.parse_thin_event(raw, request.headers.get("stripe-signature", ""), secret)
+    except (stripe_client.SignatureVerificationError, ValueError):
+        logger.warning("Rejected Stripe accounts webhook: bad or missing signature")
+        raise HTTPException(status_code=400, detail="Invalid signature")
+    related = getattr(notification, "related_object", None)
+    account_id = getattr(related, "id", None) if related else None
+    if account_id:
+        background_tasks.add_task(_process_account, account_id)
+    else:
+        logger.info("Accounts event %s without a related account", getattr(notification, "type", None))
     return {"received": True}

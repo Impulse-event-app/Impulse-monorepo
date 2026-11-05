@@ -35,7 +35,10 @@ class User(Base):
     expo_push_token = Column(Text, nullable=True)              # ExponentPushToken[...] for push
     # One Pinch payer per user, created on first card save and reused forever.
     # Cards vault as sources against it — see PaymentMethod.
-    pinch_payer_id = Column(Text, nullable=True)               # pyr_XXX
+    pinch_payer_id = Column(Text, nullable=True)               # pyr_XXX (retired; dropped with the Pinch cleanup)
+    # One Stripe Customer per user on the platform account. Saved cards are its
+    # PaymentMethods and work at every venue (destination charges).
+    stripe_customer_id = Column(Text, nullable=True, unique=True)   # cus_XXX
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -125,6 +128,17 @@ class Venue(Base):
     # The full bank account number lives here between the bank step and submission
     # and is stripped from every read and deleted once the merchant exists.
     onboarding_draft = Column(JSONB, nullable=True)
+
+    # ── Stripe connected account (Accounts v2, recipient configuration) ─────
+    stripe_account_id = Column(Text, nullable=True, unique=True)   # acct_XXX
+    # configuration.recipient.capabilities.stripe_balance.stripe_transfers.status:
+    # "active" is the only state in which deals can take money.
+    stripe_transfers_status = Column(Text, nullable=True)
+    stripe_requirements = Column(JSONB, nullable=True)            # requirements.entries, for the checklist
+    stripe_status_updated_at = Column(DateTime(timezone=True), nullable=True)
+    # End of the venue's free pilot. NULL counts as still in the pilot, so a
+    # forgotten date never charges a venue that was promised free.
+    pilot_ends_at = Column(DateTime(timezone=True), nullable=True)
 
     owner: "User" = relationship("User", back_populates="venues")
     deals: List["Deal"] = relationship("Deal", back_populates="venue")
@@ -292,6 +306,10 @@ class Booking(Base):
     split_confirmed_at = Column(DateTime(timezone=True), nullable=True)
     # Spots are taken out of the deal once (initiator's deposit / Huddle resolution).
     spots_held = Column(Boolean, nullable=False, server_default="false")
+    # The Instant Payout made to the venue after redemption (po_XXX), so a
+    # retry never pays out twice. payout_status: paid | standard | failed.
+    stripe_payout_id = Column(Text, nullable=True)
+    payout_status = Column(Text, nullable=True)
 
     # ── Voting stage (Huddle only) ────────────────────────────
     join_token = Column(Text, nullable=True, unique=True)
@@ -332,10 +350,22 @@ class BookingParticipant(Base):
     covered_by_member_id = Column(UUID(as_uuid=False), ForeignKey("booking_participants.id"), nullable=True)
 
     # ── Payment ───────────────────────────────────────────────
-    pinch_payer_id = Column(Text, nullable=True)
-    pinch_source_id = Column(Text, nullable=True)
+    # A seat is "paid" (deposit_status) once its card is HELD for the whole
+    # share, or saved to be held later; nothing is charged until the venue
+    # redeems the code, which captures it (balance_status "paid").
+    pinch_payer_id = Column(Text, nullable=True)        # retired
+    pinch_source_id = Column(Text, nullable=True)       # retired
+    # The PaymentIntent (pi_) holding this seat, or the SetupIntent (seti_)
+    # that saved its card for a far-off booking.
     deposit_payment_id = Column(Text, nullable=True, index=True)
+    # The card the seat was held with, on the payer's Stripe Customer — reused
+    # to re-hold a far-off booking and by the sweep.
+    stripe_payment_method_id = Column(Text, nullable=True)
+    # none | saved | held | captured | released | failed
+    hold_status = Column(Text, nullable=True)
+    hold_expires_at = Column(DateTime(timezone=True), nullable=True)
     # unpaid | paid | guaranteed | settled | refunded | declined
+    # (refunded = a Huddle hold released before it became a booking)
     deposit_status = Column(Text, nullable=False, server_default="unpaid")
     # Bumped after a definitive decline or a share change, so the next attempt
     # gets a fresh nonce (Pinch replays the first result for a reused nonce).

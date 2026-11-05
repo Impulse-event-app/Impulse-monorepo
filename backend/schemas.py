@@ -95,9 +95,9 @@ class VenueResponse(BaseModel):
     avg_rating: float
     total_ratings: int
     created_at: datetime
-    pinch_merchant_id: Optional[str] = None
-    pinch_submission_status: Optional[str] = None
-    pinch_merchant_status: Optional[str] = None
+    stripe_account_id: Optional[str] = None
+    stripe_transfers_status: Optional[str] = None
+    pilot_ends_at: Optional[datetime] = None
 
 
 # ── Deal ──────────────────────────────────────────────────────────────────────
@@ -369,41 +369,43 @@ class BookingCreate(BaseModel):
     seat_labels: Optional[List[Optional[str]]] = None   # e.g. [None, "Sam", "Alex"]
 
 
-class BookingPay(BaseModel):
-    """How to pay a deposit share — either a saved card or a fresh CaptureJs token.
+class BookingHoldStart(BaseModel):
+    """Step 1 of claiming a spot. `expected_share_cents` is the amount the payer
+    was shown; the hold is created only if it still matches their stored share,
+    so the amount held is always the amount consented to."""
+    expected_share_cents: int
 
-    Exactly one of `payment_method_id` (charge a card already on file) or
-    `token` (a new card) must be supplied. With `token`, `save_card` decides
-    whether it is kept on file afterwards; the payer/card details are only
-    needed on that path.
 
-    `expected_deposit_cents` is the amount the payer was shown when they
-    tapped confirm. The server charges it only if it still matches their
-    stored share — the amount charged is always the amount consented to."""
-    expected_deposit_cents: int
-    payment_method_id: Optional[str] = None
-    token: Optional[str] = None
-    save_card: bool = False
-    card_holder_name: Optional[str] = None
-    email: Optional[str] = None
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
+class HoldIntentResponse(BaseModel):
+    """Everything PaymentSheet needs. intent_type "payment" = hold the card now
+    (initPaymentSheet paymentIntentClientSecret); "setup" = save it now, held
+    closer to the slot (setupIntentClientSecret)."""
+    intent_type: Literal["payment", "setup"]
+    intent_id: str
+    client_secret: str
+    amount_cents: int
+    customer_id: str
+    customer_session_client_secret: str
 
-    @model_validator(mode="after")
-    def _one_payment_path(self):
-        if bool(self.payment_method_id) == bool(self.token):
-            raise ValueError("Supply exactly one of payment_method_id or token")
-        if self.token and not (self.email and self.first_name and self.last_name):
-            raise ValueError("first_name, last_name and email are required with a new card")
-        return self
+
+class BookingHoldConfirm(BaseModel):
+    """Step 2: PaymentSheet finished. The server reads the intent back from
+    Stripe rather than trusting the app."""
+    intent_id: str
+
+
+class CardSetupResponse(BaseModel):
+    """Add a card from the wallet screen: PaymentSheet in setup mode."""
+    setup_intent_client_secret: str
+    customer_id: str
+    customer_session_client_secret: str
 
 
 class PaymentMethodResponse(BaseModel):
-    """A card on file. `display_card_number` is the bare last 4 and
-    `card_scheme` is lowercase, exactly as Pinch returns them — the client
-    builds the mask and title-cases the scheme."""
-    model_config = ConfigDict(from_attributes=True)
-
+    """A card on file (a Stripe PaymentMethod id, pm_…). `display_card_number`
+    is the bare last 4 and `card_scheme` is lowercase — the client builds the
+    mask and title-cases the scheme. `wallet` is "apple_pay" / "google_pay"
+    for a wallet-backed card."""
     id: str
     card_scheme: Optional[str]
     display_card_number: Optional[str]
@@ -411,16 +413,7 @@ class PaymentMethodResponse(BaseModel):
     card_holder_name: Optional[str]
     funding: Optional[str]
     is_default: bool
-    created_at: datetime
-
-
-class PaymentMethodCreate(BaseModel):
-    """Save a card to the user's wallet from a CaptureJs token."""
-    token: str
-    first_name: str
-    last_name: str
-    email: str
-    make_default: bool = True
+    wallet: Optional[str] = None
 
 
 class BookingResponse(BaseModel):
@@ -612,45 +605,34 @@ class StatsResponse(BaseModel):
     total_spots: int
 
 
-# ── Payouts (venue view of Pinch transfers) ───────────────────────────────────
+# ── Payouts (venue view of Stripe payouts) ────────────────────────────────────
 
 class PayoutLine(BaseModel):
-    """One booking's contribution to a payout."""
-    booking_id: Optional[str]
+    """One redeemed booking paid out to the venue."""
+    booking_id: str
     confirmation_code: Optional[str]
     deal_title: Optional[str]
-    kind: Optional[str]                 # deposit | balance
-    line_type: Optional[str]            # Settlement | Dishonour | ...
-    amount_cents: int                   # what the venue is owed for this line
-    transaction_date: Optional[datetime]
+    amount_cents: int                   # what was captured for the booking
+    redeemed_at: Optional[datetime]
 
 
 class PayoutResponse(BaseModel):
-    """A Pinch transfer, sliced to the part that belongs to one venue.
-
-    `amount_cents` is this venue's share, not the whole transfer — with every
-    charge currently on the single Impulse merchant, one transfer covers many
-    venues. `transfer_net_cents` is the full transfer for reference.
-    """
-    id: str
-    pinch_transfer_id: str
-    status: str
-    reference: Optional[str]
+    """A Stripe payout from the venue's connected account to its bank."""
+    id: str                             # po_XXX
+    status: str                         # paid | pending | in_transit | failed | canceled
+    method: str                         # instant | standard
     currency: str
     amount_cents: int
-    transfer_net_cents: int
-    transfer_date: Optional[datetime]
-    account_name: Optional[str]
-    bsb: Optional[str]
-    account_number: Optional[str]
+    arrival_date: Optional[datetime]
+    created: Optional[datetime]
     lines: List[PayoutLine]
 
 
 class PayoutSummary(BaseModel):
     """Header figures for the payouts page."""
-    paid_cents: int        # settled and complete
-    in_transit_cents: int  # transfer raised, not yet complete
-    awaiting_cents: int    # earned on redeemed bookings, not yet in any transfer
+    paid_cents: int        # payouts that have arrived
+    in_transit_cents: int  # payouts on their way
+    awaiting_cents: int    # in the venue's Stripe balance, not yet paid out
     payout_count: int
     last_payout_date: Optional[datetime]
 
@@ -906,105 +888,22 @@ class VenueEnquiryCreate(BaseModel):
     website: Optional[str] = Field(default=None, max_length=200)
 
 
-# ── Pinch managed merchant onboarding ─────────────────────────────────────────
-#
-# The onboarding draft is stored as free-form JSON on the venue so a half-finished
-# form survives a device change, but the pieces that become a Pinch payload are
-# typed here so a malformed draft fails at submit rather than at Pinch.
+# ── Stripe Connect (venue payments) ───────────────────────────────────────────
 
-DOCUMENT_TYPES = (
-    "identity-document", "financial-document",
-    "business-registration", "additional-verification",
-)
-
-
-class MerchantContactInput(BaseModel):
-    """A director, owner or UBO. Pinch requires email, contactType and
-    isPrimaryContact; the rest materially improves the odds of passing review."""
-
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    email: str
-    phone: Optional[str] = None
-    contact_type: Literal["owner", "director", "shareholder", "executive"]
-    is_primary_contact: bool = False
-    is_ubo: bool = False
-    ownership: Optional[float] = Field(default=None, ge=0, le=100)
-    dob: Optional[str] = None                       # ISO yyyy-mm-dd
-    street_address: Optional[str] = None
-    suburb: Optional[str] = None
-    state: Optional[str] = None
-    postcode: Optional[str] = None
-    country: Optional[str] = "AU"
-
-
-class OnboardingDraft(BaseModel):
-    """Every step's fields, all optional — this is saved partially filled."""
-
-    # Business details
-    company_name: Optional[str] = None
-    legal_entity_name: Optional[str] = None
-    company_email: Optional[str] = None
-    company_phone: Optional[str] = None
-    company_website_url: Optional[str] = None
-    abn: Optional[str] = None
-    nature_of_business: Optional[str] = None
-    organisation_type: Optional[str] = None
-    legal_street_address: Optional[str] = None
-    legal_suburb: Optional[str] = None
-    legal_state: Optional[str] = None
-    legal_postcode: Optional[str] = None
-    legal_country: Optional[str] = "AU"
-
-    # Bank
-    bank_account_name: Optional[str] = None
-    bank_bsb: Optional[str] = None
-    bank_account_number: Optional[str] = None       # write-only; never read back
-
-    # Declarations
-    afsl_held: Optional[bool] = None
-    afsl_number: Optional[str] = None
-    austrac_registered: Optional[bool] = None
-    shares_held_in_trust: Optional[bool] = None
-
-    # People
-    contacts: List[MerchantContactInput] = Field(default_factory=list)
-
-    completed_steps: List[str] = Field(default_factory=list)
-
-
-class OnboardingDraftRead(OnboardingDraft):
-    """What a GET returns. Overrides bank_account_number to a masked stand-in so
-    the real number cannot be read back out of the draft it was saved into."""
-
-    bank_account_number: Optional[str] = None       # always None on read
-    bank_account_last3: Optional[str] = None
-
-
-class MerchantDocumentResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    document_type: str
-    pinch_contact_id: Optional[str]
-    label: str
-    created_at: datetime
-
-
-class MerchantComplianceResponse(BaseModel):
-    """Venue-facing onboarding state: what Pinch says, plus what is still missing."""
-
+class PaymentsStatusResponse(BaseModel):
+    """Venue-facing payments state: the Stripe account, whether it can take
+    money, what Stripe still needs, and the venue's free pilot."""
     venue_id: str
-    pinch_merchant_id: Optional[str] = None
-    compliance_status: Optional[str] = None
-    submission_status: Optional[str] = None
-    merchant_status: Optional[str] = None
-    compliance_notes: Optional[str] = None
-    updated_at: Optional[datetime] = None
-    live_enabled: bool = False
-    transactions_enabled: bool = False
-    settlements_enabled: bool = False
-    can_publish_deals: bool = True
-    contacts: List[Dict] = Field(default_factory=list)
-    documents: List[MerchantDocumentResponse] = Field(default_factory=list)
+    stripe_account_id: Optional[str] = None
+    transfers_status: Optional[str] = None      # active | pending | restricted | unsupported
+    can_publish_deals: bool = False
     outstanding: List[str] = Field(default_factory=list)
+    updated_at: Optional[datetime] = None
+    pilot_ends_at: Optional[datetime] = None
+    in_pilot: bool = True
+
+
+class AccountSessionResponse(BaseModel):
+    """Client secret for Connect embedded components (onboarding, payouts,
+    notification banner)."""
+    client_secret: str

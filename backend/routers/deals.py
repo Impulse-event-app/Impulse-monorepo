@@ -29,19 +29,15 @@ def _assert_deal_owner(deal: Deal, user: dict, db: Session) -> None:
 
 
 def _assert_can_publish(venue: Venue) -> None:
-    """A published deal takes deposits, so it needs somewhere for the money to land.
-
-    Only applies to venues that have started Pinch onboarding. A venue with no
-    pinch_merchant_id has never been onboarded and still charges through the
-    single hardcoded merchant exactly as before — gating those would break every
-    venue that predates this flow. Drafting is never blocked, only going live.
-    """
+    """A published deal takes holds on guests' cards, so the venue's Stripe
+    account must be able to receive the money. Drafting is never blocked, only
+    going live."""
     if can_publish_deals(venue):
         return
     raise HTTPException(
         status_code=409,
-        detail="Your payment account is still being verified by Pinch. "
-               "You can keep editing this deal and publish it once you're approved.",
+        detail="Finish setting up payments before publishing. "
+               "You can keep editing this deal and publish it once Stripe has verified your account.",
     )
 
 

@@ -1,26 +1,32 @@
 """
 The one booking flow. Solo bookings, direct split bookings and Huddles (a
 booking with a voting stage) all run through here once the deal is known:
-price lock, shares, the deposit fan-out, the guarantor charge, the balance
-fan-out at redemption, the decline handler, the refund path and the deadline
-sweep. Routers own HTTP shape and auth; they never charge or refund directly.
+price lock, shares, holding each seat's card, the guarantor hold, the capture
+at redemption, the decline handler, releasing holds and the deadline sweep.
+Routers own HTTP shape and auth; they never charge or release directly.
+
+Money (Stripe, see payments.py): claiming a spot HOLDS the seat's whole share
+on the card; the venue redeeming the code CAPTURES it and the venue is paid
+out instantly. A seat's deposit_status "paid" now means "held" (or saved, for
+a far-off booking); balance_status "paid" means captured.
 
 The only fork on has_voting after resolution is at the share deadline:
-a Huddle collapses and refunds (nobody guaranteed it), a direct booking falls
-to its initiator's card (the initiator guaranteed it when they booked).
+a Huddle collapses and releases its holds (nobody guaranteed it), a direct
+booking falls to its initiator's card (the initiator guaranteed it when they
+booked).
 
-Nonces:
-  deposit-{bookingId}-{memberId}-{attempt}   a seat's own deposit
+Stripe idempotency keys:
+  deposit-{bookingId}-{memberId}-{attempt}   a seat's own hold
   guarantor-{bookingId}-{memberId}           initiator covering an unpaid seat at the deadline
-  balance-{bookingId}-{memberId}             balance at redemption
-  refund-{bookingId}-{memberId}              Huddle collapse / cancel
-`attempt` moves on after a definitive decline or a share change, because
-Pinch answers a reused nonce with the first result and ignores the amount.
+  balance-{bookingId}-{memberId}             capture at redemption
+  noshow-{bookingId}-{memberId}              10% capture for a no-show
+  refund-{bookingId}-{memberId}              Huddle collapse / cancel (hold released)
+`attempt` moves on after a share change, so a stale hold for the old amount
+can never be reused.
 """
 import logging
-import os
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Sequence
 
 from fastapi import HTTPException
@@ -32,15 +38,13 @@ import payments
 import push
 import wallet
 from booking_logic import (
-    SplitError, apply_cover, compute_shares, deal_cutoff, deposit_split, fmt_cents, recalc_unpaid, validate_custom,
+    SplitError, apply_cover, compute_shares, deal_cutoff, deposit_split, fmt_cents, recalc_unpaid, slot_at,
+    validate_custom,
 )
 from models import Booking, BookingParticipant, Deal, User
-from payments import PaymentNotApproved
-from pinch_client import PinchError
+from payments import PaymentError, PaymentNotApproved
 
 logger = logging.getLogger("impulse.booking_flow")
-
-PINCH_MERCHANT_ID: str = os.environ["PINCH_TEST_MERCHANT_ID"]
 
 # A seat whose deposit is settled one way or another — nothing left to collect.
 DEPOSIT_DONE = ("paid", "guaranteed", "settled", "declined")
@@ -153,8 +157,8 @@ def lock_price(b: Booking, deal: Deal) -> None:
 
 def set_share(p: BookingParticipant, share_cents: int) -> None:
     """Store a seat's share and its deposit/balance. A changed amount on an
-    unpaid seat moves its nonce on, so a stale Pinch result can't be replayed
-    against the new amount. A $0 share owes nothing and is settled."""
+    unpaid seat moves its nonce on, so a hold created for the old amount is
+    never reused. A $0 share owes nothing and is settled."""
     if p.deposit_status in DEPOSIT_FIXED:
         if p.share_amount_cents != share_cents:
             raise SplitError(f"{display_name(p)} has already paid, so their share can't change")
@@ -345,26 +349,49 @@ def maybe_confirm(db: Session, b: Booking) -> None:
         confirm(db, b)
 
 
-# ── Deposit fan-out ──────────────────────────────────────────────────────────
+# ── Holding a seat ───────────────────────────────────────────────────────────
 
 def deposit_nonce(b: Booking, p: BookingParticipant) -> str:
     return f"deposit-{b.id}-{p.id}-{p.deposit_attempt}"
 
 
 def _metadata(b: Booking, p: BookingParticipant, kind: str, **extra) -> dict:
+    """Stripe metadata values must be strings."""
     return {
-        "impulseBookingId": b.id,
-        "impulseMemberId": p.id,
+        "impulseBookingId": str(b.id),
+        "impulseMemberId": str(p.id),
         "type": kind,
-        "hasVoting": bool(b.has_voting),
-        **extra,
+        "hasVoting": "true" if b.has_voting else "false",
+        **{k: str(v) for k, v in extra.items()},
     }
 
 
-def pay_share(db: Session, b: Booking, p: BookingParticipant, user: dict, body) -> None:
-    """Charge one seat's deposit share — exactly the amount the payer was
-    shown (body.expected_deposit_cents), or nothing at all. The initiator's
-    payment on a direct booking also takes the group's spots."""
+def slot_start(b: Booking) -> Optional[datetime]:
+    if not b.deal or not b.slot_time:
+        return None
+    return slot_at(b.deal.date, b.slot_time)
+
+
+def venue_account(b: Booking) -> str:
+    """The venue's connected account, or a 409 when it can't take money yet.
+    Destination charges to an account whose transfers aren't active fail, so
+    nothing is held for a venue that hasn't finished Stripe onboarding."""
+    venue = b.deal.venue if b.deal else None
+    if not venue or not venue.stripe_account_id or venue.stripe_transfers_status != "active":
+        raise HTTPException(status_code=409, detail="This venue can't take bookings right now")
+    return venue.stripe_account_id
+
+
+def _ensure_user(db: Session, user: dict) -> User:
+    row = db.query(User).filter(User.id == user["sub"]).first()
+    if not row:
+        row = User(id=user["sub"], email=user.get("email"))
+        db.add(row)
+        db.flush()
+    return row
+
+
+def _check_payable(b: Booking, p: BookingParticipant, expected_share_cents: int) -> None:
     if b.status != "collecting":
         raise HTTPException(status_code=409, detail=f"This booking isn't collecting shares (status={b.status})")
     if not b.split_confirmed_at:
@@ -375,77 +402,126 @@ def pay_share(db: Session, b: Booking, p: BookingParticipant, user: dict, body) 
         raise HTTPException(status_code=409, detail="The deadline for this booking has passed")
     if not b.has_voting and p.id != b.initiator_member_id and initiator(b).deposit_status != "paid":
         raise HTTPException(status_code=409, detail="This booking isn't locked in yet")
-    if body.expected_deposit_cents != p.deposit_cents:
+    if expected_share_cents != p.share_amount_cents:
         raise HTTPException(
             status_code=409,
             detail=f"Your share changed to {fmt_cents(p.share_amount_cents)} — have a look before confirming",
         )
 
-    row = db.query(User).filter(User.id == user["sub"]).first()
-    if not row:
-        row = User(id=user["sub"], email=user.get("email"))
-        db.add(row)
-        db.flush()
 
-    if not b.has_voting and p.id == b.initiator_member_id:
-        lock_spots(db, b)   # same transaction: a failed charge rolls the hold back
+def start_hold(db: Session, b: Booking, p: BookingParticipant, user: dict, expected_share_cents: int) -> dict:
+    """Step 1 of claiming a spot: create the hold (or, for a booking more than
+    HOLD_AHEAD away, a SetupIntent that saves the card) and hand PaymentSheet
+    what it needs. Nothing is held until the app confirms it.
 
+    The idempotency key is the seat's nonce, so asking twice returns the same
+    intent; a changed share moves the nonce on and gets a fresh one."""
+    _check_payable(b, p, expected_share_cents)
+    destination = venue_account(b)
+    row = _ensure_user(db, user)
+    sheet = wallet.sheet_params(row)
     nonce = deposit_nonce(b, p)
+    venue_name = b.deal.venue.name
     try:
-        p.pinch_payer_id, p.pinch_source_id = wallet.resolve_source(
-            db, row,
-            payment_method_id=body.payment_method_id,
-            token=body.token,
-            save_card=body.save_card,
-            first_name=body.first_name,
-            last_name=body.last_name,
-            email=body.email,
-        )
-        payment = payments.charge_deposit(
-            payer_id=p.pinch_payer_id,
-            source_id=p.pinch_source_id,
-            amount_cents=p.deposit_cents,
-            description=f"Impulse deposit — {b.deal.venue.name} {slot_label(b)}",
-            metadata=_metadata(
-                b, p, "deposit",
-                depositAmountCents=p.deposit_cents,
-                balanceAmountCents=p.balance_cents,
-                shareTotalCents=p.share_amount_cents,
-            ),
-            nonce=nonce,
-            merchant_id=PINCH_MERCHANT_ID,
-        )
-    except PinchError as e:
+        if payments.needs_setup_first(slot_start(b)):
+            intent = payments.create_setup(
+                customer_id=sheet["customer_id"],
+                metadata=_metadata(b, p, "save_card", shareTotalCents=p.share_amount_cents),
+                idempotency_key=f"setup-{nonce}",
+            )
+            kind = "setup"
+        else:
+            intent = payments.create_hold(
+                customer_id=sheet["customer_id"],
+                amount_cents=p.share_amount_cents,
+                destination=destination,
+                description=f"Impulse — {venue_name} {slot_label(b)}",
+                metadata=_metadata(b, p, "hold", shareTotalCents=p.share_amount_cents,
+                                   depositAmountCents=p.deposit_cents),
+                idempotency_key=nonce,
+            )
+            kind = "payment"
+    except PaymentError as e:
         db.rollback()
-        logger.error("Deposit failed for booking %s seat %s (nonce %s): %s %s",
-                     b.id, p.id, nonce, e.status_code, e.body)
-        if _definitive_decline(e):
-            _bump_attempt(db, p.id)
-        raise HTTPException(status_code=402, detail=f"Deposit payment failed: {e.body}")
+        logger.error("Starting a hold failed for booking %s seat %s: %s %s",
+                     b.id, p.id, e.status_code, e.body)
+        raise HTTPException(status_code=502, detail="Couldn't start the payment. Try again.")
 
-    p.deposit_payment_id = payment["id"]
+    p.deposit_payment_id = intent["id"]
+    db.commit()
+    return {
+        "intent_type": kind,
+        "intent_id": intent["id"],
+        "client_secret": intent["client_secret"],
+        "amount_cents": p.share_amount_cents,
+        **sheet,
+    }
+
+
+def confirm_hold(db: Session, b: Booking, p: BookingParticipant, user: Optional[dict], intent_id: str) -> None:
+    """Step 2: PaymentSheet says the card is held (or saved). Read the intent
+    back from Stripe rather than trusting the app, then mark the seat in. Also
+    called by the webhook as a backstop for an app closed mid-payment, so it is
+    idempotent: a seat already in on this intent is left alone."""
+    if p.deposit_status in DEPOSIT_FIXED and p.deposit_payment_id == intent_id:
+        return
+    if not intent_id or intent_id != p.deposit_payment_id:
+        raise HTTPException(status_code=409, detail="That payment isn't for this share")
+    _check_payable(b, p, p.share_amount_cents)
+
+    try:
+        if intent_id.startswith("seti_"):
+            intent = payments.retrieve_setup(intent_id)
+            if intent.get("status") != "succeeded":
+                raise HTTPException(status_code=402, detail="Your card wasn't saved. Try again.")
+            p.hold_status = "saved"
+            p.hold_expires_at = None
+        else:
+            intent = payments.retrieve_hold(intent_id)
+            if intent.get("status") != "requires_capture":
+                raise HTTPException(status_code=402, detail="Your card wasn't authorised. Try again.")
+            if intent.get("amount") != p.share_amount_cents:
+                # The amount held must be the amount consented to — never adjust.
+                payments.cancel_hold(intent_id=intent_id, idempotency_key=f"cancel-{intent_id}")
+                raise HTTPException(status_code=409, detail="Your share changed — have a look before confirming")
+            p.hold_status = "held"
+            p.hold_expires_at = payments.hold_expires_at(intent)
+    except PaymentError as e:
+        logger.error("Confirming hold %s for booking %s seat %s failed: %s %s",
+                     intent_id, b.id, p.id, e.status_code, e.body)
+        raise HTTPException(status_code=502, detail="Couldn't confirm the payment. Try again.")
+
+    p.stripe_payment_method_id = payments.payment_method_of(intent)
+    if not b.has_voting and p.id == b.initiator_member_id:
+        try:
+            lock_spots(db, b)
+        except HTTPException:
+            db.rollback()
+            if intent_id.startswith("pi_"):
+                payments.cancel_hold(intent_id=intent_id, idempotency_key=f"cancel-{intent_id}")
+            raise
+
     p.deposit_status = "paid"
     touch(b)
     db.commit()
     db.refresh(b)
-    logger.info("Booking %s: seat %s paid deposit (%d/%d in)", b.id, p.id,
+    logger.info("Booking %s: seat %s %s (%d/%d in)", b.id, p.id, p.hold_status,
                 sum(q.deposit_status in DEPOSIT_DONE for q in b.participants), len(b.participants))
     maybe_confirm(db, b)
 
 
-def _definitive_decline(e: PinchError) -> bool:
-    """Pinch said no (declined, or rejected the request outright). A 403 is a
-    nonce replay we couldn't accept — money may have moved, so the nonce must
-    NOT move on; that one needs a human."""
-    return isinstance(e, PaymentNotApproved) or (400 <= e.status_code < 500 and e.status_code != 403)
-
-
-def _bump_attempt(db: Session, member_id: str) -> None:
-    db.query(BookingParticipant).filter(BookingParticipant.id == member_id).update(
-        {BookingParticipant.deposit_attempt: BookingParticipant.deposit_attempt + 1},
-        synchronize_session=False,
-    )
-    db.commit()
+def confirm_hold_from_webhook(db: Session, intent_id: str) -> None:
+    """payment_intent.amount_capturable_updated / setup_intent.succeeded."""
+    p = db.query(BookingParticipant).filter(BookingParticipant.deposit_payment_id == intent_id).first()
+    if not p or p.deposit_status != "unpaid":
+        return
+    b = load(db, p.booking_id, lock=True)
+    p = next(q for q in b.participants if q.id == p.id)
+    try:
+        confirm_hold(db, b, p, None, intent_id)
+    except HTTPException as e:
+        db.rollback()
+        logger.warning("Webhook could not finalise %s for booking %s: %s", intent_id, b.id, e.detail)
 
 
 # ── Decline handler (the one) ────────────────────────────────────────────────
@@ -462,134 +538,282 @@ def handle_decline(p: BookingParticipant, kind: str, amount_cents: int, payer_na
     return f"Card declined — collect {fmt_cents(amount_cents)} from {payer_name} directly"
 
 
+def _customer_of(db: Session, p: BookingParticipant) -> Optional[str]:
+    if not p.user_id:
+        return None
+    row = db.query(User).filter(User.id == p.user_id).first()
+    return row.stripe_customer_id if row else None
+
+
 # ── Guarantor (direct bookings) ──────────────────────────────────────────────
 
 def charge_guarantor(db: Session, b: Booking) -> int:
     """At the share deadline, every seat still unpaid falls to the initiator's
-    card: nonce guarantor-{bookingId}-{memberId}. Each seat commits on its
-    own, so a crash mid-loop resumes with the same nonces (a replay of an
-    approved charge counts as done). Returns how many seats were guaranteed.
-    The code issues afterwards regardless — the booking was never at risk."""
+    card: an off-session hold for that seat's share (guarantor-{b}-{m}). Each
+    seat commits on its own, so a crash mid-loop resumes with the same keys.
+    Returns how many seats were guaranteed. The code issues afterwards
+    regardless — the booking was never at risk."""
     ini = initiator(b)
+    customer_id = _customer_of(db, ini)
     guaranteed = 0
     for p in share_order(b):
-        if p.deposit_status != "unpaid" or not p.deposit_cents:
+        if p.deposit_status != "unpaid" or not p.share_amount_cents:
             continue
         try:
-            payment = payments.charge_deposit(
-                payer_id=ini.pinch_payer_id,
-                source_id=ini.pinch_source_id,
-                amount_cents=p.deposit_cents,
-                description=f"Impulse deposit (covering {display_name(p)}) — {b.deal.venue.name} {slot_label(b)}",
-                metadata=_metadata(
-                    b, p, "guarantor_deposit",
-                    guarantorMemberId=ini.id,
-                    depositAmountCents=p.deposit_cents,
-                    balanceAmountCents=p.balance_cents,
-                    shareTotalCents=p.share_amount_cents,
-                ),
-                nonce=f"guarantor-{b.id}-{p.id}",
-                merchant_id=PINCH_MERCHANT_ID,
+            if not (customer_id and ini.stripe_payment_method_id):
+                raise PaymentNotApproved(0, "no card on file for the initiator")
+            hold = payments.place_offsession_hold(
+                customer_id=customer_id,
+                payment_method_id=ini.stripe_payment_method_id,
+                amount_cents=p.share_amount_cents,
+                destination=venue_account(b),
+                description=f"Impulse (covering {display_name(p)}) — {b.deal.venue.name} {slot_label(b)}",
+                metadata=_metadata(b, p, "guarantor_hold", guarantorMemberId=ini.id,
+                                   shareTotalCents=p.share_amount_cents),
+                idempotency_key=f"guarantor-{b.id}-{p.id}",
             )
-            p.deposit_payment_id = payment["id"]
+            p.deposit_payment_id = hold["id"]
+            p.stripe_payment_method_id = ini.stripe_payment_method_id
+            p.hold_status = "held"
+            p.hold_expires_at = payments.hold_expires_at(hold)
             p.deposit_status = "guaranteed"
             guaranteed += 1
-        except PinchError as e:
-            logger.error("Guarantor charge failed for booking %s seat %s: %s %s",
-                         b.id, p.id, e.status_code, e.body)
-            handle_decline(p, "deposit", p.deposit_cents, display_name(ini))
+        except (PaymentError, HTTPException) as e:
+            logger.error("Guarantor hold failed for booking %s seat %s: %s", b.id, p.id, e)
+            handle_decline(p, "deposit", p.share_amount_cents, display_name(ini))
         touch(b)
         db.commit()
     return guaranteed
 
 
-# ── Balance fan-out at redemption ────────────────────────────────────────────
+# ── Capture at redemption ────────────────────────────────────────────────────
 
-def _balance_source(b: Booking, p: BookingParticipant) -> BookingParticipant:
-    """Whose card pays this seat's balance: its own, or the initiator's when
-    the initiator guaranteed the seat at the deadline."""
+def _payer_seat(b: Booking, p: BookingParticipant) -> BookingParticipant:
+    """Whose card pays this seat: its own, or the initiator's when the
+    initiator guaranteed the seat at the deadline."""
     return initiator(b) if p.deposit_status in ("guaranteed", "declined") else p
 
 
+def _capture_seat(db: Session, b: Booking, p: BookingParticipant, amount_cents: int, kind: str) -> dict:
+    """Capture `amount_cents` of this seat's hold with the right Impulse fee.
+    A seat whose hold lapsed (or was only ever saved) is charged off-session on
+    the same card instead. Raises PaymentError when neither works."""
+    venue = b.deal.venue
+    intent_id = p.deposit_payment_id if (p.deposit_payment_id or "").startswith("pi_") else None
+    intent = payments.retrieve_hold(intent_id) if intent_id else None
+
+    if not intent or intent.get("status") != "requires_capture":
+        payer = _payer_seat(b, p)
+        customer_id = _customer_of(db, payer)
+        pm = p.stripe_payment_method_id or payer.stripe_payment_method_id
+        if not (customer_id and pm):
+            raise PaymentNotApproved(0, "no card on file for this seat")
+        intent = payments.place_offsession_hold(
+            customer_id=customer_id, payment_method_id=pm, amount_cents=p.share_amount_cents,
+            destination=venue_account(b),
+            description=f"Impulse — {venue.name} {slot_label(b)}",
+            metadata=_metadata(b, p, "rehold", shareTotalCents=p.share_amount_cents),
+            idempotency_key=f"rehold-{kind}-{b.id}-{p.id}",
+        )
+        p.deposit_payment_id = intent["id"]
+
+    fee = payments.impulse_fee(
+        venue=venue, deposit_cents=p.deposit_cents or 0, captured_cents=amount_cents,
+        card_country=payments.card_country_of(intent),
+    )
+    captured = payments.capture(
+        intent_id=intent["id"], amount_cents=amount_cents, application_fee_cents=fee,
+        idempotency_key=f"{kind}-{b.id}-{p.id}",
+    )
+    p.hold_status = "captured"
+    p.balance_payment_id = captured["id"]
+    return captured
+
+
 def redeem(db: Session, b: Booking) -> dict:
-    """Venue confirms the booking: one balance charge per seat (nonce
-    balance-{bookingId}-{memberId}). A decline is flagged but never blocks
-    the rest — the booking is still redeemed."""
+    """Venue confirms the booking: capture each seat's hold in full (key
+    balance-{bookingId}-{memberId}), then pay the venue out instantly. A failed
+    capture is flagged but never blocks the rest — the booking is still
+    redeemed, and the venue collects that seat directly."""
+    import payouts
     venue_name = b.deal.venue.name
     results = []
     total_charged = 0
     declines = 0
     for p in share_order(b):
-        bal = p.balance_cents or 0
-        payer = _balance_source(b, p)
+        share = p.share_amount_cents or 0
+        payer = _payer_seat(b, p)
         name = display_name(p)
-        if bal <= 0 or p.deposit_status in ("settled", "refunded"):
+        if share <= 0 or p.deposit_status in ("settled", "refunded"):
             p.balance_status = "paid"
             results.append({"name": name, "balance_cents": 0, "status": "paid", "warning": None})
             continue
         if p.balance_status == "paid":
-            total_charged += bal
-            results.append({"name": name, "balance_cents": bal, "status": "paid", "warning": None})
+            total_charged += share
+            results.append({"name": name, "balance_cents": share, "status": "paid", "warning": None})
             continue
         try:
-            if not (payer.pinch_payer_id and payer.pinch_source_id):
-                raise PinchError(0, "no card on file for this seat")
-            payment = payments.charge_balance(
-                payer_id=payer.pinch_payer_id,
-                source_id=payer.pinch_source_id,
-                amount_cents=bal,
-                application_fee_cents=round(bal * payments.BALANCE_APPLICATION_FEE_RATE),
-                description=f"Impulse balance — {venue_name} {slot_label(b)}",
-                metadata=_metadata(b, p, "balance", balanceAmountCents=bal, paidByMemberId=payer.id),
-                nonce=f"balance-{b.id}-{p.id}",
-                merchant_id=PINCH_MERCHANT_ID,
-            )
-            p.balance_payment_id = payment["id"]
+            _capture_seat(db, b, p, share, "balance")
             p.balance_status = "paid"
             if payer is p:
                 p.payment_note = (
                     f"Your booking at {venue_name} has been confirmed — "
-                    f"{fmt_cents(bal)} has been charged to your card. Enjoy!"
+                    f"{fmt_cents(share)} has been charged to your card. Enjoy!"
                 )
-            total_charged += bal
-            results.append({"name": name, "balance_cents": bal, "status": "paid", "warning": None})
-        except PinchError as e:
-            logger.error("Balance charge failed for booking %s seat %s: %s %s", b.id, p.id, e.status_code, e.body)
+            total_charged += share
+            results.append({"name": name, "balance_cents": share, "status": "paid", "warning": None})
+        except (PaymentError, HTTPException) as e:
+            logger.error("Capture failed for booking %s seat %s: %s", b.id, p.id, e)
             declines += 1
-            results.append({"name": name, "balance_cents": bal, "status": "declined",
-                            "warning": handle_decline(p, "balance", bal, display_name(payer))})
+            results.append({"name": name, "balance_cents": share, "status": "declined",
+                            "warning": handle_decline(p, "balance", share, display_name(payer))})
 
     b.status = "redeemed"
     b.redeemed_at = now()
     touch(b)
     db.commit()
-    logger.info("Booking %s redeemed at %s: charged %d cents, %d decline(s)", b.id, venue_name, total_charged, declines)
+    logger.info("Booking %s redeemed at %s: captured %d cents, %d decline(s)", b.id, venue_name, total_charged, declines)
+    if total_charged:
+        payouts.pay_out_booking(db, b)
     return {"members": results, "total_charged_cents": total_charged, "declines": declines}
 
 
-# ── Refund path (Huddle collapse / cancel) ───────────────────────────────────
+# ── Releasing holds (Huddle collapse / cancel) ───────────────────────────────
 
 def refund_participants(b: Booking, reason: str) -> tuple:
-    """Refund every seat that paid its own deposit. Only Huddles refund: a
-    collapsed Huddle never became a real booking. Returns (refunded, failed)."""
-    refunded = failed = 0
+    """Release every seat's own hold. Only Huddles do this: a collapsed Huddle
+    never became a real booking, and a released hold costs nobody anything.
+    Returns (released, failed). Kept under its old name for the routers."""
+    released = failed = 0
     for p in b.participants:
         if p.deposit_status != "paid":
             continue
         try:
-            payments.refund_full(
-                payment_id=p.deposit_payment_id,
-                reason=reason,
-                nonce=f"refund-{b.id}-{p.id}",
-                merchant_id=PINCH_MERCHANT_ID,
-            )
+            if (p.deposit_payment_id or "").startswith("pi_"):
+                payments.cancel_hold(intent_id=p.deposit_payment_id,
+                                     idempotency_key=f"refund-{b.id}-{p.id}")
             p.deposit_status = "refunded"
-            refunded += 1
-        except PinchError as e:
+            p.hold_status = "released"
+            released += 1
+        except PaymentError as e:
             failed += 1
-            logger.error("Refund failed for booking %s seat %s: %s %s — needs manual follow-up",
-                         b.id, p.id, e.status_code, e.body)
-    return refunded, failed
+            logger.error("Releasing hold failed for booking %s seat %s (%s): %s %s — needs manual follow-up",
+                         b.id, p.id, reason, e.status_code, e.body)
+    return released, failed
+
+
+# ── Hold upkeep (runs with the deadline sweep) ───────────────────────────────
+
+NO_SHOW_GRACE = timedelta(hours=12)
+REHOLD_MARGIN = timedelta(hours=12)
+
+
+def sweep_holds(db: Session) -> dict:
+    """Keep holds valid until check-in and settle no-shows.
+
+    - A seat whose card was only saved (booking was far off) gets its
+      off-session hold OFFSESSION_HOLD_LEAD before the slot.
+    - A hold about to lapse before an unredeemed slot is released and re-held.
+    - A confirmed booking still unredeemed NO_SHOW_GRACE after its slot is a
+      no-show: each seat's 10% is captured, the rest released.
+    - A redeemed booking whose payout failed is retried.
+    """
+    import payouts
+    t = now()
+    counts = {"held_later": 0, "hold_failures": 0, "reheld": 0, "no_shows": 0, "payouts_retried": 0}
+    live = (
+        db.query(Booking)
+        .options(joinedload(Booking.participants), joinedload(Booking.deal).joinedload(Deal.venue))
+        .filter(Booking.status.in_(("collecting", "confirmed")))
+        .all()
+    )
+    for b in live:
+        start = slot_start(b)
+        if start is None:
+            continue
+        if b.status == "confirmed" and t > start + NO_SHOW_GRACE:
+            _settle_no_show(db, b, counts)
+            continue
+        for p in b.participants:
+            if p.deposit_status not in DEPOSIT_FIXED:
+                continue
+            if p.hold_status == "saved" and start - t <= payments.OFFSESSION_HOLD_LEAD:
+                _hold_later(db, b, p, counts, "hold")
+            elif (p.hold_status == "held" and p.hold_expires_at
+                  and p.hold_expires_at - REHOLD_MARGIN < t < start):
+                if (p.deposit_payment_id or "").startswith("pi_"):
+                    try:
+                        payments.cancel_hold(intent_id=p.deposit_payment_id,
+                                             idempotency_key=f"cancel-{p.deposit_payment_id}")
+                    except PaymentError as e:
+                        logger.error("Releasing lapsing hold %s failed: %s", p.deposit_payment_id, e)
+                        continue
+                _hold_later(db, b, p, counts, f"rehold-{int(p.hold_expires_at.timestamp())}")
+                counts["reheld"] += 1
+
+    retry = (
+        db.query(Booking)
+        .options(joinedload(Booking.deal).joinedload(Deal.venue))
+        .filter(Booking.status == "redeemed", Booking.payout_status == "failed",
+                Booking.redeemed_at > t - timedelta(days=2))
+        .all()
+    )
+    for b in retry:
+        payouts.pay_out_booking(db, b)
+        counts["payouts_retried"] += 1
+    return counts
+
+
+def _hold_later(db: Session, b: Booking, p: BookingParticipant, counts: dict, key: str) -> None:
+    payer = _payer_seat(b, p)
+    customer_id = _customer_of(db, payer)
+    try:
+        if not (customer_id and p.stripe_payment_method_id):
+            raise PaymentNotApproved(0, "no card on file")
+        hold = payments.place_offsession_hold(
+            customer_id=customer_id, payment_method_id=p.stripe_payment_method_id,
+            amount_cents=p.share_amount_cents, destination=venue_account(b),
+            description=f"Impulse — {b.deal.venue.name} {slot_label(b)}",
+            metadata=_metadata(b, p, "hold_later", shareTotalCents=p.share_amount_cents),
+            idempotency_key=f"{key}-{b.id}-{p.id}",
+        )
+        p.deposit_payment_id = hold["id"]
+        p.hold_status = "held"
+        p.hold_expires_at = payments.hold_expires_at(hold)
+        counts["held_later"] += 1
+    except (PaymentError, HTTPException) as e:
+        logger.error("Off-session hold failed for booking %s seat %s: %s", b.id, p.id, e)
+        p.hold_status = "failed"
+        p.payment_followup = True
+        p.payment_note = "We couldn't hold your card for this booking — update your card in the app."
+        counts["hold_failures"] += 1
+    touch(b)
+    db.commit()
+
+
+def _settle_no_show(db: Session, b: Booking, counts: dict) -> None:
+    """The group never checked in: capture each seat's 10% and release the
+    rest. During the pilot that 10% goes to the venue (fee 0)."""
+    import payouts
+    captured_any = False
+    for p in b.participants:
+        if p.deposit_status not in DEPOSIT_FIXED or not p.deposit_cents:
+            continue
+        if p.hold_status not in ("held", "saved"):
+            continue
+        try:
+            _capture_seat(db, b, p, p.deposit_cents, "noshow")
+            captured_any = True
+        except (PaymentError, HTTPException) as e:
+            logger.error("No-show capture failed for booking %s seat %s: %s", b.id, p.id, e)
+            p.payment_followup = True
+    b.status = "no_show"
+    touch(b)
+    db.commit()
+    counts["no_shows"] += 1
+    logger.info("Booking %s marked no-show", b.id)
+    if captured_any:
+        payouts.pay_out_booking(db, b)
 
 
 # ── Push ─────────────────────────────────────────────────────────────────────
@@ -640,10 +864,11 @@ def sweep_deadlines(db: Session) -> dict:
 
     - Voting deadline passed while still voting → expired, nobody charged.
     - Share deadline passed while collecting:
-        · Huddle: some deposits paid → refund each (refund-{b}-{m}), collapsed;
-          none paid → expired. Spots go back to the deal.
+        · Huddle: some seats held → release each hold (refund-{b}-{m}),
+          collapsed; none held → expired. Spots go back to the deal.
         · Direct: unpaid seats fall to the initiator (guarantor-{b}-{m}) and
           the code issues regardless.
+    - Then hold upkeep and no-shows (sweep_holds).
     """
     t = now()
     counts = {"expired_voting": 0, "collapsed": 0, "expired_payment": 0,
@@ -681,6 +906,7 @@ def sweep_deadlines(db: Session) -> dict:
         else:
             counts["guaranteed"] += charge_guarantor(db, b)
             confirm(db, b)
+    counts.update(sweep_holds(db))
     return counts
 
 
@@ -700,9 +926,9 @@ def _collapse(db: Session, b: Booking, counts: dict) -> None:
     b.status = "collapsed"
     touch(b)
     db.commit()
-    push_all(db, b, "Plan expired", "The group didn't all pay in time — you've been refunded.", "huddle_collapsed")
+    push_all(db, b, "Plan expired", "The group didn't all pay in time — the hold on your card has been released.", "huddle_collapsed")
     counts["collapsed"] += 1
-    logger.info("Booking %s collapsed (share deadline), refunded %d seat(s)", b.id, len(paid))
+    logger.info("Booking %s collapsed (share deadline), released %d hold(s)", b.id, len(paid))
 
 
 # ── Views ────────────────────────────────────────────────────────────────────

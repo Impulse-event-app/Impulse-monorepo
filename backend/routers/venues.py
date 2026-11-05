@@ -1,3 +1,4 @@
+import logging
 from datetime import date as dt_date
 from datetime import datetime, timezone
 from typing import List, Literal, Optional
@@ -6,11 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, exists, false, func, or_
 from sqlalchemy.orm import Session, joinedload
 
-import payments
+import stripe_client
 from auth import get_current_user
 from database import get_db
 from booking_logic import VENUE_TZ, pack_nights, slot_at
-from models import Booking, BookingParticipant, Deal, Settlement, SettlementLine, Venue, UNLIMITED_SPOTS
+from models import Booking, BookingParticipant, Deal, Venue, UNLIMITED_SPOTS
 from schemas import (
     BookedSlot,
     BookingResponse,
@@ -30,6 +31,7 @@ from schemas import (
 )
 
 router = APIRouter()
+logger = logging.getLogger("impulse.venues")
 
 
 def _get_venue_or_404(venue_id: str, db: Session) -> Venue:
@@ -141,7 +143,7 @@ def list_venue_deals(
     )
 
 
-DEAD_STATUSES = ("cancelled", "expired", "collapsed")
+DEAD_STATUSES = ("cancelled", "expired", "collapsed", "no_show")
 @router.get("/{venue_id}/bookings/recent", response_model=List[RecentBooking])
 def recent_venue_bookings(
     venue_id: str,
@@ -295,125 +297,64 @@ def list_venue_bookings(
     )
 
 
+def _ts(value) -> Optional[datetime]:
+    return datetime.fromtimestamp(int(value), tz=timezone.utc) if value else None
+
+
 @router.get("/{venue_id}/payouts", response_model=PayoutsResponse)
 def get_payouts(
     venue_id: str,
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Admin: money actually transferred to the bank, newest first.
-
-    Sliced to this venue: while every charge runs through the single Impulse
-    merchant a transfer covers many venues, so the venue sees its own lines and
-    its own share rather than the whole transfer.
-    """
+    """Admin: money paid out from the venue's Stripe account to its bank,
+    newest first, each with the redeemed bookings that triggered it."""
     venue = _get_venue_or_404(venue_id, db)
     _assert_owner(venue, user)
+    empty = PayoutsResponse(summary=PayoutSummary(
+        paid_cents=0, in_transit_cents=0, awaiting_cents=0, payout_count=0, last_payout_date=None,
+    ), payouts=[])
+    if not venue.stripe_account_id:
+        return empty
+    try:
+        stripe_payouts = stripe_client.list_payouts(venue.stripe_account_id)
+        balance = stripe_client.retrieve_balance(venue.stripe_account_id)
+    except stripe_client.StripeError as e:
+        logger.error("Reading payouts for venue %s failed: %s", venue_id, e)
+        raise HTTPException(status_code=502, detail="Couldn't load payouts. Try again.")
 
-    lines = (
-        db.query(SettlementLine)
-        .filter(SettlementLine.venue_id == venue_id)
-        .order_by(SettlementLine.transaction_date.desc().nullslast())
-        .all()
-    )
-
-    # Booking/deal lookups for the line detail, in two queries rather than N.
-    booking_ids = {ln.booking_id for ln in lines if ln.booking_id}
-    bookings = (
-        {b.id: b for b in db.query(Booking).filter(Booking.id.in_(booking_ids)).all()}
-        if booking_ids else {}
-    )
-    deal_titles = {
-        d.id: d.title
-        for d in db.query(Deal).filter(Deal.venue_id == venue_id).all()
-    }
-
-    by_settlement: dict = {}
-    for ln in lines:
-        by_settlement.setdefault(ln.settlement_id, []).append(ln)
-
-    settlements_rows = (
-        db.query(Settlement)
-        .filter(Settlement.id.in_(by_settlement.keys()))
-        .order_by(Settlement.transfer_date.desc().nullslast())
-        .all()
-        if by_settlement else []
-    )
-
-    payouts: List[PayoutResponse] = []
-    paid_cents = 0
-    in_transit_cents = 0
-    for s in settlements_rows:
-        s_lines = by_settlement.get(s.id, [])
-        venue_share = sum(ln.venue_amount_cents for ln in s_lines)
-        if s.status == "complete":
-            paid_cents += venue_share
-        else:
-            in_transit_cents += venue_share
-
-        payouts.append(PayoutResponse(
-            id=s.id,
-            pinch_transfer_id=s.pinch_transfer_id,
-            status=s.status,
-            reference=s.reference,
-            currency=s.currency,
-            amount_cents=venue_share,
-            transfer_net_cents=s.amount_cents,
-            transfer_date=s.transfer_date,
-            account_name=s.account_name,
-            bsb=s.bsb,
-            account_number=s.account_number,
-            lines=[
-                PayoutLine(
-                    booking_id=ln.booking_id,
-                    confirmation_code=(
-                        bookings[ln.booking_id].confirmation_code
-                        if ln.booking_id in bookings else None
-                    ),
-                    deal_title=(
-                        deal_titles.get(bookings[ln.booking_id].deal_id)
-                        if ln.booking_id in bookings else None
-                    ),
-                    kind=ln.kind,
-                    line_type=ln.line_type,
-                    amount_cents=ln.venue_amount_cents,
-                    transaction_date=ln.transaction_date,
-                )
-                for ln in s_lines
-            ],
-        ))
-
-    # Earned but not yet in any transfer: redeemed bookings whose balance has
-    # been charged and settled to nothing yet. Deposits are excluded because
-    # they are Impulse's in full and never settle to the venue.
-    # Per seat: a group booking settles one balance line per participant.
-    settled_payment_ids = {ln.pinch_payment_id for ln in lines if ln.pinch_payment_id}
-    venue_deal_ids = list(deal_titles.keys())
-    awaiting_cents = 0
-    if venue_deal_ids:
-        unsettled = (
-            db.query(BookingParticipant)
-            .join(Booking, Booking.id == BookingParticipant.booking_id)
-            .filter(
-                Booking.deal_id.in_(venue_deal_ids),
-                BookingParticipant.balance_status == "paid",
-                BookingParticipant.balance_payment_id.isnot(None),
-            )
+    payout_ids = [p["id"] for p in stripe_payouts]
+    by_payout: dict = {}
+    if payout_ids:
+        rows = (
+            db.query(Booking, Deal.title)
+            .join(Deal, Deal.id == Booking.deal_id)
+            .filter(Booking.stripe_payout_id.in_(payout_ids))
             .all()
         )
-        for seat in unsettled:
-            if seat.balance_payment_id in settled_payment_ids:
-                continue
-            balance = seat.balance_cents or 0
-            awaiting_cents += balance - round(balance * payments.BALANCE_APPLICATION_FEE_RATE)
+        for b, title in rows:
+            by_payout.setdefault(b.stripe_payout_id, []).append(PayoutLine(
+                booking_id=b.id, confirmation_code=b.confirmation_code, deal_title=title,
+                amount_cents=b.locked_price_cents or 0, redeemed_at=b.redeemed_at,
+            ))
 
+    payouts = [
+        PayoutResponse(
+            id=p["id"], status=p.get("status") or "pending", method=p.get("method") or "standard",
+            currency=p.get("currency") or "aud", amount_cents=p.get("amount") or 0,
+            arrival_date=_ts(p.get("arrival_date")), created=_ts(p.get("created")),
+            lines=by_payout.get(p["id"], []),
+        )
+        for p in stripe_payouts
+    ]
+    aud = lambda entries: sum(e.get("amount") or 0 for e in (entries or []) if e.get("currency") == "aud")
     return PayoutsResponse(
         summary=PayoutSummary(
-            paid_cents=paid_cents,
-            in_transit_cents=in_transit_cents,
-            awaiting_cents=awaiting_cents,
+            paid_cents=sum(p.amount_cents for p in payouts if p.status == "paid"),
+            in_transit_cents=sum(p.amount_cents for p in payouts if p.status in ("pending", "in_transit")),
+            awaiting_cents=aud(balance.get("available")) + aud(balance.get("pending")),
             payout_count=len(payouts),
-            last_payout_date=payouts[0].transfer_date if payouts else None,
+            last_payout_date=payouts[0].arrival_date if payouts else None,
         ),
         payouts=payouts,
     )

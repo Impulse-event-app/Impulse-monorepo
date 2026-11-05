@@ -1,7 +1,8 @@
 """End-to-end API tests for the one booking model — solo, "I'll pay for
 everyone", Huddle Pay (split + invites), the guarantor, Huddles, venue
 redemption and user search — through the real FastAPI app and a real
-Postgres. Pinch is stubbed; every charge/refund it would receive is recorded.
+Postgres. Stripe is stubbed at the payments boundary; every hold, capture and
+release it would receive is recorded.
 
 Needs a disposable database (its tables are created and dropped here):
 
@@ -28,6 +29,7 @@ if TEST_DB:
     import booking_flow as flow
     import main
     import payments
+    import payouts
     import wallet
     from booking_logic import VENUE_TZ
     from database import Base, get_db
@@ -58,18 +60,45 @@ def env():
     main.app.dependency_overrides[auth.get_optional_user] = lambda: dict(current)
 
     charges = []
+    intents = {}
 
-    def charge(kind):
-        def f(**kw):
-            charges.append({"kind": kind, **kw})
-            return {"id": f"pmt_{len(charges)}", "status": "approved"}
-        return f
+    def record(kind, **kw):
+        charges.append({"kind": kind, **kw})
 
-    saved = (payments.charge_deposit, payments.charge_balance, payments.refund_full, wallet.resolve_source)
-    payments.charge_deposit = charge("deposit")
-    payments.charge_balance = charge("balance")
-    payments.refund_full = lambda **kw: charges.append({"kind": "refund", **kw}) or {"id": "ref_1"}
-    wallet.resolve_source = lambda db, row, **kw: (f"pyr_{row.id[:6]}", f"src_{row.id[:6]}")
+    def create_hold(**kw):
+        record("hold", **kw)
+        pi = f"pi_{len(charges)}"
+        intents[pi] = (kw["amount_cents"], f"pm_{kw['customer_id']}")
+        return {"id": pi, "client_secret": f"{pi}_secret"}
+
+    def held(pi):
+        amount, pm = intents.get(pi, (0, None))
+        return {"id": pi, "status": "requires_capture", "amount": amount,
+                "payment_method": {"id": pm, "card": {"country": "AU"}}}
+
+    def offsession(**kw):
+        record("offsession", **kw)
+        pi = f"pi_{kw['idempotency_key']}"
+        intents[pi] = (kw["amount_cents"], kw["payment_method_id"])
+        return held(pi)
+
+    def sheet(row):
+        row.stripe_customer_id = f"cus_{row.id[:6]}"
+        return {"customer_id": row.stripe_customer_id, "customer_session_client_secret": "cuss"}
+
+    patched = {
+        (payments, "create_hold"): create_hold,
+        (payments, "needs_setup_first"): lambda *a, **k: False,
+        (payments, "retrieve_hold"): held,
+        (payments, "place_offsession_hold"): offsession,
+        (payments, "capture"): lambda **kw: record("capture", **kw) or {"id": kw["intent_id"], "status": "succeeded"},
+        (payments, "cancel_hold"): lambda **kw: record("cancel", **kw),
+        (payouts, "pay_out_booking"): lambda db, b: record("payout", booking_id=b.id),
+        (wallet, "sheet_params"): sheet,
+    }
+    saved = {k: getattr(*k) for k in patched}
+    for (mod, name), fn in patched.items():
+        setattr(mod, name, fn)
 
     ids = {k: str(uuid.uuid4()) for k in ("owner", "host", "sam", "alex", "jo")}
     names = {"owner": "Venue Owner", "host": "Rahul Host", "sam": "Sammy Tester", "alex": "Alex Tester", "jo": "Jo Tester"}
@@ -77,7 +106,8 @@ def env():
     with Session() as db:
         for k, uid in ids.items():
             db.add(User(id=uid, email=f"{k}@example.test", full_name=names[k]))
-        venue = Venue(owner_id=ids["owner"], name="Test Lanes", category="Bowling")
+        venue = Venue(owner_id=ids["owner"], name="Test Lanes", category="Bowling",
+                      stripe_account_id="acct_test", stripe_transfers_status="active")
         db.add(venue)
         db.flush()
         deals = {}
@@ -101,7 +131,8 @@ def env():
     yield {"as": as_, "ids": ids, "deals": deals, "charges": charges, "engine": engine, "Session": Session}
 
     main.app.dependency_overrides.clear()
-    payments.charge_deposit, payments.charge_balance, payments.refund_full, wallet.resolve_source = saved
+    for (mod, name), fn in saved.items():
+        setattr(mod, name, fn)
     Base.metadata.drop_all(engine)
 
 
@@ -110,8 +141,17 @@ def ok(r, code=200):
     return r.json() if r.content else None
 
 
-def card(expected):
-    return {"expected_deposit_cents": expected, "payment_method_id": "pm_test"}
+def pay(client, booking_id, share_cents):
+    """Claim a spot the way the app does: start the hold, then confirm it once
+    PaymentSheet is done. Returns the confirm response (or the failed start)."""
+    r = client.post(f"/bookings/{booking_id}/pay/start", json={"expected_share_cents": share_cents})
+    if r.status_code != 200:
+        return r
+    return client.post(f"/bookings/{booking_id}/pay", json={"intent_id": r.json()["intent_id"]})
+
+
+def whole(b):
+    return b["deposit_amount_cents"] + b["balance_amount_cents"]
 
 
 def spots(env, key="pp"):
@@ -139,7 +179,7 @@ def new_booking(env, who="host", n=3, split=True, key="pp", **extra):
 
 def test_solo_booking_issues_code(env):
     b = new_booking(env, who="jo", n=1, split=False)
-    paid = ok(env["as"]("jo").post(f"/bookings/{b['id']}/pay", json=card(b["deposit_amount_cents"])))
+    paid = ok(pay(env["as"]("jo"), b["id"], whole(b)))
     assert paid["confirmation_code"] and paid["payment_status"] == "deposit_paid"
 
 
@@ -147,8 +187,10 @@ def test_group_without_split_is_one_payer(env):
     b = new_booking(env, n=3, split=False)
     assert not b["is_split"] and b["deposit_amount_cents"] + b["balance_amount_cents"] == 5550
     s0 = spots(env)
-    paid = ok(env["as"]("host").post(f"/bookings/{b['id']}/pay", json=card(b["deposit_amount_cents"])))
+    paid = ok(pay(env["as"]("host"), b["id"], whole(b)))
     assert paid["confirmation_code"] and spots(env) == s0 - 3
+    hold = [c for c in env["charges"] if c["kind"] == "hold"][-1]
+    assert hold["amount_cents"] == 5550 and hold["destination"] == "acct_test"   # the whole bill, held not charged
 
 
 def test_per_unit_deal_is_one_price_for_the_group(env):
@@ -182,7 +224,7 @@ def test_venue_bookings_span_every_deal_owner_only(env):
 
 def test_recent_bookings_and_booked_slots_are_one_call_each(env):
     paid = new_booking(env, who="jo", n=2, split=False, key="room")
-    ok(env["as"]("jo").post(f"/bookings/{paid['id']}/pay", json=card(paid["deposit_amount_cents"])))
+    ok(pay(env["as"]("jo"), paid["id"], whole(paid)))
     newest = new_booking(env, who="jo", n=1, split=False)
     venue_id = ok(env["as"]("owner").get(f"/deals/{env['deals']['pp']}"))["venue_id"]
     owner = env["as"]("owner")
@@ -231,16 +273,16 @@ def test_huddle_pay_invites_lock_in_decline_and_one_code(env):
     assert any(x["id"] == bid for x in ok(sam.get("/bookings/me")))
     sv = ok(sam.get(f"/bookings/{bid}/split"))
     assert sv["my_share"]["share_cents"] == 2000 and not sv["locked_in"]
-    assert sam.post(f"/bookings/{bid}/pay", json=card(400)).status_code == 409     # not locked in
+    assert pay(sam, bid, 2000).status_code == 409     # not locked in
 
     host = env["as"]("host")
     s0 = spots(env)
-    ok(host.post(f"/bookings/{bid}/pay", json=card(430)))
+    ok(pay(host, bid, 2150))
     assert spots(env) == s0 - 3
 
     sam = env["as"]("sam")
-    assert sam.post(f"/bookings/{bid}/pay", json=card(401)).status_code == 409     # consent guard
-    ok(sam.post(f"/bookings/{bid}/pay", json=card(400)))
+    assert pay(sam, bid, 2001).status_code == 409     # consent guard
+    ok(pay(sam, bid, 2000))
 
     assert env["as"]("host").post(f"/bookings/{bid}/cancel").status_code == 409   # a friend has paid
 
@@ -255,7 +297,7 @@ def test_huddle_pay_invites_lock_in_decline_and_one_code(env):
     alex = env["as"]("alex")
     av = ok(alex.get(f"/bookings/{bid}/split"))
     assert av["my_share"]["share_cents"] == 1400
-    ok(alex.post(f"/bookings/{bid}/pay", json=card(280)))
+    ok(pay(alex, bid, 1400))
     with env["engine"].begin() as x:
         x.execute(text("update deals set deal_price = 18.50 where id=:d"), {"d": env["deals"]["pp"]})
 
@@ -263,19 +305,20 @@ def test_huddle_pay_invites_lock_in_decline_and_one_code(env):
     assert len(codes) == 1 and None not in codes
 
 
-def test_guarantor_charges_initiator_once_at_deadline(env):
+def test_guarantor_holds_on_initiator_once_at_deadline(env):
     host = env["as"]("host")
     b = new_booking(env, n=3)
     bid = b["id"]
     v = ok(host.get(f"/bookings/{bid}/split"))
     host = env["as"]("host")
     ok(host.post(f"/bookings/{bid}/seats/{v['participants'][1]['id']}/invite", json={"user_id": env["ids"]["sam"]}))
-    ok(host.post(f"/bookings/{bid}/pay", json=card(v["my_share"]["deposit_cents"])))
+    ok(pay(host, bid, v["my_share"]["share_cents"]))
     past_deadline(env, bid)
     n0 = len(env["charges"])
     assert sweep(env)["guaranteed"] == 2
     g = env["charges"][n0:]
-    assert all(c["nonce"].startswith(f"guarantor-{bid}-") and c["source_id"] == f"src_{env['ids']['host'][:6]}" for c in g)
+    host_card = f"pm_cus_{env['ids']['host'][:6]}"
+    assert all(c["idempotency_key"].startswith(f"guarantor-{bid}-") and c["payment_method_id"] == host_card for c in g)
     sweep(env)
     assert len(env["charges"]) == n0 + 2
     v = ok(host.get(f"/bookings/{bid}/split"))
@@ -284,8 +327,10 @@ def test_guarantor_charges_initiator_once_at_deadline(env):
     owner = env["as"]("owner")
     n0 = len(env["charges"])
     rr = ok(owner.post(f"/bookings/redeem/{v['confirmation_code']}"))
-    assert rr["declines"] == 0
-    assert all(c["source_id"] == f"src_{env['ids']['host'][:6]}" for c in env["charges"][n0:])  # guaranteed balances too
+    assert rr["declines"] == 0 and rr["total_charged_cents"] == 5550
+    done = env["charges"][n0:]
+    assert [c["kind"] for c in done] == ["capture", "capture", "capture", "payout"]
+    assert all(c["application_fee_cents"] == 0 for c in done if c["kind"] == "capture")   # pilot venue
     assert owner.post(f"/bookings/redeem/{v['confirmation_code']}").status_code == 409
 
 
@@ -305,27 +350,27 @@ def test_huddle_vote_then_uneven_split(env):
     hv = _resolved_huddle(env)
     hid = hv["id"]
     assert hv["status"] == "collecting" and not hv["split_confirmed"] and spots(env) == s0 - 2
-    assert env["as"]("sam").post(f"/bookings/{hid}/pay", json=card(1)).status_code == 409
+    assert pay(env["as"]("sam"), hid, 1).status_code == 409
     ids = [p["id"] for p in hv["participants"]]
     hv = ok(env["as"]("host").patch(f"/bookings/{hid}/split", json={
         "split_mode": "custom", "amounts": {ids[0]: hv["locked_price_cents"] - 1000, ids[1]: 1000}}))
-    ok(env["as"]("host").post(f"/bookings/{hid}/pay", json=card(hv["my_share"]["deposit_cents"])))
+    ok(pay(env["as"]("host"), hid, hv["my_share"]["share_cents"]))
     sv = ok(env["as"]("sam").get(f"/huddles/{hid}"))
     assert sv["my_share"]["share_cents"] == 1000
-    ok(env["as"]("sam").post(f"/bookings/{hid}/pay", json=card(sv["my_share"]["deposit_cents"])))
+    ok(pay(env["as"]("sam"), hid, 1000))
     assert ok(env["as"]("sam").get(f"/huddles/{hid}"))["status"] == "confirmed"
 
 
-def test_huddle_collapse_refunds_and_returns_spots(env):
+def test_huddle_collapse_releases_holds_and_returns_spots(env):
     hv = _resolved_huddle(env, second="jo")
     hid = hv["id"]
     hv = ok(env["as"]("host").patch(f"/bookings/{hid}/split", json={"split_mode": "even"}))
-    ok(env["as"]("host").post(f"/bookings/{hid}/pay", json=card(hv["my_share"]["deposit_cents"])))
+    ok(pay(env["as"]("host"), hid, hv["my_share"]["share_cents"]))
     s0 = spots(env)
     past_deadline(env, hid)
     n0 = len(env["charges"])
     sweep(env)
-    assert [c["kind"] for c in env["charges"][n0:]] == ["refund"]
+    assert [c["kind"] for c in env["charges"][n0:]] == ["cancel"]     # the hold is released, nothing refunded
     assert ok(env["as"]("host").get(f"/huddles/{hid}"))["status"] == "collapsed"
     assert spots(env) == s0 + 2
 
@@ -376,7 +421,8 @@ def test_live_activity_token_register_and_updates(env, monkeypatch):
         assert [r.push_token for r in rows] == [token] and rows[0].member_id == v["my_member_id"]
 
     queued.clear()
-    ok(env["as"]("host").post(f"/bookings/{bid}/pay", json=card(b["deposit_amount_cents"])))
+    share = ok(env["as"]("host").get(f"/bookings/{bid}/split"))["my_share"]["share_cents"]
+    ok(pay(env["as"]("host"), bid, share))
     assert {bid} in queued                     # the pay's commit queued an update
 
     ok(env["as"]("host").delete(f"/bookings/{bid}/live-activity-token"), 204)
