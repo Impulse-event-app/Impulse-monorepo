@@ -17,6 +17,7 @@ instant-eligible bank account or debit card.
 """
 import logging
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 import stripe_client
@@ -60,10 +61,10 @@ def pay_out_booking(db: Session, b: Booking) -> None:
                     "destination": destination,
                     "metadata": {"impulseBookingId": str(b.id)},
                 }, idempotency_key=f"payout-{b.id}")
-                b.stripe_payout_id = payout["id"]
-                b.payout_status = "pending"
                 logger.info("Booking %s: instant payout %s of %d cents to venue %s",
                             b.id, payout["id"], amount, venue.id)
+                _record_payout(db, b, payout)
+                return
     except stripe_client.StripeError as e:
         logger.error("Instant payout for booking %s (venue %s) failed: %s", b.id, venue.id, e)
         b.payout_status = "failed"
@@ -71,3 +72,20 @@ def pay_out_booking(db: Session, b: Booking) -> None:
         logger.exception("Instant payout for booking %s crashed", b.id)
         b.payout_status = "failed"
     db.commit()
+
+
+def _record_payout(db: Session, b: Booking, payout: dict) -> None:
+    """Save the payout without ever downgrading "paid".
+
+    Instant payouts can be paid, and the payout.paid webhook processed, before
+    this commit lands. Writing "pending" unconditionally would then overwrite
+    the webhook's "paid" and leave the booking stuck. So take the status Stripe
+    returned, and only write where the row isn't already paid."""
+    status = "paid" if payout.get("status") == "paid" else "pending"
+    db.query(Booking).filter(Booking.id == b.id).update(
+        {Booking.stripe_payout_id: payout["id"]}, synchronize_session=False)
+    db.query(Booking).filter(
+        Booking.id == b.id, or_(Booking.payout_status.is_(None), Booking.payout_status != "paid"),
+    ).update({Booking.payout_status: status}, synchronize_session=False)
+    db.commit()
+    db.refresh(b)

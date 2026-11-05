@@ -243,6 +243,40 @@ def test_payout_paid_webhook_marks_the_booking(monkeypatch):
     assert booking.payout_status == "paid"
 
 
+def test_payout_paid_before_the_id_is_saved_finds_the_booking_by_metadata(monkeypatch):
+    """An instant payout can be paid before pay_out_booking commits its id."""
+    monkeypatch.setattr(stripe_client, "STRIPE_CONNECT_WEBHOOK_SECRET", "whsec_c")
+    monkeypatch.setattr(stripe_client, "construct_event", lambda p, s, k: {
+        "type": "payout.paid", "account": "acct_123",
+        "data": {"object": {"id": "po_2", "amount": 4500, "metadata": {"impulseBookingId": "b-2"}}}})
+    booking = Booking(id="b-2", stripe_payout_id=None, payout_status="pending")
+
+    class Session(FakeSession):
+        def get(self, model, row_id):
+            return booking if row_id == "b-2" else None
+    monkeypatch.setattr(webhooks, "SessionLocal", lambda: Session(None, bookings=[]))
+    assert _webhook_app().post("/webhooks/stripe/connect", content=b"{}", headers={"stripe-signature": "x"}).status_code == 200
+    assert booking.payout_status == "paid" and booking.stripe_payout_id == "po_2"
+
+
+def _thin(related_type, related_id):
+    from types import SimpleNamespace
+    return SimpleNamespace(type="v2.core.account[requirements].updated",
+                           related_object=SimpleNamespace(type=related_type, id=related_id))
+
+
+def test_accounts_webhook_only_acts_on_account_events(monkeypatch):
+    monkeypatch.setattr(stripe_client, "STRIPE_ACCOUNTS_WEBHOOK_SECRET", "whsec_a")
+    seen = []
+    monkeypatch.setattr(webhooks, "_process_account", lambda account_id: seen.append(account_id))
+    events = iter([_thin("v2.core.account", "acct_9"), _thin("payment_intent", "pi_1")])
+    monkeypatch.setattr(stripe_client, "parse_thin_event", lambda p, s, k: next(events))
+    client = _webhook_app()
+    for _ in range(2):
+        assert client.post("/webhooks/stripe/accounts", content=b"{}", headers={"stripe-signature": "x"}).status_code == 200
+    assert seen == ["acct_9"]
+
+
 @pytest.fixture
 def outbox(monkeypatch):
     sent = []

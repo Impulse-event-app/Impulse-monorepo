@@ -83,6 +83,14 @@ def _process_connect(event: dict) -> None:
     db = SessionLocal()
     try:
         b = db.query(Booking).filter(Booking.stripe_payout_id == obj.get("id")).first()
+        if not b:
+            # An instant payout can land before payouts.pay_out_booking has
+            # committed its id, so fall back to the booking id it stamped into
+            # the payout's metadata.
+            booking_id = (obj.get("metadata") or {}).get("impulseBookingId")
+            b = db.get(Booking, booking_id) if booking_id else None
+            if b and not b.stripe_payout_id:
+                b.stripe_payout_id = obj.get("id")
         if b:
             b.payout_status = {"payout.paid": "paid"}.get(kind, "failed")
             db.commit()
@@ -166,9 +174,11 @@ async def stripe_accounts_webhook(request: Request, background_tasks: Background
         logger.warning("Rejected Stripe accounts webhook: bad or missing signature")
         raise HTTPException(status_code=400, detail="Invalid signature")
     related = getattr(notification, "related_object", None)
-    account_id = getattr(related, "id", None) if related else None
-    if account_id:
-        background_tasks.add_task(_process_account, account_id)
+    # Only account events matter here. A destination subscribed to more (or
+    # `stripe listen --all-thin` locally) also delivers thin events about
+    # payments, charges and payouts, whose related object isn't an account.
+    if related and getattr(related, "type", None) == "v2.core.account" and getattr(related, "id", None):
+        background_tasks.add_task(_process_account, related.id)
     else:
-        logger.info("Accounts event %s without a related account", getattr(notification, "type", None))
+        logger.debug("Ignoring thin event %s", getattr(notification, "type", None))
     return {"received": True}
