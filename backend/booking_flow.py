@@ -732,7 +732,11 @@ def sweep_holds(db: Session) -> dict:
         if start is None:
             continue
         if b.status == "confirmed" and t > start + NO_SHOW_GRACE:
-            _settle_no_show(db, b, counts)
+            # Only bookings holding Stripe money are settled. Older bookings
+            # (before holds existed) have nothing to capture and must keep
+            # their status.
+            if any(p.hold_status in ("held", "saved") for p in b.participants):
+                _settle_no_show(db, b, counts)
             continue
         for p in b.participants:
             if p.deposit_status not in DEPOSIT_FIXED:

@@ -392,6 +392,31 @@ def test_no_show_captures_only_the_ten_percent(stripe_stub):
     assert b.status == "no_show"
 
 
+def test_sweep_leaves_bookings_without_holds_alone(stripe_stub, monkeypatch):
+    """Bookings from before Stripe holds have no hold_status. A past slot must
+    not turn them into no-shows."""
+    b = _booking([_seat("ini", 2500, "paid")], status="confirmed")
+    monkeypatch.setattr(flow, "now", lambda: flow.slot_start(b) + timedelta(days=3))
+
+    class Q:
+        def options(self, *a):
+            return self
+
+        def filter(self, *a):
+            return self
+
+        def all(self):
+            return [b]
+
+    class DB(StubDB):
+        def query(self, *a):
+            return Q()
+
+    flow.sweep_holds(DB())
+    assert b.status == "confirmed"
+    assert not [kind for kind, _ in stripe_stub if kind == "capture"]
+
+
 def test_saved_card_is_held_four_days_before_the_slot(stripe_stub, monkeypatch):
     b = _booking([_seat("ini", 2500, "paid", intent="seti_ini", pm="pm_ini", hold="saved")], status="confirmed")
     start = flow.slot_start(b)
