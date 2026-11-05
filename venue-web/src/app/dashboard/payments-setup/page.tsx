@@ -93,8 +93,9 @@ export default function PaymentsSetupPage() {
       {status && !status.stripe_account_id && (
         <div style={{ ...card, padding: 26 }}>
           <p style={{ fontSize: 14, margin: "0 0 18px", lineHeight: 1.6 }}>
-            You&apos;ll need your ABN, your bank account details and photo ID for each director or
-            owner with 25% or more.
+            You&apos;ll need your ABN, your business address, your website (a social media page is
+            fine) and the bank account your payouts should go to. Stripe may ask for photo ID if it
+            needs to confirm who you are.
           </p>
           <button onClick={() => start.mutate()} disabled={start.isPending} style={{ ...btnPrimary, padding: "12px 22px" }}>
             {start.isPending ? "Starting…" : "Set up payments →"}
