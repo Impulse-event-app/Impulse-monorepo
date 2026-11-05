@@ -6,6 +6,7 @@ performance cards.
 
 Usage:
     python seed_history.py --venue-id <uuid> [--weeks 8] [--dry-run]
+    python seed_history.py --venue-id <uuid> --quiet "Mon,Tue,Wed 11:30am-3pm"
     python seed_history.py --venue-id <uuid> --wipe
 
 Every deal this makes has an id derived from (venue, date, index), so --wipe
@@ -47,6 +48,13 @@ DEMAND = {
     20 * 60: 0.80, 20 * 60 + 30: 0.60, 21 * 60: 0.30, 21 * 60 + 30: 0.20,
     22 * 60: 0.15, 22 * 60 + 30: 0.18, 23 * 60: 0.10, 23 * 60 + 30: 0.08,
 }
+# On --quiet days: next to nobody inside the dull hours, steady trade around
+# them, so the portal's quietest-stretch hint lands on those hours.
+QUIET_DEMAND = 0.03
+AROUND_QUIET = 0.35
+# The daytime deal a --quiet day runs, so its history covers the dull hours.
+DAYTIME_OFFER = ("Daytime darts + drink", 30, 30, "pp", 11 * 60, 17 * 60 + 30)
+
 NIGHT = {0: 0.6, 1: 0.6, 2: 0.7, 3: 1.0, 4: 1.5, 5: 1.6, 6: 0.8}   # Mon … Sun
 
 # (title, usual price, discount %, unit, first slot, last slot) by venue category.
@@ -120,6 +128,16 @@ def opening_hours(text: str | None) -> dict[int, tuple[int, int] | None]:
     return week
 
 
+def quiet_hours(text: str) -> tuple[set[int], int, int]:
+    """'Mon,Tue,Wed 11:30am-3pm' → ({0, 1, 2}, 690, 900)."""
+    m = re.fullmatch(r"\s*([A-Za-z, ]+?)\s+(\S+)\s*[–-]\s*(\S+)\s*", text)
+    days = [d.strip()[:3].title() for d in m.group(1).split(",")] if m else []
+    start, end = (_clock(m.group(2)), _clock(m.group(3))) if m else (None, None)
+    if not days or any(d not in DAY_NAMES for d in days) or start is None or end is None or end <= start:
+        raise SystemExit(f"Can't read --quiet {text!r}; expected e.g. 'Mon,Tue,Wed 11:30am-3pm'")
+    return {DAY_NAMES.index(d) for d in days}, start, end
+
+
 def deal_id_for(venue_id: str, day: date, index: int) -> str:
     return str(uuid.uuid5(NAMESPACE, f"{venue_id}:{day.isoformat()}:{index}"))
 
@@ -141,6 +159,11 @@ def wipe(db, venue_id: str) -> None:
         for i in range(MAX_DEALS_PER_NIGHT)
     ]
     deals = db.query(Deal).filter(Deal.id.in_(ids)).all()
+    # A booking points at its first seat, so unhook that before the seats go.
+    for d in deals:
+        for b in d.bookings:
+            b.initiator_member_id = None
+    db.flush()
     bookings = 0
     for d in deals:
         for b in d.bookings:
@@ -153,7 +176,8 @@ def wipe(db, venue_id: str) -> None:
     print(f"[wipe] Removed {len(deals)} seeded deal(s) and {bookings} booking(s).")
 
 
-def seed(db, venue: Venue, weeks: int, rng: random.Random) -> tuple[int, int, int]:
+def seed(db, venue: Venue, weeks: int, rng: random.Random,
+         quiet: tuple[set[int], int, int] | None = None) -> tuple[int, int, int]:
     offers = OFFERS.get(venue.category, GENERIC)
     hours = opening_hours(venue.opening_hours)
     today = datetime.now(SYDNEY).date()
@@ -167,9 +191,10 @@ def seed(db, venue: Venue, weeks: int, rng: random.Random) -> tuple[int, int, in
             continue            # closed that day
         open_, close = open_hours
         night = NIGHT[day.weekday()]
+        is_quiet = quiet is not None and day.weekday() in quiet[0]
         # Only offers that fit inside that day's hours, last start 30 min before close.
         fitting = []
-        for title, usual, discount, unit, first, last in offers:
+        for title, usual, discount, unit, first, last in [DAYTIME_OFFER] if is_quiet else offers:
             first, last = max(first, open_), min(last, close - 30)
             if last >= first:
                 fitting.append((title, usual, discount, unit, first, last))
@@ -177,7 +202,12 @@ def seed(db, venue: Venue, weeks: int, rng: random.Random) -> tuple[int, int, in
             continue
         # Quieter days run one deal; busy ones two.
         count = min(len(fitting), MAX_DEALS_PER_NIGHT if night >= 1.0 else 1)
-        for index, offer in enumerate(rng.sample(fitting, count)):
+        picked = rng.sample(fitting, count)
+        if is_quiet:
+            # The daytime deal, plus one evening offer from the usual set.
+            evening = [o for o in offers if o[4] >= 17 * 60 and min(o[5], close - 30) >= o[4]]
+            picked = fitting + rng.sample(evening, min(1, len(evening)))
+        for index, offer in enumerate(picked):
             deal_id = deal_id_for(venue.id, day, index)
             if db.get(Deal, deal_id):
                 continue        # already seeded; run --wipe first to regenerate
@@ -199,7 +229,10 @@ def seed(db, venue: Venue, weeks: int, rng: random.Random) -> tuple[int, int, in
             held = 0
             for s in slots:
                 # Roughly Poisson: expected groups per slot scale with demand and night.
-                expected = DEMAND.get(s, 0.1) * night * 3.2
+                demand = DEMAND.get(s, 0.1)
+                if is_quiet:
+                    demand = QUIET_DEMAND if quiet[1] <= s < quiet[2] else max(demand, AROUND_QUIET)
+                expected = demand * night * 3.2
                 groups = sum(1 for _ in range(12) if rng.random() < expected / 12)
                 for _ in range(groups):
                     people = rng.choice([2, 2, 2, 3, 4, 4, 5, 6])
@@ -258,6 +291,7 @@ def main() -> None:
     parser.add_argument("--weeks", type=int, default=8)
     parser.add_argument("--wipe", action="store_true", help="remove this script's rows for the venue, then stop")
     parser.add_argument("--dry-run", action="store_true", help="build everything, report, and roll back")
+    parser.add_argument("--quiet", default=None, help="dull hours to show in the history, e.g. 'Mon,Tue,Wed 11:30am-3pm'")
     parser.add_argument("--seed", type=int, default=None, help="random seed, for a repeatable history")
     args = parser.parse_args()
 
@@ -273,7 +307,8 @@ def main() -> None:
             wipe(db, venue.id)
             return
 
-        deals, bookings, people = seed(db, venue, args.weeks, random.Random(args.seed))
+        quiet = quiet_hours(args.quiet) if args.quiet else None
+        deals, bookings, people = seed(db, venue, args.weeks, random.Random(args.seed), quiet)
         if args.dry_run:
             db.rollback()
             print(f"[dry run] Would add {deals} past deals, {bookings} bookings, {people} people. Nothing written.")
