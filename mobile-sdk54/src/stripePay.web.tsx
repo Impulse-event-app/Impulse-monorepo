@@ -5,7 +5,7 @@
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import { loadStripe, type Stripe } from '@stripe/stripe-js';
 import { useRef, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Modal, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { ApiBooking, confirmCardUpdate, confirmHold, startCardSetup, startCardUpdate, startHold } from './api';
 import { Btn } from './components';
 import { fontUI, useApp } from './theme';
@@ -46,7 +46,8 @@ function Form({ open, close }: { open: Open; close: (done: boolean, err?: Error)
   };
   return (
     <View style={{ gap: 18 }}>
-      <PaymentElement />
+      {/* Guests are in Australia; without this Stripe guesses the country from the IP. */}
+      <PaymentElement options={{ defaultValues: { billingDetails: { address: { country: 'AU' } } } }} />
       {busy ? <ActivityIndicator color={T.accent} style={{ height: 52 }} /> : (
         <Btn full onPress={submit}>{open.mode === 'setup' ? 'Save card' : 'Hold my spot'}</Btn>
       )}
@@ -100,20 +101,28 @@ export function useStripePay(): {
   const overlay = open ? (
     <Modal transparent animationType="fade" visible onRequestClose={() => close(false)}>
       <Pressable onPress={() => close(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 16 }}>
-        <Pressable onPress={() => {}} style={{ backgroundColor: T.surface, borderRadius: 20, padding: 22, maxWidth: 460, width: '100%', alignSelf: 'center' }}>
-          <Text style={{ ...fontUI(600), fontSize: 17, color: T.text, marginBottom: 16 }}>
-            {open.mode === 'setup' ? 'Add a card' : 'Hold your spot'}
-          </Text>
-          <Elements
-            stripe={stripe()}
-            options={{
-              clientSecret: open.clientSecret,
-              customerSessionClientSecret: open.customerSessionClientSecret,
-              appearance: { theme: 'flat', variables: { colorPrimary: T.accent, colorBackground: T.surface, colorText: T.text } },
-            }}
-          >
-            <Form open={open} close={close} />
-          </Elements>
+        {/* Capped at the window and scrollable: the Payment Element plus Link's
+            optional fields are taller than a laptop screen, which otherwise
+            pushes the confirm button out of reach. */}
+        <Pressable
+          onPress={() => {}}
+          style={{ backgroundColor: T.surface, borderRadius: 20, maxWidth: 460, maxHeight: '90%', width: '100%', alignSelf: 'center', overflow: 'hidden' }}
+        >
+          <ScrollView contentContainerStyle={{ padding: 22 }} keyboardShouldPersistTaps="handled">
+            <Text style={{ ...fontUI(600), fontSize: 17, color: T.text, marginBottom: 16 }}>
+              {open.mode === 'setup' ? 'Add a card' : 'Hold your spot'}
+            </Text>
+            <Elements
+              stripe={stripe()}
+              options={{
+                clientSecret: open.clientSecret,
+                customerSessionClientSecret: open.customerSessionClientSecret,
+                appearance: { theme: 'flat', variables: { colorPrimary: T.accent, colorBackground: T.surface, colorText: T.text } },
+              }}
+            >
+              <Form open={open} close={close} />
+            </Elements>
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
