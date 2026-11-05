@@ -135,7 +135,7 @@ function PaymentsSetupBanner({
   if (!compliance || compliance.can_publish_deals) return null;
 
   const started = !!compliance.stripe_account_id;
-  const rejected = compliance.transfers_status === "restricted";
+  const rejected = compliance.transfers_status === "restricted" && compliance.needs_attention;
 
   const tone = rejected ? "danger" : started ? "info" : "soft";
   const { badge, dot } = toneBadge(tone);

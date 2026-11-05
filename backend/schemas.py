@@ -898,6 +898,9 @@ class PaymentsStatusResponse(BaseModel):
     transfers_status: Optional[str] = None      # active | pending | restricted | unsupported
     can_publish_deals: bool = False
     outstanding: List[str] = Field(default_factory=list)
+    # True when Stripe rejected something or is asking again, not just because
+    # the venue hasn't finished onboarding yet.
+    needs_attention: bool = False
     updated_at: Optional[datetime] = None
     pilot_ends_at: Optional[datetime] = None
     in_pilot: bool = True

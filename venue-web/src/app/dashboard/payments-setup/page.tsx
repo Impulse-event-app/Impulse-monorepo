@@ -19,10 +19,15 @@ const STATUS: Record<string, { label: string; tone: Tone; copy: string }> = {
     tone: "info",
     copy: "Stripe is checking your details, which usually takes a few minutes. You can draft deals in the meantime; they go live once you're verified.",
   },
+  unfinished: {
+    label: "Not finished",
+    tone: "info",
+    copy: "Finish Stripe's steps below and you can start taking bookings.",
+  },
   restricted: {
     label: "Needs attention",
     tone: "danger",
-    copy: "Stripe needs a little more before you can take bookings. Finish the steps below.",
+    copy: "Stripe needs something checked or added before you can take bookings. Finish the steps below.",
   },
 };
 
@@ -54,7 +59,12 @@ export default function PaymentsSetupPage() {
     return <div style={{ display: "grid", placeItems: "center", height: "60vh", color: "var(--faint)", fontSize: 14 }}>Loading…</div>;
   }
 
-  const meta = STATUS[status?.transfers_status ?? ""] ?? STATUS.pending;
+  // "restricted" covers both a venue that simply hasn't finished onboarding and
+  // one Stripe has flagged; only the second is worth an alarming badge.
+  const key = status?.transfers_status === "restricted" && !status.needs_attention
+    ? "unfinished"
+    : status?.transfers_status ?? "";
+  const meta = STATUS[key] ?? STATUS.pending;
   const { badge, dot } = toneBadge(meta.tone);
   const pilot = status ? pilotLine(status) : null;
   const refresh = () => qc.invalidateQueries({ queryKey: ["merchant-status", venueId] });

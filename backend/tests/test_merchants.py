@@ -165,14 +165,33 @@ def test_account_session_needs_an_account_first(venue):
 
 def test_status_refreshes_from_stripe_and_lists_whats_due(venue, monkeypatch):
     venue.stripe_account_id = "acct_123"
+    # The shape a real sandbox account returned: the field path is the description.
+    routine = [{"code": "routine_onboarding"}]
     monkeypatch.setattr(stripe_client, "retrieve_account", lambda acct: _account("restricted", [
-        {"description": "Upload a photo ID", "minimum_deadline": {"status": "currently_due"}},
-        {"description": "Not yet", "minimum_deadline": {"status": "eventually_due"}},
+        {"description": "defaults.profile.business_url", "minimum_deadline": {"status": "past_due"},
+         "errors": [], "requested_reasons": routine},
+        {"description": "identity.attestations.terms_of_service.account.date",
+         "minimum_deadline": {"status": "past_due"}, "errors": [], "requested_reasons": routine},
+        {"description": "identity.attestations.terms_of_service.account.ip",
+         "minimum_deadline": {"status": "past_due"}, "errors": [], "requested_reasons": routine},
+        {"description": "identity.business_details.address.city", "minimum_deadline": {"status": "eventually_due"}},
     ]))
     client, _ = _client(venue)
     body = client.get(f"/merchants/venues/{VENUE_ID}/status").json()
     assert body["transfers_status"] == "restricted" and body["can_publish_deals"] is False
-    assert body["outstanding"] == ["Upload a photo ID"]
+    assert body["outstanding"] == ["Your website (a social media page is fine)", "Accept Stripe's terms"]
+    assert body["needs_attention"] is False          # just unfinished onboarding
+
+
+def test_a_rejected_detail_needs_attention(venue, monkeypatch):
+    venue.stripe_account_id = "acct_123"
+    monkeypatch.setattr(stripe_client, "retrieve_account", lambda acct: _account("restricted", [
+        {"description": "identity.business_details.id_numbers", "minimum_deadline": {"status": "past_due"},
+         "errors": [{"code": "invalid_value"}], "requested_reasons": [{"code": "routine_onboarding"}]},
+    ]))
+    client, _ = _client(venue)
+    body = client.get(f"/merchants/venues/{VENUE_ID}/status").json()
+    assert body["outstanding"] == ["Your ABN"] and body["needs_attention"] is True
 
 
 def test_only_an_active_account_can_publish():

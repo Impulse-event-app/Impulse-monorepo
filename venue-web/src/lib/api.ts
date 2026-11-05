@@ -459,6 +459,8 @@ export interface PaymentsStatus {
   updated_at: string | null;
   pilot_ends_at: string | null;
   in_pilot: boolean;
+  /** Stripe rejected something or is asking again, not just "onboarding unfinished". */
+  needs_attention: boolean;
 }
 
 export const merchantApi = {

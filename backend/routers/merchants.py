@@ -77,15 +77,53 @@ def _transfers_status(account: dict) -> str:
     return transfers.get("status") or "pending"
 
 
+# Accounts v2 puts the field path in requirements.entries[].description
+# ("identity.business_details.address.city"), so venues see these instead.
+# First matching prefix wins; several fields can share one line.
+_REQUIREMENT_LABELS = (
+    ("defaults.profile.business_url", "Your website (a social media page is fine)"),
+    ("external_account", "The bank account for your payouts"),
+    ("identity.attestations.terms_of_service", "Accept Stripe's terms"),
+    ("identity.entity_type", "Your business type"),
+    ("identity.business_details.registered_name", "Your registered business name"),
+    ("identity.business_details.address", "Your business address"),
+    ("identity.business_details.id_numbers", "Your ABN"),
+    ("identity.business_details.phone", "Your business phone number"),
+    ("identity.business_details.structure", "Your business structure"),
+    ("identity.individual", "Details of the person setting up payments"),
+    ("documents", "A supporting document"),
+)
+
+
+def _label(field: str) -> str:
+    for prefix, label in _REQUIREMENT_LABELS:
+        if (field or "").startswith(prefix):
+            return label
+    return "More details Stripe needs"
+
+
 def _due_entries(account: dict) -> List[dict]:
-    """Requirements that block the account now, in plain words."""
+    """Requirements that block the account now, one plain-words line each.
+
+    `attention` marks the ones that aren't just routine first-time onboarding:
+    Stripe rejected something the venue gave, or is asking again later."""
     entries = ((account.get("requirements") or {}).get("entries") or [])
-    due = []
+    due: List[dict] = []
+    seen = set()
     for e in entries:
         deadline = (e.get("minimum_deadline") or {}).get("status")
-        if deadline in ("currently_due", "past_due"):
-            due.append({"description": e.get("description"), "deadline": deadline,
-                        "awaiting_action_from": e.get("awaiting_action_from")})
+        if deadline not in ("currently_due", "past_due"):
+            continue
+        label = _label(e.get("description"))
+        attention = bool(e.get("errors")) or any(
+            (r or {}).get("code") != "routine_onboarding" for r in (e.get("requested_reasons") or []))
+        if label in seen:
+            if attention:
+                next(d for d in due if d["description"] == label)["attention"] = True
+            continue
+        seen.add(label)
+        due.append({"description": label, "field": e.get("description"), "deadline": deadline,
+                    "attention": attention})
     return due
 
 
@@ -115,13 +153,14 @@ def _status(venue: Venue) -> PaymentsStatusResponse:
     if not venue.stripe_account_id:
         outstanding = ["Set up payments so your takings reach your bank"]
     else:
-        outstanding = [d.get("description") or "More information is needed" for d in due]
+        outstanding = [d.get("description") or "More details Stripe needs" for d in due]
     return PaymentsStatusResponse(
         venue_id=venue.id,
         stripe_account_id=venue.stripe_account_id,
         transfers_status=venue.stripe_transfers_status,
         can_publish_deals=can_publish_deals(venue),
         outstanding=outstanding,
+        needs_attention=any(d.get("attention") for d in due),
         updated_at=venue.stripe_status_updated_at,
         pilot_ends_at=venue.pilot_ends_at,
         in_pilot=payments.in_pilot(venue),
