@@ -6,6 +6,7 @@ import { venueApi, type Payout, type PayoutsResponse } from "@/lib/api";
 import { useVenue } from "@/providers/VenueProvider";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { FONT_DISPLAY, numeric, card, toneBadge, type Tone } from "@/lib/ui";
+import { StripeDashboardButton } from "@/components/StripeDashboardButton";
 
 const COLS = "1.1fr 1.5fr 1fr 1fr 40px";
 
@@ -71,6 +72,9 @@ export default function PayoutsPage() {
         Money sent to your bank. Each booking is paid out within minutes of you checking the
         group in, or on the next daily payout if your bank can&apos;t take instant payments.
       </p>
+      <div style={{ margin: "-10px 0 26px" }}>
+        <StripeDashboardButton venueId={venue.id} />
+      </div>
 
       {/* Summary */}
       <div className="payout-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 26 }}>

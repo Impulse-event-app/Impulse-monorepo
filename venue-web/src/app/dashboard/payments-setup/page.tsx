@@ -4,6 +4,7 @@ import { ConnectAccountOnboarding, ConnectNotificationBanner } from "@stripe/rea
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { StripeConnect } from "@/components/StripeConnect";
+import { StripeDashboardButton } from "@/components/StripeDashboardButton";
 import { ApiError, merchantApi, type PaymentsStatus } from "@/lib/api";
 import { FONT_DISPLAY, btnPrimary, card, eyebrow, fieldLabel, toneBadge, type Tone } from "@/lib/ui";
 import { useVenue } from "@/providers/VenueProvider";
@@ -89,6 +90,11 @@ export default function PaymentsSetupPage() {
           </span>
           <p style={{ fontSize: 13.5, color: "var(--muted)", margin: "14px 0 0", lineHeight: 1.6 }}>{meta.copy}</p>
           {pilot && <p style={{ fontSize: 13.5, margin: "10px 0 0", lineHeight: 1.6 }}>{pilot}</p>}
+          {status.transfers_status === "active" && (
+            <div style={{ marginTop: 16 }}>
+              <StripeDashboardButton venueId={venueId} />
+            </div>
+          )}
           {status.outstanding.length > 0 && (
             <div style={{ marginTop: 16 }}>
               <div style={{ ...fieldLabel, marginBottom: 8 }}>Still needed</div>

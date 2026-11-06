@@ -472,4 +472,7 @@ export const merchantApi = {
     request<{ client_secret: string }>("POST", `/merchants/venues/${venueId}/account-session`),
   status: (venueId: string) =>
     request<PaymentsStatus>("GET", `/merchants/venues/${venueId}/status`),
+  /** One-time link into the venue's Stripe Express Dashboard. */
+  dashboardLink: (venueId: string) =>
+    request<{ url: string }>("POST", `/merchants/venues/${venueId}/dashboard-link`),
 };
