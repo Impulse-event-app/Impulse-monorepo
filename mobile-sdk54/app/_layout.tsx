@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { DesktopNotice } from '../src/DesktopNotice';
 import { StripeRoot } from '../src/StripeRoot';
+import { UpdateGate } from '../src/UpdateGate';
 import { tokens } from '../src/theme';
 
 /**
@@ -31,10 +32,12 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <StripeRoot>
         <StatusBar style="auto" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: T.bg } }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="(user)" />
-        </Stack>
+        <UpdateGate T={T}>
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: T.bg } }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="(user)" />
+          </Stack>
+        </UpdateGate>
         {/* Web-only; compiles to null on native. Above the Stack so it covers
             every route, including the auth gate's blank frames. */}
         <DesktopNotice />

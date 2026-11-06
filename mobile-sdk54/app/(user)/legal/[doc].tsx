@@ -17,12 +17,13 @@ const DOCS: Record<string, Doc> = {
     intro: "Stuck on something? Most answers are below. If you still need a hand, reach us at support@impulse.app and we'll get back to you within one business day.",
     sections: [
       { h: 'Booking a drop', body: [
-        'When you find a deal you like, tap "Book now" and pick a time. Your spot is held the moment payment goes through, and a door code appears under Plans.',
+        'When you find a deal you like, tap "Book now" and pick a time. Your spot is yours the moment your card is held, and a door code appears under Plans.',
         'Show that code at the venue to redeem. Codes are single-use and tied to your account.',
       ] },
       { h: 'Payments & refunds', body: [
-        'We charge the discounted price shown at booking — no surprises at the door. Your saved card is used automatically.',
-        'Plans cancelled at least 2 hours before the slot are refunded in full. Inside 2 hours, deals are non-refundable unless the venue cancels.',
+        'When you book, we hold the discounted price on your card. Nothing is charged until the venue checks you in with your door code, and then the hold is charged. No surprises at the door.',
+        'Your card is saved securely with our payment provider, so you can book again in one tap. You can remove it any time in You.',
+        'If you cancel, or nobody from your booking shows up, the 10% deposit is kept and the rest of the hold is released. If the venue cancels, the whole hold is released. Released holds can take a few days to disappear from your bank statement.',
       ] },
       { h: 'Managing your bookings', body: [
         'Every booking lives under the Plans tab, with its status, time, and code. Tap one to view or cancel it.',
@@ -34,7 +35,7 @@ const DOCS: Record<string, Doc> = {
   },
   terms: {
     title: 'Terms of service',
-    updated: 'Last updated 25 July 2026',
+    updated: 'Last updated 6 November 2026',
     intro: 'These terms govern your use of Impulse. By creating an account or booking a deal, you agree to them. Please read them carefully.',
     sections: [
       { h: '1. Your account', body: [
@@ -42,12 +43,16 @@ const DOCS: Record<string, Doc> = {
       ] },
       { h: '2. Bookings & payments', body: [
         'Impulse is a marketplace connecting you with venues; the venue provides the experience. When you book a deal, you enter an agreement with that venue, and we process payment on their behalf at the price shown.',
+        'When you book, we place a hold on your card for your share of the price. The hold is charged when the venue checks you in. If your booking is more than six days away, we save your card when you book and place the hold closer to the date.',
+        'In a split booking, each person\'s share is held on their own card. If a share is still unpaid at the deadline, the person who made the booking agreed to cover it, and it is held on their card.',
+        'You authorise us to save the card you use and to place holds and charge it for your bookings as described in these terms. If a hold can\'t be placed, we\'ll ask you to update your card; if it still can\'t be charged, the venue may ask you to pay at the door.',
       ] },
       { h: '3. Cancellations', body: [
-        'You may cancel a plan up to 2 hours before its slot for a full refund. Venues may cancel where a deal can no longer be honoured, in which case you are refunded in full.',
+        'The 10% deposit on each booking is non-refundable. If you cancel a plan before it is checked in, the deposit is charged and the rest of the hold is released. The same applies if nobody from your booking shows up.',
+        'Venues may cancel where a deal can no longer be honoured, in which case your hold is released in full and nothing is charged.',
       ] },
       { h: '4. Conduct', body: [
-        'Venues may refuse service consistent with the law and their own policies, including for intoxication or unsafe behaviour. Refused entry for such reasons is not eligible for a refund.',
+        'Venues may refuse service consistent with the law and their own policies, including for intoxication or unsafe behaviour. Refused entry for such reasons is treated as a no-show.',
       ] },
       { h: '5. Liability', body: [
         'To the extent permitted by law, Impulse is not liable for the acts of venues or for indirect loss. Nothing in these terms excludes rights you have under the Australian Consumer Law.',
@@ -59,11 +64,11 @@ const DOCS: Record<string, Doc> = {
   },
   privacy: {
     title: 'Privacy policy',
-    updated: 'Last updated 25 July 2026',
+    updated: 'Last updated 6 November 2026',
     intro: 'This policy explains what we collect, why, and the choices you have. We aim to collect only what we need to run Impulse.',
     sections: [
       { h: 'What we collect', body: [
-        'Account details (name, email or phone), your preferences (home suburb, favourite activities, party size), and booking history. Payment card details are handled by our payment processor — we store only the last four digits.',
+        'Account details (name, email or phone), your preferences (home suburb, favourite activities, party size), and booking history. Payment card details are handled and stored by our payment processor; we never see or store your full card number.',
       ] },
       { h: 'How we use it', body: [
         'To show you relevant deals, process and confirm bookings, prevent fraud, and provide support. We do not sell your personal information.',

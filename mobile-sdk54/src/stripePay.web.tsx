@@ -117,7 +117,15 @@ export function useStripePay(): {
               options={{
                 clientSecret: open.clientSecret,
                 customerSessionClientSecret: open.customerSessionClientSecret,
-                appearance: { theme: 'flat', variables: { colorPrimary: T.accent, colorBackground: T.surface, colorText: T.text } },
+                // Stripe's own dark theme, so its fields and Link panel sit on the
+                // modal's surface instead of a white card in dark mode.
+                appearance: {
+                  theme: T.dark ? 'night' : 'stripe',
+                  variables: {
+                    colorPrimary: T.accent, colorBackground: T.surface, colorText: T.text,
+                    colorTextSecondary: T.muted, borderRadius: '12px',
+                  },
+                },
               }}
             >
               <Form open={open} close={close} />

@@ -316,6 +316,11 @@ export async function confirmCardUpdate(bookingId: string, intentId: string): Pr
   });
 }
 
+/** The oldest app version the API still serves (see UpdateGate). Public. */
+export async function getAppConfig(): Promise<{ min_version: string }> {
+  return publicRequest<{ min_version: string }>('/app/config');
+}
+
 // ── Saved cards ──────────────────────────────────────────────────────────────
 
 export async function listPaymentMethods(): Promise<PaymentMethod[]> {
