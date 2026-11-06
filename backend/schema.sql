@@ -30,6 +30,8 @@ create table if not exists public.users (
   notifications_enabled  boolean     not null default false,
   -- One Stripe Customer per user on the platform; saved cards work at every venue.
   stripe_customer_id     text        unique,
+  -- Sign in with Apple refresh token; revoked on account deletion
+  apple_refresh_token    text,
   created_at             timestamptz not null default now(),
   updated_at             timestamptz not null default now()
 );

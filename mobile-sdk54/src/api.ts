@@ -226,6 +226,20 @@ export async function deleteMe(): Promise<void> {
   await request<void>('/users/me', { method: 'DELETE' });
 }
 
+/**
+ * Hand the backend the one-time authorization code from a Sign in with Apple
+ * credential. The backend exchanges it for Apple's refresh token so it can
+ * revoke the Apple grant when the account is deleted (App Store 5.1.1(v)).
+ * The code expires within minutes and is single-use, so call this straight
+ * after sign-in.
+ */
+export async function registerAppleAuthorizationCode(authorizationCode: string): Promise<void> {
+  await request<void>('/users/me/apple-token', {
+    method: 'POST',
+    body: JSON.stringify({ authorization_code: authorizationCode }),
+  });
+}
+
 // ── deals ────────────────────────────────────────────────────
 
 export type DealFilters = {
