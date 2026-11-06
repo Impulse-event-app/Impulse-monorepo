@@ -1,195 +1,216 @@
 """
-Shared Pinch payment orchestration — the single source of truth for how
-Impulse vaults cards and charges deposits/balances. Both the single-booking
-flow (routers/bookings.py) and the huddle group flow (routers/huddles.py) call
-these, so the fee model, surcharge rules, metadata encoding, and nonce handling
-live in exactly one place.
+Shared Stripe payment orchestration — the single source of truth for how
+Impulse holds, captures and releases a seat's money, and for the fee model.
+The booking flow (booking_flow.py) and the wallet (wallet.py) call these; they
+never talk to Stripe directly.
 
-Fee model (revised 2026-07-30):
-- Deposit: the confirming deposit is Impulse's entire take. Pinch caps
-  applicationFee at amount − transaction fees, and Impulse absorbs those fees:
-  applicationFee = amount − the fee Pinch quotes for that card. Metadata MUST
-  be a JSON string — an object nulls Pinch's request.
+Money flow (decided 2026-11-05, replacing Pinch's deposit-then-balance):
+- Claiming a spot places a HOLD for the seat's whole share: a destination
+  PaymentIntent with capture_method=manual on Impulse's platform account,
+  transfer_data.destination = the venue's connected account. Nothing moves.
+- The venue redeeming the six-digit code CAPTURES the hold; Stripe moves the
+  money to the venue, minus `application_fee_amount`, and booking_flow then
+  asks payouts.py for an Instant Payout.
+- A Huddle that collapses CANCELS its holds — no refund, no fee.
+- A no-show captures only the seat's 10% (`deposit_cents`) after the grace
+  window and releases the rest, so the deposit stays non-refundable.
 
-Card-fee surcharging was dropped 2026-10-10: Australia's surcharge ban means
-Pinch now rejects `surcharge` with "Surcharging is not permitted.", which
-failed every deposit (solo, split and Huddle alike).
-- Balance: no application fee. The balance belongs to the venue in full; the
-  customer pays exactly the quoted balance and the venue absorbs Pinch's fees.
+Fee model (impulse_fee):
+- During a venue's free pilot (venue.pilot_ends_at in the future, or unset),
+  Impulse takes nothing: the venue gets 100%, and Impulse quietly pays
+  Stripe's card fee and the 1% Instant Payout fee.
+- After the pilot, Impulse's cut is a flat 10%: the seat's deposit_cents.
+  Impulse keeps absorbing Stripe's card fee and the Instant Payout fee
+  (decided 2026-11-05), so venues see exactly 90% of every booking. With
+  destination charges Stripe bills those fees to the platform, so absorbing
+  them needs no extra code; they simply come out of Impulse's 10%.
 
-Superseded: the balance previously carried a 20% applicationFee, which stacked
-with the deposit to a 36% effective take. Impulse's take is now the deposit and
-nothing else.
-
-Note this is the *fee* split, not the *routing*. Both charges still run through
-the single Impulse merchant, so a zero application fee means Impulse collects
-the balance and owes it onward. Routing the balance to each venue's own managed
-merchant is what makes the money actually land in their account.
+Card holds last 7 days for a customer-initiated authorisation (Visa about
+4d18h for merchant-initiated), and allow one capture. Bookings further out than
+HOLD_AHEAD save the card with a SetupIntent instead; the sweep places the hold
+closer to the slot.
 """
-import json
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
-import pinch_client
-from pinch_client import PinchError  # re-exported for callers
+import stripe_client
+from stripe_client import CURRENCY
 
-# Impulse's cut of the balance charge. Zero by decision (2026-07-30): the whole
-# 10% deposit is Impulse's take, and the balance is entirely the venue's.
-# Previously 0.20, which stacked to a 36% effective take once the deposit was
-# counted. Kept as a constant rather than inlined so reinstating a balance fee
-# is one edit — settlements, payouts and the seed script all read it.
-BALANCE_APPLICATION_FEE_RATE = 0.0
-
-
-class PaymentNotApproved(PinchError):
-    """A charge returned a non-approved status. Carries the payment body."""
+# How far ahead of the slot a hold can be placed at claim time and still be
+# valid at check-in (customer-initiated holds last 7 days).
+HOLD_AHEAD = timedelta(days=6)
+# When the sweep places a merchant-initiated hold for a far-off booking. Visa's
+# MIT window is 4 days 18 hours, so this keeps a margin past the slot.
+OFFSESSION_HOLD_LEAD = timedelta(days=4)
 
 
-def create_payer(*, first_name: str, last_name: str, email: str, merchant_id: str) -> str:
-    """Create a Pinch payer and return its id (pyr_XXX)."""
-    payer = pinch_client.create_payer(
-        {"firstName": first_name, "lastName": last_name, "email": email},
-        merchant_id,
-    )
-    return payer["id"]
+class PaymentError(Exception):
+    """Any failed Stripe call. Carries an HTTP-ish status and a readable body
+    so the booking flow can log and surface it the way it did for Pinch."""
+
+    def __init__(self, status_code: int, body: str):
+        self.status_code = status_code
+        self.body = body
+        super().__init__(f"Payment error {status_code}: {body}")
 
 
-def vault_source(*, payer_id: str, token: str, merchant_id: str) -> dict:
-    """Vault a CaptureJs token against an existing payer. Returns the full
-    source object — callers persist id plus the display fields
-    (displayCardNumber, cardScheme, expiryDate, funding, cardHolderName)."""
-    return pinch_client.create_payment_source(
-        payer_id, {"sourceType": "credit-card", "token": token}, merchant_id,
-    )
+class PaymentNotApproved(PaymentError):
+    """The card said no — a decline or failed authentication. Definitive."""
 
 
-def vault_card(*, first_name: str, last_name: str, email: str, token: str, merchant_id: str):
-    """Create a payer and vault a card against it in one step.
-
-    Kept for the throwaway path — a card used for exactly one booking and never
-    saved. Saved cards go through create_payer + vault_source so the payer can
-    be reused, which is what stops a returning customer minting a fresh payer
-    on every booking."""
-    payer_id = create_payer(
-        first_name=first_name, last_name=last_name, email=email, merchant_id=merchant_id,
-    )
-    source = vault_source(payer_id=payer_id, token=token, merchant_id=merchant_id)
-    return payer_id, source["id"]
-
-
-def source_is_chargeable(*, payer_id: str, source_id: str, merchant_id: str) -> bool:
-    """Whether a stored source can still be charged via the realtime endpoint.
-
-    Pinch has no list-sources endpoint — the payer object embeds `sources`, and
-    each carries `supportsRealtime`. Checking it before a saved-card charge is
-    the cleanest guard against a card that vaulted fine but can't be charged
-    synchronously. Unknown sources return False."""
-    payer = pinch_client.get_payer(payer_id, merchant_id)
-    for source in payer.get("sources") or []:
-        if source.get("id") == source_id:
-            return bool(source.get("supportsRealtime"))
-    return False
-
-
-def _require_approved(payment: dict) -> dict:
-    if str(payment.get("status", "")).lower() != "approved":
-        raise PaymentNotApproved(200, json.dumps(payment))
-    return payment
-
-
-def _replayed_payment(err: PinchError, amount_cents: int) -> dict:
-    """A reused nonce comes back as HTTP 403 {"isNonceReplay": true, "data":
-    <the original payment>} — and Pinch ignores the amount on the retry
-    (probed in sandbox 2026-09-26). So a replay only counts as our charge when
-    the original was approved for exactly the amount we meant to charge now;
-    anything else re-raises with Pinch's exact body.
-
-    `amount` on a surcharged payment (pre-2026-10-10 deposits) includes the card
-    fee, so the intended amount is read back from the chargeAmountCents we stamp
-    into metadata."""
-    if err.status_code != 403:
-        raise err
+def _wrap(fn, *args, **kwargs):
     try:
-        body = json.loads(err.body)
-    except ValueError:
-        raise err
-    payment = body.get("data") if isinstance(body, dict) and body.get("isNonceReplay") else None
-    if not payment:
-        raise err
+        return fn(*args, **kwargs)
+    except stripe_client.CardError as e:
+        raise PaymentNotApproved(402, e.user_message or str(e))
+    except stripe_client.StripeError as e:
+        raise PaymentError(e.http_status or 0, e.user_message or str(e))
+
+
+# ── Fee model ────────────────────────────────────────────────────────────────
+
+def in_pilot(venue, at: Optional[datetime] = None) -> bool:
+    """A venue with no pilot end date is treated as still in its pilot, so a
+    forgotten date never charges a venue that was promised free."""
+    ends = getattr(venue, "pilot_ends_at", None)
+    if ends is None:
+        return True
+    at = at or datetime.now(timezone.utc)
+    if ends.tzinfo is None:
+        ends = ends.replace(tzinfo=timezone.utc)
+    return at < ends
+
+
+def impulse_fee(*, venue, deposit_cents: int, captured_cents: int,
+                at: Optional[datetime] = None) -> int:
+    """The application_fee_amount for one capture — the only place the fee
+    model lives: 0 during the venue's pilot, a flat 10% (the seat's deposit)
+    after it, never more than what was captured. See the module docstring."""
+    if captured_cents <= 0 or in_pilot(venue, at):
+        return 0
+    return min(deposit_cents or 0, captured_cents)
+
+
+# ── Holds ────────────────────────────────────────────────────────────────────
+
+def needs_setup_first(slot_start: Optional[datetime], at: Optional[datetime] = None) -> bool:
+    """True when a hold placed now would expire before check-in."""
+    if slot_start is None:
+        return False
+    at = at or datetime.now(timezone.utc)
+    return slot_start - at > HOLD_AHEAD
+
+
+def create_hold(*, customer_id: str, amount_cents: int, destination: str,
+                description: str, metadata: dict, idempotency_key: str) -> dict:
+    """An on-session hold the app confirms through PaymentSheet (which handles
+    3DS, Apple Pay and Google Pay). The card is saved to the platform Customer
+    so the same card can be re-held or cover a friend later, at any venue."""
+    return _wrap(stripe_client.create_payment_intent, {
+        "amount": amount_cents,
+        "currency": CURRENCY,
+        "customer": customer_id,
+        "capture_method": "manual",
+        "setup_future_usage": "off_session",
+        "transfer_data": {"destination": destination},
+        "description": description,
+        "metadata": metadata,
+    }, idempotency_key)
+
+
+def place_offsession_hold(*, customer_id: str, payment_method_id: str, amount_cents: int,
+                          destination: str, description: str, metadata: dict,
+                          idempotency_key: str) -> dict:
+    """A hold the server places itself on a saved card — a far-off booking as
+    its slot nears, or the initiator covering an unpaid seat. Raises
+    PaymentNotApproved when the card declines or wants the guest present."""
+    pi = _wrap(stripe_client.create_payment_intent, {
+        "amount": amount_cents,
+        "currency": CURRENCY,
+        "customer": customer_id,
+        "payment_method": payment_method_id,
+        "capture_method": "manual",
+        "off_session": True,
+        "confirm": True,
+        "transfer_data": {"destination": destination},
+        "description": description,
+        "metadata": metadata,
+    }, idempotency_key)
+    if pi.get("status") != "requires_capture":
+        raise PaymentNotApproved(402, f"hold not placed (status={pi.get('status')})")
+    # Read back expanded, so callers get the card country and capture_before.
+    return retrieve_hold(pi["id"])
+
+
+def create_setup(*, customer_id: str, metadata: dict, idempotency_key: str) -> dict:
+    """Save a card now, hold it later (bookings more than HOLD_AHEAD out)."""
+    return _wrap(stripe_client.create_setup_intent, {
+        "customer": customer_id,
+        "usage": "off_session",
+        "metadata": metadata,
+    }, idempotency_key)
+
+
+def retrieve_hold(intent_id: str) -> dict:
+    return _wrap(stripe_client.retrieve_payment_intent, intent_id)
+
+
+def retrieve_setup(intent_id: str) -> dict:
+    return _wrap(stripe_client.retrieve_setup_intent, intent_id)
+
+
+def _id(value) -> Optional[str]:
+    """An expandable field: either the id string or the expanded object."""
+    if isinstance(value, dict):
+        return value.get("id")
+    return value
+
+
+def payment_method_of(intent: dict) -> Optional[str]:
+    return _id(intent.get("payment_method"))
+
+
+def hold_expires_at(intent: dict) -> Optional[datetime]:
+    """When the authorisation lapses (charge.payment_method_details.card.capture_before)."""
+    charge = intent.get("latest_charge")
+    if isinstance(charge, dict):
+        ts = ((charge.get("payment_method_details") or {}).get("card") or {}).get("capture_before")
+        if ts:
+            return datetime.fromtimestamp(int(ts), tz=timezone.utc)
+    return None
+
+
+def capture(*, intent_id: str, amount_cents: int, application_fee_cents: int,
+            idempotency_key: str) -> dict:
+    """Capture `amount_cents` of a hold (less releases the rest). Raises
+    PaymentNotApproved when the hold has lapsed or was cancelled."""
+    pi = _wrap(stripe_client.capture_payment_intent, intent_id, {
+        "amount_to_capture": amount_cents,
+        "application_fee_amount": application_fee_cents,
+    }, idempotency_key)
+    if pi.get("status") != "succeeded":
+        raise PaymentNotApproved(402, f"capture failed (status={pi.get('status')})")
+    return pi
+
+
+def cancel_hold(*, intent_id: str, idempotency_key: str) -> None:
+    """Release a hold. One that is already cancelled or lapsed counts as released."""
     try:
-        meta = json.loads(payment.get("metadata") or "{}")
-    except ValueError:
-        meta = {}
-    charged = meta.get("chargeAmountCents")
-    if charged is None and not payment.get("isSurcharged"):
-        charged = payment.get("amount")
-    if charged != amount_cents:
-        raise err
-    return _require_approved(payment)
+        stripe_client.cancel_payment_intent(intent_id, idempotency_key)
+    except stripe_client.StripeError as e:
+        code = getattr(e, "code", None)
+        if code == "payment_intent_unexpected_state":
+            return
+        raise PaymentError(e.http_status or 0, e.user_message or str(e))
 
 
-def _create_payment(input: dict, merchant_id: str) -> dict:
-    """POST the charge; a nonce replay of the same approved charge is success."""
-    try:
-        payment = pinch_client.create_payment(input, merchant_id)
-    except PaymentNotApproved:
-        raise
-    except PinchError as e:
-        return _replayed_payment(e, input["amount"])
-    return _require_approved(payment)
-
-
-def charge_deposit(*, payer_id: str, source_id: str, amount_cents: int,
-                   description: str, metadata: dict, nonce: str, merchant_id: str) -> dict:
-    """Charge a deposit: Impulse keeps everything Pinch's card fee leaves, and
-    the customer pays exactly the deposit. Returns the approved payment.
-    Raises PinchError / PaymentNotApproved."""
-    fees = pinch_client.calculate_fees(
-        {"sourceId": source_id, "amount": amount_cents}, merchant_id,
-    )
-    return _create_payment(
-        {
-            "payerId": payer_id,
-            "sourceId": source_id,
-            "amount": amount_cents,
-            "applicationFee": amount_cents - fees["fees"]["transactionFee"],
-            "description": description,
-            "metadata": json.dumps({**metadata, "chargeAmountCents": amount_cents}),
-            "nonce": nonce,
-        },
-        merchant_id,
-    )
-
-
-def refund_full(*, payment_id: str, reason: str, nonce: str, merchant_id: str) -> dict:
-    """Fully refund a prior payment — the actual captured amount (deposit share,
-    plus the card-fee surcharge on deposits taken before 2026-10-10), so the member is made whole and no sub-minimum
-    remainder is left (Pinch rejects refunds that would leave < $1 on a payment).
-
-    Used only when a huddle plan collapses before it becomes a real booking —
-    confirmed single-booking deposits are never refunded. Idempotent on nonce."""
-    payment = pinch_client.get_payment(payment_id, merchant_id)
-    amount = payment.get("amount")
-    if not amount:
-        raise PinchError(200, f"payment {payment_id} has no amount to refund: {payment}")
-    return pinch_client.create_refund(
-        {"paymentId": payment_id, "amount": amount, "reason": reason, "nonce": nonce},
-        merchant_id,
-    )
-
-
-def charge_balance(*, payer_id: str, source_id: str, amount_cents: int,
-                   application_fee_cents: int, description: str, metadata: dict,
-                   nonce: str, merchant_id: str) -> dict:
-    """Charge a balance: Impulse takes application_fee_cents, no surcharge.
-    Returns the approved payment. Raises PinchError / PaymentNotApproved."""
-    return _create_payment(
-        {
-            "payerId": payer_id,
-            "sourceId": source_id,
-            "amount": amount_cents,
-            "applicationFee": application_fee_cents,
-            "description": description,
-            "metadata": json.dumps({**metadata, "chargeAmountCents": amount_cents}),
-            "nonce": nonce,
-        },
-        merchant_id,
-    )
+def refund_captured(*, intent_id: str, reason: str, idempotency_key: str) -> dict:
+    """Refund a captured seat in full, pulling the money back from the venue
+    and returning Impulse's fee. Not used by the normal flow — captured money
+    is the venue's — but kept for support and disputes."""
+    return _wrap(stripe_client.create_refund, {
+        "payment_intent": intent_id,
+        "reverse_transfer": True,
+        "refund_application_fee": True,
+        "metadata": {"reason": reason},
+    }, idempotency_key)

@@ -12,7 +12,7 @@ Usage:
 Every deal this makes has an id derived from (venue, date, index), so --wipe
 finds exactly those rows and nothing the venue made itself. The deals are all
 in the past and inactive, so guests never see them in the app. No money moves
-and nothing is sent to Pinch.
+and nothing is sent to Stripe.
 
 It writes to whatever DATABASE_URL points at. Check that before running.
 """

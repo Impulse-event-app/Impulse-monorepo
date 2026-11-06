@@ -9,6 +9,8 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@stripe/connect-js": "^3.5.0",
+    "@stripe/react-connect-js": "^3.5.0",
     "@supabase/supabase-js": "^2.109.0",
     "@tanstack/react-query": "^5.101.2",
     "clsx": "^2.1.1",

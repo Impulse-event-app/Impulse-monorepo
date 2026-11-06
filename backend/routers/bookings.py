@@ -7,13 +7,16 @@ from sqlalchemy.orm import Session, joinedload
 
 import booking_flow as flow
 import live_activity
+import payouts
 from auth import get_current_user
 from booking_logic import SplitError
 from database import get_db
 from models import Booking, BookingParticipant, Deal, User, Venue
 from schemas import (
     BookingCreate,
-    BookingPay,
+    BookingHoldConfirm,
+    BookingHoldStart,
+    HoldIntentResponse,
     BookingResponse,
     BookingView,
     BookingWithDetailsResponse,
@@ -30,6 +33,8 @@ from schemas import (
 )
 
 router = APIRouter()
+
+OUTDATED_APP = "This version of Impulse is out of date. Update the app to keep booking."
 logger = logging.getLogger("impulse.bookings")
 
 MAX_GROUP = 10
@@ -232,22 +237,70 @@ def create_booking(
     return _details(db, b.id, user)
 
 
-@router.post("/{booking_id}/pay", response_model=BookingWithDetailsResponse)
-def pay_share(
+@router.post("/{booking_id}/pay/start", response_model=HoldIntentResponse)
+def start_pay(
     booking_id: str,
-    body: BookingPay,
+    body: BookingHoldStart,
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
     """
-    Any participant: pay my deposit share via Pinch — exactly the amount I was
-    shown (body.expected_deposit_cents), or a 409 if it has since changed.
-    The initiator's payment locks the slot. When the last share lands the
-    code is issued to everyone at once.
+    Any participant, step 1 of claiming my spot: create the hold on my card
+    for exactly the share I was shown (body.expected_share_cents), or a 409 if
+    it has since changed. Returns what PaymentSheet needs; nothing is held
+    until the app confirms. Nothing is charged until the venue redeems the code.
     """
     b = flow.load(db, booking_id, lock=True)
     me = flow.member_of(b, user)
-    flow.pay_share(db, b, me, user, body)
+    return flow.start_hold(db, b, me, user, body.expected_share_cents)
+
+
+@router.post("/{booking_id}/pay", response_model=BookingWithDetailsResponse)
+def pay_share(
+    booking_id: str,
+    body: BookingHoldConfirm,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """
+    Step 2: PaymentSheet finished. The server reads the hold back from Stripe;
+    the initiator's hold locks the slot, and when the last share is in the code
+    is issued to everyone at once.
+    """
+    if not body.intent_id:
+        # Builds from before Stripe post {expected_deposit_cents, token, ...}
+        # here. Tell them to update instead of failing validation.
+        raise HTTPException(status_code=426, detail=OUTDATED_APP)
+    b = flow.load(db, booking_id, lock=True)
+    me = flow.member_of(b, user)
+    flow.confirm_hold(db, b, me, user, body.intent_id)
+    return _details(db, booking_id, user)
+
+
+@router.post("/{booking_id}/card/start", response_model=HoldIntentResponse)
+def start_card_update(
+    booking_id: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """My spot is in but my card couldn't be held: start holding a different
+    card. Returns what PaymentSheet needs; the old hold stays until confirmed."""
+    b = flow.load(db, booking_id, lock=True)
+    me = flow.member_of(b, user)
+    return flow.start_card_update(db, b, me, user)
+
+
+@router.post("/{booking_id}/card", response_model=BookingWithDetailsResponse)
+def confirm_card_update(
+    booking_id: str,
+    body: BookingHoldConfirm,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """PaymentSheet finished: swap the new card in and release the old hold."""
+    b = flow.load(db, booking_id, lock=True)
+    me = flow.member_of(b, user)
+    flow.confirm_card_update(db, b, me, user, body.intent_id)
     return _details(db, booking_id, user)
 
 
@@ -551,9 +604,10 @@ def redeem_code(
     user: dict = Depends(get_current_user),
 ):
     """
-    Venue: confirm the booking and charge each seat's balance against its card
-    (the initiator's, for seats they guaranteed). A declined balance never
-    blocks redemption — it's flagged and the venue collects directly.
+    Venue: confirm the booking and capture each seat's held share (the
+    initiator's card, for seats they guaranteed), then pay the venue out. A
+    capture that fails never blocks redemption — it's flagged and the venue
+    collects directly.
     - 409: already redeemed, cancelled, or not confirmed yet
     - 404: code not found
     - 403: code belongs to a different venue
@@ -604,10 +658,11 @@ def cancel_booking(
     user: dict = Depends(get_current_user),
 ):
     """
-    Initiator: cancel a booking. Deposits are NON-REFUNDABLE — no Pinch refund
-    call is ever made. A split booking can only be cancelled while the
-    initiator is the only one who has paid: once friends have paid, it stays.
-    Huddles are cancelled via /huddles/{id}/cancel.
+    Initiator: cancel a booking. The 10% deposit is NON-REFUNDABLE: it is
+    captured from the held card and the rest of the hold is released, the same
+    as a no-show. A split booking can only be cancelled while the initiator is
+    the only one who has paid: once friends have paid, it stays. Huddles are
+    cancelled via /huddles/{id}/cancel.
     """
     b = flow.load(db, booking_id, lock=True)
     me = flow.member_of(b, user)
@@ -626,14 +681,17 @@ def cancel_booking(
         )
 
     deposit_forfeited = me.deposit_status == "paid"
+    flow.settle_cancellation(db, b)   # 10% captured, the rest of the hold released
     b.status = "cancelled"
     flow.release_spots(db, b)   # the venue can resell them (the deposit is still kept)
     flow.touch(b)
     db.commit()
+    if deposit_forfeited:
+        payouts.pay_out_booking(db, b)
 
     # Venue notification is a later feature — log for now.
     logger.info(
-        "Booking %s cancelled by user %s — venue %s, slot %s, deposit_forfeited=%s (deposit %s cents kept by Impulse)",
+        "Booking %s cancelled by user %s — venue %s, slot %s, deposit_forfeited=%s (deposit %s cents captured)",
         b.id, user["sub"], b.deal.venue.name, b.slot_time, deposit_forfeited, me.deposit_cents,
     )
     return CancelResponse(

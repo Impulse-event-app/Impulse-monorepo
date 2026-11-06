@@ -54,8 +54,8 @@ export default function ProfileScreen() {
   const [draft, setDraft] = useState(profile.name);
   const [notifBusy, setNotifBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  // Real cards on file, vaulted at Pinch — this screen only ever sees the
-  // scheme and last 4 that Pinch returns.
+  // Real cards on file, kept on the user's Stripe Customer — this screen only
+  // ever sees the brand and last 4 that Stripe returns.
   const wallet = useWallet();
   const defaultCard = wallet.cards?.find((c) => c.is_default) ?? wallet.cards?.[0] ?? null;
 

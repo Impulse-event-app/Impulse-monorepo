@@ -337,7 +337,7 @@ export default function Onboarding() {
           </View>
           <Lede title="Book in one tap." body="Save a card and booking takes one tap. Impulse never sees the number." />
           <View style={{ paddingHorizontal: 22, paddingTop: 24 }}>
-            <WalletPanel wallet={wallet} depositLabel="Save card" />
+            <WalletPanel wallet={wallet} depositLabel="Add a card" />
           </View>
         </Panel>
       </ScrollView>

@@ -1,19 +1,17 @@
 // wallet.tsx — saved cards, shared by the profile screen and the onboarding
 // step so both behave identically.
 //
-// Raw card details never pass through here. PinchCardField tokenises inside a
-// WebView and hands back a token; only that token reaches addPaymentMethod().
+// Raw card details never pass through here: cards are added in Stripe's own
+// sheet (stripePay) and live on the user's Stripe Customer, so the same saved
+// card works at every venue.
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, View } from 'react-native';
-import {
-  addPaymentMethod, deletePaymentMethod, listPaymentMethods, describeCard, getMe,
-  ApiError, PaymentMethod,
-} from './api';
+import { deletePaymentMethod, listPaymentMethods, describeCard, ApiError, PaymentMethod } from './api';
 import { supabase } from './supabase';
 import { useApp } from './theme';
-import { Group, Row, TextBtn } from './components';
+import { Btn, Group, Row, TextBtn } from './components';
 import { Plus, RowIcons } from './icons';
-import { PinchCardField } from './PinchCardField';
+import { useStripePay } from './stripePay';
 
 export function useWallet() {
   const [cards, setCards] = useState<PaymentMethod[] | null>(null);
@@ -38,36 +36,22 @@ export function useWallet() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  /** Vault a CaptureJs token against the signed-in user. Returns true on success. */
-  const add = useCallback(async (token: string, cardHolderName: string): Promise<boolean> => {
+  const stripePay = useStripePay();
+
+  /** Add a card through Stripe's sheet. Returns true once it's saved. */
+  const add = useCallback(async (): Promise<boolean> => {
     setBusy(true);
     try {
-      // Pinch wants a payer name and email. Prefer the synced profile; fall
-      // back to the session email and the name typed on the card, so this also
-      // works during onboarding before the profile has been written.
-      const profile = await getMe().catch(() => null);
-      const { data: { session } } = await supabase.auth.getSession();
-      const fullName = (profile?.full_name || cardHolderName || '').trim();
-      const [first, ...rest] = fullName.split(/\s+/);
-      await addPaymentMethod({
-        token,
-        first_name: first || 'Impulse',
-        last_name: rest.join(' ') || 'Customer',
-        email: profile?.email || session?.user?.email || 'no-email@impulse.app',
-        make_default: true,
-      });
-      await refresh();
-      return true;
+      const saved = await stripePay.addCard();
+      if (saved) await refresh();
+      return saved;
     } catch (err) {
-      Alert.alert(
-        "Couldn't save that card",
-        err instanceof ApiError ? err.message : 'Please try again.',
-      );
+      Alert.alert("Couldn't save that card", err instanceof Error ? err.message : 'Please try again.');
       return false;
     } finally {
       setBusy(false);
     }
-  }, [refresh]);
+  }, [refresh, stripePay]);
 
   const remove = useCallback(async (method: PaymentMethod) => {
     setBusy(true);
@@ -84,7 +68,7 @@ export function useWallet() {
     }
   }, [refresh]);
 
-  return { cards, busy, signedIn, add, remove, refresh };
+  return { cards, busy, signedIn, add, remove, refresh, overlay: stripePay.overlay };
 }
 
 /** One saved card, as a grouped-list row. `onRemove` omitted → read-only display. */
@@ -126,11 +110,11 @@ export function CardRow({
 }
 
 /**
- * Card list + "add a card" form. Used verbatim in the profile sheet and the
+ * Card list + "add a card". Used verbatim in the profile sheet and the
  * onboarding step, so the two can't drift apart.
  */
 export function WalletPanel({
-  wallet, depositLabel = 'Save card', onAdded,
+  wallet, depositLabel = 'Add a card', onAdded,
 }: {
   wallet: ReturnType<typeof useWallet>;
   depositLabel?: string;
@@ -138,13 +122,14 @@ export function WalletPanel({
 }) {
   const { T } = useApp();
   const { cards, busy, add, remove } = wallet;
-  const [adding, setAdding] = useState(false);
 
   if (cards === null) {
     return <ActivityIndicator color={T.accent} style={{ height: 48 }} />;
   }
 
-  const showForm = adding || cards.length === 0;
+  const onAdd = async () => {
+    if (await add()) onAdded?.();
+  };
 
   return (
     <View>
@@ -153,30 +138,14 @@ export function WalletPanel({
           {cards.map((c) => (
             <CardRow key={c.id} card={c} disabled={busy} onRemove={() => remove(c)} />
           ))}
-          {!showForm && (
-            <Row icon={<Plus size={13} color={T.accent} />} label="Add a card" accent chevron={false} onPress={() => setAdding(true)} />
-          )}
+          <Row icon={<Plus size={13} color={T.accent} />} label="Add a card" accent chevron={false} onPress={onAdd} />
         </Group>
       )}
 
-      {showForm && (
-        <View style={{ marginTop: cards.length ? 20 : 0 }}>
-          <PinchCardField
-            depositLabel={depositLabel}
-            colors={{ bg: T.bg, text: T.text, muted: T.muted, line: T.line, accent: T.accent, surface: T.surface, fill: T.fill }}
-            onToken={async ({ token, cardHolderName }) => {
-              if (await add(token, cardHolderName)) {
-                setAdding(false);
-                onAdded?.();
-              }
-            }}
-            onError={(message) => Alert.alert('Card error', message)}
-          />
-          {cards.length > 0 && <TextBtn onPress={() => setAdding(false)}>Cancel</TextBtn>}
-        </View>
-      )}
+      {cards.length === 0 && <Btn full onPress={onAdd} disabled={busy}>{depositLabel}</Btn>}
 
       {busy && <ActivityIndicator color={T.accent} style={{ marginTop: 12 }} />}
+      {wallet.overlay}
     </View>
   );
 }

@@ -17,6 +17,7 @@ import { BackButton, Group, HuddleMark, Label, NUM, ReadableColumn, Row, ScreenT
 import { Plus } from '../../../src/icons';
 import { Completion, LiveMeter, SplitSelector, fmtCents, inviteLine, seatUrl, useLiveBooking } from '../../../src/split';
 import { SharePay, shareTerms } from '../../../src/SharePay';
+import { CardUpdate } from '../../../src/CardUpdate';
 import { InviteSheet } from '../../../src/InviteSheet';
 import { hapticError, hapticSuccess } from '../../../src/haptics';
 
@@ -134,6 +135,11 @@ export default function HuddlePayScreen() {
         contentContainerStyle={{ paddingTop: insets.top + 60, paddingHorizontal: 16, paddingBottom: 60 }}
       >
         <ReadableColumn>
+          {myShare?.card_needs_update && (
+            <View style={{ marginBottom: 20 }}>
+              <CardUpdate bookingId={v.id} onUpdated={() => { refresh(); refreshBookings(); }} />
+            </View>
+          )}
           {done ? (
             <Completion view={v} />
           ) : (
@@ -245,7 +251,7 @@ export default function HuddlePayScreen() {
                 <SharePay
                   bookingId={v.id}
                   share={myShare}
-                  label={`Pay my ${fmtCents(myShare.deposit_cents)} and lock it in`}
+                  label="Hold my share and lock it in"
                   onPaid={() => { hapticSuccess(); refresh(); }}
                   onShareChanged={refresh}
                 />

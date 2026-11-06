@@ -1,59 +1,55 @@
-# Payments routing: where venue money actually goes
+# Payments routing: where venue money goes
 
-*Noted 27 Oct 2026, ahead of the Nightowl meeting.*
+*Rewritten 5 Nov 2026, when payments moved from Pinch to Stripe Connect.*
 
 ## Summary
 
-The plan is for each venue's takings to settle **directly into its own Pinch merchant account**. **The code doesn't do that yet.** Every charge still runs through **one shared Impulse merchant**, and that merchant is Pinch's **test** merchant.
+Every booking is a Stripe **destination charge**: it lives on Impulse's platform account and names the venue's connected account as the destination. When the venue checks the group in, the money moves to the venue's Stripe balance, and the backend asks Stripe for an **Instant Payout** to the venue's bank.
 
-Until routing changes, don't tell venues "the money goes straight into your account".
+## The money flow
 
-## What the code does today
+1. **Claim a spot.** The app calls `POST /bookings/{id}/pay/start`. The backend creates a PaymentIntent for the seat's **whole share** (`booking_flow.start_hold`) with:
+   - `capture_method=manual`
+   - `transfer_data.destination` = the venue's account
+   - `setup_future_usage=off_session`, on the user's Stripe Customer
 
-Every Pinch charge uses a single merchant ID read from the environment:
+   PaymentSheet confirms it (card, saved card, Apple Pay, Google Pay). Then `POST /bookings/{id}/pay` reads it back and marks the seat in (`confirm_hold`). **Nothing is charged.**
+   - Bookings more than 6 days out save the card with a SetupIntent instead. The sweep places the hold 4 days before the slot (card holds last 7 days, and Visa merchant-initiated holds last about 4d 18h).
+2. **Check-in.** The venue redeems the six-digit code, and `booking_flow.redeem` captures every seat's hold. A lapsed hold is re-placed on the same card and captured. A failed capture is flagged for the venue to collect at the till. Then `payouts.pay_out_booking` sends the instantly available balance to the venue.
+3. **Huddle collapse or cancel.** Holds are cancelled (`refund_participants`). No refund, no fee.
+4. **No-show.** 12 hours after the slot, the sweep captures each seat's 10% (`deposit_cents`) and releases the rest. The booking becomes `no_show`.
 
-- `backend/booking_flow.py:43`: `PINCH_MERCHANT_ID = os.environ["PINCH_TEST_MERCHANT_ID"]`
-- `backend/wallet.py:22`: the same variable, for saved cards
-- The charge calls in `booking_flow.py` all pass that one ID:
-  - line 416: deposit
-  - line 492: guarantor
-  - line 545: balance at redemption
-  - line 584: further charges
+## Fees (`payments.impulse_fee`, the only place this lives)
 
-`backend/payments.py` says this in its header comment:
+- **Pilot** (`venues.pilot_ends_at` in the future, or unset): `application_fee_amount = 0`. The venue gets 100%.
+  - `pilot_ends_at` defaults to 3 months after the venue creates its Stripe account. Set it by hand to change it.
+- **After the pilot:** a flat 10%. The application fee is the seat's `deposit_cents`, capped at the amount captured, so venues receive exactly 90%.
+- **Impulse always absorbs Stripe's fees:** the card fee (1.7% + 30c domestic, 3.5% + 30c international) and the 1% Instant Payout fee. With destination charges Stripe bills them to the platform, so after the pilot they come out of Impulse's 10% and during the pilot Impulse pays them outright. Decided 5 Nov 2026.
 
-> Note this is the *fee* split, not the *routing*. Both charges still run through the single Impulse merchant, so a zero application fee means Impulse collects the balance and owes it onward. Routing the balance to each venue's own managed merchant is what makes the money actually land in their account.
+## Venue onboarding
 
-**Fee model:**
-- **Deposit:** Impulse's whole take.
-- **Balance:** belongs to the venue in full.
+- `POST /merchants/venues/{id}` creates an **Accounts v2** connected account:
+  - `dashboard: express`
+  - `fees_collector` and `losses_collector`: `application`
+  - recipient configuration with `stripe_balance.stripe_transfers`
+- venue-web renders Stripe's embedded `account_onboarding` and `notification_banner` components, using `POST …/account-session`.
+- A venue can publish deals only when `stripe_transfers` is `active` (`merchants.can_publish_deals`). This now applies to **every** venue, including the demo venues.
+- Status updates arrive as thin v2 events on `/webhooks/stripe/accounts` (see `backend/.env.example` for the event list), and `GET …/status` re-reads them live.
 
-Because both charges land in Impulse's merchant, Impulse currently holds the venue's balance and owes it onward.
+## Liability
 
-## What Payments setup does
+Impulse is the merchant of record and owns disputes and negative balances (`losses_collector: application`). Instant Payouts pay venues before the dispute window closes, so a chargeback on a paid-out booking can leave Impulse covering it. `charge.dispute.created` is logged at ERROR; respond to disputes in the Stripe Dashboard.
 
-`venue-web` → **Payments setup** (`backend/routers/merchants.py`) onboards each venue as its **own** Pinch managed merchant: business details, bank account, directors and ID documents. Once Pinch approves the venue, `merchant_status` becomes `active`.
+## Still to do before live
 
-That status only controls **whether deals can be published** (`can_publish_deals`, `routers/merchants.py:510`). **It doesn't change where charges go.** A fully verified venue's guests still pay into the shared Impulse merchant.
-
-## What the Payouts page is for
-
-`/dashboard/payouts` (`get_payouts` in `routers/venues.py`, with `backend/settlements.py`) shows **Pinch transfers**: money actually sent to a bank account, which happens days after a card is approved.
-
-Because one shared merchant takes every venue's money, a single transfer covers many venues. The page picks out each venue's own booking lines and share of each transfer.
-
-It only makes sense while money is pooled. Once charges route to each venue's own merchant, Pinch pays venues directly and they'd see payouts in their own Pinch account. **The page is hidden from the sidebar as of 27 Oct 2026**, but the route still exists.
-
-## What needs to change
-
-1. **Route each charge to the venue's own merchant when it's active.** The four charge sites in `booking_flow.py` (and `wallet.py` for vaulting) should use `deal.venue.pinch_merchant_id` when `pinch_merchant_status == "active"`, and fall back to the shared merchant otherwise.
-2. **Vault cards against the right merchant.** In Pinch, payers and sources belong to a merchant, so a card saved on the shared merchant may not be chargeable on a venue's merchant. Check how Pinch handles payers across managed merchants before switching.
-3. **Keep Impulse's take as an application fee** on the deposit, charged on the venue's merchant, so the deposit still reaches Impulse.
-4. **Move production off the test merchant:** replace `PINCH_TEST_MERCHANT_ID` with a live merchant and live credentials.
-5. **Decide what happens to Payouts:** delete it, or keep it only for venues still on the shared merchant.
-6. **Fix the copy that promises direct settlement:**
-   - the dashboard banner ("Set up payments to get paid directly")
-   - the Payments setup intro
-   - the onboarding text
-
-   Right now these describe the intended behaviour, not the current one.
+- Create the Stripe account and a sandbox, and set keys in Render and in both apps:
+  - `STRIPE_SECRET_KEY` (restricted key)
+  - the three webhook secrets
+  - `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` and `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
+- Apply migration `c8f1a3e5d927` (additive).
+- Confirm with Stripe:
+  - the platform's Instant Payout daily limit;
+  - that recipient-configuration AU accounts are eligible for Instant Payouts;
+  - that your venue categories aren't restricted.
+- Apple Pay: register the merchant ID `merchant.au.impulseapp.impulse` in Apple Developer and Stripe, then make a new native build.
+- After live, a cleanup migration drops the Pinch columns and tables (`pinch_*`, `merchant_documents`, `settlements`, `settlement_lines`, `payment_methods`).

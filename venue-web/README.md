@@ -34,3 +34,15 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Payments (Stripe Connect)
+
+Payments setup and payouts use Stripe's embedded Connect components. Set the
+platform's publishable key in `.env.local` (and on the host):
+
+```
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_…
+```
+
+The client secret for the components comes from the backend
+(`POST /merchants/venues/{id}/account-session`), which holds the secret key.

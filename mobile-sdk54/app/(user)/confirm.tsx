@@ -8,11 +8,12 @@ import {
 } from '../../src/components';
 import { Check } from '../../src/icons';
 import { hapticSuccess } from '../../src/haptics';
+import { CardUpdate } from '../../src/CardUpdate';
 
 export default function ConfirmScreen() {
   const { code, balance } = useLocalSearchParams<{ code: string; balance?: string }>();
   const balanceCents = balance ? parseInt(balance, 10) : null;
-  const { T, plans } = useApp();
+  const { T, plans, refreshBookings } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReduceMotion();
@@ -94,9 +95,15 @@ export default function ConfirmScreen() {
             )}
           </View>
 
+          {!verified && plan.needsCard && plan.bookingId && (
+            <View style={{ marginTop: 22, alignSelf: 'stretch' }}>
+              <CardUpdate bookingId={plan.bookingId} onUpdated={() => refreshBookings()} />
+            </View>
+          )}
+
           {!verified && balanceCents !== null && balanceCents > 0 && (
             <Label style={{ marginTop: 18, lineHeight: 19, textAlign: 'center', maxWidth: 320 }}>
-              ${(balanceCents / 100).toFixed(2)} is charged to your card when the code is scanned.
+              ${(balanceCents / 100).toFixed(2)} is held on your card and charged when the code is scanned.
             </Label>
           )}
         </ReadableColumn>
