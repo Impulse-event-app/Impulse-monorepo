@@ -14,7 +14,7 @@ import { Platform } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
-import { ApiError, UserProfileUpdate, deleteMe, getMe, patchMe } from './api';
+import { ApiError, UserProfileUpdate, deleteMe, getMe, patchMe, registerAppleAuthorizationCode } from './api';
 import { persistGet, persistSet } from './persist';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
@@ -39,6 +39,14 @@ export async function signInWithApple() {
     token: credential.identityToken,
   });
   if (error) throw error;
+  // Let the backend swap the one-time code for Apple's refresh token, so
+  // deleting the account can revoke the Apple grant. Best-effort and not
+  // awaited: a failure here must never block sign-in.
+  if (credential.authorizationCode) {
+    registerAppleAuthorizationCode(credential.authorizationCode).catch((e) => {
+      console.warn('Storing Apple authorization code failed', e);
+    });
+  }
   return data.user;
 }
 

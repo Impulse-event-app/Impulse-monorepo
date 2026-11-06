@@ -39,6 +39,9 @@ class User(Base):
     # One Stripe Customer per user on the platform account. Saved cards are its
     # PaymentMethods and work at every venue (destination charges).
     stripe_customer_id = Column(Text, nullable=True, unique=True)   # cus_XXX
+    # Sign in with Apple refresh token, kept only so account deletion can revoke
+    # the Apple grant (App Store 5.1.1(v)). Null for non-Apple users.
+    apple_refresh_token = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

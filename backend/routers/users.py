@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
+import apple_auth
 import push
 import stripe_client
 import wallet
@@ -15,6 +16,7 @@ from auth import SUPABASE_URL, get_current_user
 from database import get_db
 from models import Booking, BookingParticipant, PaymentMethod, User, UserVenueInteraction, Venue
 from schemas import (
+    AppleTokenRegister,
     UserSearchResult,
     CardSetupResponse,
     PaymentMethodResponse,
@@ -164,10 +166,16 @@ def delete_me(
     if db.query(Venue.id).filter(Venue.owner_id == uid).first():
         raise HTTPException(
             status_code=409,
-            detail="This account runs a venue, so it can't be deleted here. Email support@impulse.app and we'll close it with you.",
+            detail="This account runs a venue, so it can't be deleted here. Email support@impulseapp.au and we'll close it with you.",
         )
 
     row = db.query(User).filter(User.id == uid).first()
+
+    # 0. Revoke the Sign in with Apple grant (App Store 5.1.1(v)). Best-effort:
+    #    a failure is logged, never a reason to keep someone's account.
+    if row and row.apple_refresh_token:
+        if not apple_auth.revoke_refresh_token(row.apple_refresh_token):
+            logger.error("Apple token revocation for %s failed; deleting the account anyway", uid)
 
     # 1. Delete the Stripe Customer first, which detaches every saved card.
     #    Nothing will point at it once the user row is gone, so a failure here
@@ -205,6 +213,34 @@ def delete_me(
     # 3. Remove the sign-in identity. If this fails the data is already gone and
     #    a retry finishes the job (every step above is a no-op the second time).
     _delete_auth_user(uid)
+
+
+@router.post("/me/apple-token", status_code=204)
+def register_apple_token(
+    body: AppleTokenRegister,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Exchange a Sign in with Apple authorization code for Apple's refresh
+    token and keep it, so account deletion can revoke it. The app calls this
+    best-effort right after an Apple sign-in. Until the APPLE_* env vars are
+    set this is a no-op."""
+    try:
+        refresh_token = apple_auth.exchange_code(body.authorization_code)
+    except apple_auth.AppleError as exc:
+        logger.error("Apple code exchange for %s failed: %s %s", user["sub"], exc.status_code, exc.body)
+        raise HTTPException(status_code=502, detail="Couldn't verify the Apple sign-in.")
+    except Exception as exc:
+        logger.error("Apple code exchange for %s failed: %s", user["sub"], exc)
+        raise HTTPException(status_code=502, detail="Couldn't verify the Apple sign-in.")
+    if not refresh_token:
+        return
+    row = db.query(User).filter(User.id == user["sub"]).first()
+    if not row:
+        row = User(id=user["sub"], email=user.get("email"))
+        db.add(row)
+    row.apple_refresh_token = refresh_token
+    db.commit()
 
 
 @router.put("/me/push-token", status_code=204)

@@ -1,6 +1,6 @@
-// Mock support / legal content pages, reached from the profile ("You") tab.
+// Support and legal content pages, reached from the profile ("You") tab.
 // One route serves Help & Support, Terms of Service, and Privacy via the [doc]
-// param. Copy is placeholder-but-plausible — swap in reviewed text before launch.
+// param.
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,7 +14,7 @@ const DOCS: Record<string, Doc> = {
   help: {
     title: 'Help & support',
     updated: 'Support hours: 9am–9pm AEST, 7 days',
-    intro: "Stuck on something? Most answers are below. If you still need a hand, reach us at support@impulse.app and we'll get back to you within one business day.",
+    intro: "Stuck on something? Most answers are below. If you still need a hand, reach us at support@impulseapp.au and we'll get back to you within one business day.",
     sections: [
       { h: 'Booking a drop', body: [
         'When you find a deal you like, tap "Book now" and pick a time. Your spot is yours the moment your card is held, and a door code appears under Plans.',
@@ -29,7 +29,7 @@ const DOCS: Record<string, Doc> = {
         'Every booking lives under the Plans tab, with its status, time, and code. Tap one to view or cancel it.',
       ] },
       { h: 'Contact us', body: [
-        'Email support@impulse.app with your account email and the venue name, and we\'ll sort it. For anything urgent at a venue, speak to their staff first.',
+        'Email support@impulseapp.au with your account email and the venue name, and we\'ll sort it. For anything urgent at a venue, speak to their staff first.',
       ] },
     ],
   },
@@ -80,7 +80,7 @@ const DOCS: Record<string, Doc> = {
         'We share the minimum necessary with the venue you book (such as your name and door code) and with service providers who help us operate, under confidentiality obligations.',
       ] },
       { h: 'Your rights', body: [
-        'You can delete your account at any time in the app: open You, then Delete account. That removes your profile, preferences, saved cards and sign-in straight away. Booking records are kept without your name or contact details, and only as long as needed for legal and accounting purposes. To access or correct your data, email privacy@impulse.app.',
+        'You can delete your account at any time in the app: open You, then Delete account. That removes your profile, preferences, saved cards and sign-in straight away. Booking records are kept without your name or contact details, and only as long as needed for legal and accounting purposes. To access or correct your data, email privacy@impulseapp.au.',
       ] },
     ],
   },
