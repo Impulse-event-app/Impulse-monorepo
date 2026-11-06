@@ -107,6 +107,17 @@ app.include_router(waitlist.router,     prefix="/api/waitlist", tags=["waitlist"
 app.include_router(contact.router,      prefix="/api/contact",  tags=["contact"])
 
 
+# The oldest app version the API still serves. The app asks on launch and shows
+# an "update Impulse" screen below it. Raise it on Render when a release changes
+# a contract older builds depend on (as the Stripe release did for payments).
+MIN_APP_VERSION = os.environ.get("MIN_APP_VERSION", "0.0.0")
+
+
+@app.get("/app/config", tags=["app"])
+def app_config():
+    return {"min_version": MIN_APP_VERSION}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}

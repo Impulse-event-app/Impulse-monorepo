@@ -785,6 +785,26 @@ def redeem(db: Session, b: Booking) -> dict:
     return {"members": results, "total_charged_cents": total_charged, "declines": declines}
 
 
+# ── Cancellation ─────────────────────────────────────────────────────────────
+
+def settle_cancellation(db: Session, b: Booking) -> int:
+    """A direct booking cancelled by its initiator: the 10% deposit is kept, as
+    it always was, so capture it from the held (or saved) card and release the
+    rest of the hold. During the venue's pilot that 10% goes to the venue.
+    Returns cents captured. A failed capture is flagged, never blocks the cancel."""
+    captured = 0
+    for p in b.participants:
+        if p.deposit_status != "paid" or not p.deposit_cents or p.hold_status not in ("held", "saved"):
+            continue
+        try:
+            _capture_seat(db, b, p, p.deposit_cents, "cancel")
+            captured += p.deposit_cents
+        except (PaymentError, HTTPException) as e:
+            logger.error("Cancellation capture failed for booking %s seat %s: %s", b.id, p.id, e)
+            p.payment_followup = True
+    return captured
+
+
 # ── Releasing holds (Huddle collapse / cancel) ───────────────────────────────
 
 def refund_participants(b: Booking, reason: str) -> tuple:

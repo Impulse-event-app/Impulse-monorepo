@@ -375,6 +375,28 @@ def test_huddle_collapse_releases_holds_and_returns_spots(env):
     assert spots(env) == s0 + 2
 
 
+# ── Old app builds ───────────────────────────────────────────────────────────
+
+def test_pre_stripe_builds_are_told_to_update(env):
+    b = new_booking(env, who="jo", n=1, split=False)
+    r = env["as"]("jo").post(f"/bookings/{b['id']}/pay", json={"expected_deposit_cents": 185, "token": "tkn_old"})
+    assert r.status_code == 426 and "Update the app" in r.json()["detail"]
+
+
+def test_app_config_reports_the_minimum_version(env):
+    assert "min_version" in ok(env["as"]("jo").get("/app/config"))
+
+
+def test_cancelling_a_held_booking_captures_the_deposit(env):
+    b = new_booking(env, who="jo", n=2, split=False)
+    ok(pay(env["as"]("jo"), b["id"], whole(b)))
+    n0 = len(env["charges"])
+    out = ok(env["as"]("jo").post(f"/bookings/{b['id']}/cancel"))
+    assert out["depositForfeited"] is True
+    captures = [c for c in env["charges"][n0:] if c["kind"] == "capture"]
+    assert [c["amount_cents"] for c in captures] == [b["deposit_amount_cents"]]
+
+
 # ── Search ───────────────────────────────────────────────────────────────────
 
 def test_user_search_is_name_only_and_needs_three_letters(env):

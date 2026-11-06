@@ -161,6 +161,15 @@ def test_account_session_needs_an_account_first(venue):
     assert client.post(f"/merchants/venues/{VENUE_ID}/account-session").status_code == 409
 
 
+def test_dashboard_link_opens_the_venues_express_dashboard(venue, monkeypatch):
+    venue.stripe_account_id = "acct_123"
+    monkeypatch.setattr(stripe_client, "create_login_link", lambda acct: {"url": f"https://connect.stripe.com/express/{acct}"})
+    client, _ = _client(venue)
+    assert client.post(f"/merchants/venues/{VENUE_ID}/dashboard-link").json() == {
+        "url": "https://connect.stripe.com/express/acct_123"}
+    assert _client(_venue())[0].post(f"/merchants/venues/{VENUE_ID}/dashboard-link").status_code == 409
+
+
 # ── Status + publishing ───────────────────────────────────────────────────────
 
 def test_status_refreshes_from_stripe_and_lists_whats_due(venue, monkeypatch):

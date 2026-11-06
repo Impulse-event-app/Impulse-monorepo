@@ -390,8 +390,10 @@ class HoldIntentResponse(BaseModel):
 
 class BookingHoldConfirm(BaseModel):
     """Step 2: PaymentSheet finished. The server reads the intent back from
-    Stripe rather than trusting the app."""
-    intent_id: str
+    Stripe rather than trusting the app. Optional only so a pre-Stripe build's
+    body ({expected_deposit_cents, token, ...}) gets a clear "update the app"
+    426 from the route instead of a validation error."""
+    intent_id: Optional[str] = None
 
 
 class CardSetupResponse(BaseModel):
@@ -908,6 +910,11 @@ class PaymentsStatusResponse(BaseModel):
     updated_at: Optional[datetime] = None
     pilot_ends_at: Optional[datetime] = None
     in_pilot: bool = True
+
+
+class DashboardLinkResponse(BaseModel):
+    """One-time link into the venue's Stripe Express Dashboard."""
+    url: str
 
 
 class AccountSessionResponse(BaseModel):

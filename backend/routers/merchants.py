@@ -30,7 +30,7 @@ from auth import get_current_user
 from database import get_db
 from models import User, Venue
 from routers.venues import _assert_owner, _get_venue_or_404
-from schemas import AccountSessionResponse, PaymentsStatusResponse
+from schemas import AccountSessionResponse, DashboardLinkResponse, PaymentsStatusResponse
 import payments
 
 logger = logging.getLogger("impulse.merchants")
@@ -224,6 +224,21 @@ def account_session(venue: Venue = Depends(require_owned_venue)):
         logger.error("Account session for venue %s failed: %s", venue.id, e)
         raise HTTPException(status_code=502, detail="Couldn't open payments. Try again.")
     return AccountSessionResponse(client_secret=session["client_secret"])
+
+
+@router.post("/venues/{venue_id}/dashboard-link", response_model=DashboardLinkResponse)
+def dashboard_link(venue: Venue = Depends(require_owned_venue)):
+    """A one-time link into the venue's Stripe Express Dashboard, where it can
+    see its payouts and answer disputes. Links expire quickly, so the portal
+    asks for a fresh one on every click."""
+    if not venue.stripe_account_id:
+        raise HTTPException(status_code=409, detail="Set up payments first")
+    try:
+        link = stripe_client.create_login_link(venue.stripe_account_id)
+    except stripe_client.StripeError as e:
+        logger.error("Dashboard link for venue %s failed: %s", venue.id, e)
+        raise HTTPException(status_code=502, detail="Couldn't open your Stripe dashboard. Try again.")
+    return DashboardLinkResponse(url=link["url"])
 
 
 @router.get("/venues/{venue_id}/status", response_model=PaymentsStatusResponse)

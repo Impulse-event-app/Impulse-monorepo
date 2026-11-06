@@ -176,6 +176,11 @@ def create_account_session(account_id: str, components: dict) -> dict:
     return _d(client().v1.account_sessions.create({"account": account_id, "components": components}))
 
 
+def create_login_link(account_id: str) -> dict:
+    """A single-use link into the venue's Express Dashboard (payouts, disputes)."""
+    return _d(client().v1.accounts.login_links.create(account_id))
+
+
 def retrieve_balance(account_id: str) -> dict:
     return _d(client().v1.balance.retrieve(
         {"expand": ["instant_available.net_available"]}, _opts(account=account_id),

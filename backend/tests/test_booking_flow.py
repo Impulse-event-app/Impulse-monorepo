@@ -516,6 +516,22 @@ def test_card_update_needs_a_seat_that_is_in(monkeypatch):
     assert e.value.status_code == 409
 
 
+# ── Cancellation ──────────────────────────────────────────────────────────────
+
+def test_cancelling_keeps_the_ten_percent_and_releases_the_rest(stripe_stub):
+    b = _booking([_seat("ini", 5000, "paid", intent="pi_ini", pm="pm_ini", hold="held")], status="confirmed")
+    assert flow.settle_cancellation(StubDB(), b) == 500
+    captures = [kw for kind, kw in stripe_stub if kind == "capture"]
+    assert [(c["amount_cents"], c["idempotency_key"]) for c in captures] == [(500, "cancel-bk-1-ini")]
+    assert captures[0]["application_fee_cents"] == 0          # pilot venue: the 10% goes to the venue
+
+
+def test_cancelling_before_anything_is_held_charges_nothing(stripe_stub):
+    b = _booking([_seat("ini", 5000)], status="collecting")
+    assert flow.settle_cancellation(StubDB(), b) == 0
+    assert not [kind for kind, _ in stripe_stub if kind == "capture"]
+
+
 # ── Fee model ─────────────────────────────────────────────────────────────────
 
 def test_pilot_venue_pays_no_fee_and_unset_pilot_counts_as_pilot():
