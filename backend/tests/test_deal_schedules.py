@@ -211,7 +211,8 @@ def test_one_off_deal_gets_its_label_and_end_time(env):
     assert r.status_code == 201, r.text
     d = r.json()
     assert d["date"] == "Friday 1 March 2030" and d["slots"] == ["6:00 PM", "8:00 PM"]
-    assert datetime.fromisoformat(d["expires_at"]) == datetime(2030, 3, 1, 20, 0, tzinfo=SYDNEY)
+    # fromisoformat only accepts a trailing "Z" from Python 3.11; prod runs 3.9.
+    assert datetime.fromisoformat(d["expires_at"].replace("Z", "+00:00")) == datetime(2030, 3, 1, 20, 0, tzinfo=SYDNEY)
 
     r = env.api.patch(f"/deals/{d['id']}", json={"deal_date": "2030-03-02"})
     assert r.json()["date"] == "Saturday 2 March 2030"

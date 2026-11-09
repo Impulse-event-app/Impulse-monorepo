@@ -113,8 +113,9 @@ export default function ProfileScreen() {
     }
   };
 
-  // Diagnostics: register this device again, then ask the server to push to
-  // it, and show exactly what happened at each step.
+  // Diagnostics (dev builds only — the row is hidden when !__DEV__): register
+  // this device again, then ask the server to push to it, and show exactly
+  // what happened at each step.
   const testPush = async () => {
     setNotifBusy(true);
     try {
@@ -231,7 +232,9 @@ export default function ProfileScreen() {
                     />
                   }
                 />
-                <Row icon={I('bell')} label="Send a test notification" onPress={notifBusy ? undefined : testPush} />
+                {__DEV__ && (
+                  <Row icon={I('bell')} label="Send a test notification" onPress={notifBusy ? undefined : testPush} />
+                )}
               </Group>
             </>
           ) : (

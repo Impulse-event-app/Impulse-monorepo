@@ -1,0 +1,164 @@
+# CI on every PR and push to main; CD on push to main.
+#
+# Each app is tested only when its folder changes, and each deploy waits for
+# its own tests:
+#   backend/       → pytest (incl. the DB suite on a throwaway Postgres) → Render
+#   mobile-sdk54/  → typecheck → EAS iOS build + TestFlight submit, EAS Hosting (web)
+#   venue-web/     → typecheck, lint, build (no deploy here)
+#
+# Secrets (repo → Settings → Secrets and variables → Actions):
+#   RENDER_DEPLOY_HOOK_URL  Render service → Settings → Deploy Hook
+#   EXPO_TOKEN              expo.dev → Account settings → Access tokens
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      mobile: ${{ steps.filter.outputs.mobile }}
+      venue-web: ${{ steps.filter.outputs.venue-web }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/ci.yml'
+            mobile:
+              - 'mobile-sdk54/**'
+              - '.github/workflows/ci.yml'
+            venue-web:
+              - 'venue-web/**'
+              - '.github/workflows/ci.yml'
+
+  # ── tests ──────────────────────────────────────────────────
+
+  backend-test:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: impulse_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # The DB suite creates and drops every table — only ever this container.
+      IMPULSE_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/impulse_test
+      # Read at import; tests stub everything that would use them.
+      DATABASE_URL: postgresql+psycopg://unused@localhost/unused
+      SUPABASE_URL: https://example.supabase.co
+      PINCH_CLIENT_ID: ci
+      PINCH_API_KEY: ci
+      PINCH_TEST_MERCHANT_ID: ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      # Python comes from backend/.python-version — the same 3.9 Render runs.
+      - run: uv sync --frozen
+      - run: uv run pytest -q
+
+  mobile-test:
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile-sdk54
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: mobile-sdk54/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+
+  venue-web-test:
+    needs: changes
+    if: needs.changes.outputs.venue-web == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: venue-web
+    env:
+      # Build-time only; the build never calls Supabase.
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: venue-web/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npm run build
+
+  # ── deploys (main only) ────────────────────────────────────
+
+  deploy-backend:
+    needs: backend-test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency: deploy-backend
+    steps:
+      - name: Trigger Render deploy of this commit
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: curl -fsS -X POST "$HOOK&ref=$GITHUB_SHA"
+
+  deploy-mobile:
+    needs: mobile-test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency: deploy-mobile
+    defaults:
+      run:
+        working-directory: mobile-sdk54
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: mobile-sdk54/package-lock.json
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: npm ci
+      # iOS: build on EAS and submit to TestFlight when it finishes. --no-wait
+      # hands off to EAS, so progress is on expo.dev rather than in this job.
+      - name: iOS build → TestFlight
+        run: eas build -p ios --profile production --auto-submit --non-interactive --no-wait
+      # Web: export with the production EXPO_PUBLIC_* vars inlined, then
+      # publish to EAS Hosting (impulse.expo.app).
+      - name: Web export
+        run: eas env:exec production "npx expo export --platform web" --non-interactive
+      - name: EAS Hosting deploy
+        run: eas deploy --prod --environment production --non-interactive

@@ -684,6 +684,10 @@ class PushTokenRegister(BaseModel):
     expo_push_token: str
 
 
+class AppleTokenRegister(BaseModel):
+    authorization_code: str = Field(min_length=1, max_length=2048)
+
+
 class UserSearchResult(BaseModel):
     """Just enough to pick the right friend — never their email or phone."""
     id: str

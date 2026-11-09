@@ -244,7 +244,8 @@ def test_recent_bookings_and_booked_slots_are_one_call_each(env):
 def test_share_deadline_is_slot_minus_an_hour_in_sydney(env):
     b = new_booking(env, n=2)
     v = ok(env["as"]("host").get(f"/bookings/{b['id']}/split"))
-    local = datetime.fromisoformat(v["share_deadline"]).astimezone(VENUE_TZ)
+    # fromisoformat only accepts a trailing "Z" from Python 3.11; prod runs 3.9.
+    local = datetime.fromisoformat(v["share_deadline"].replace("Z", "+00:00")).astimezone(VENUE_TZ)
     assert (local.hour, local.minute) == (18, 0), local
 
 

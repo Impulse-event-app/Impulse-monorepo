@@ -8,11 +8,16 @@
       "expo-router",
       "expo-font",
       "expo-web-browser",
-      "expo-secure-store",
+      ["expo-secure-store", { "faceIDPermission": false }],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Impulse uses your location to surface drops within a few suburbs — never in the background, only while you're looking."
+          "locationWhenInUsePermission": "Impulse uses your location to surface drops within a few suburbs — never in the background, only while you're looking.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "motionUsagePermission": false,
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false
         }
       ],
       "expo-notifications",
@@ -36,7 +41,7 @@
         }
       ]
     ],
-    "orientation": "default",
+    "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
