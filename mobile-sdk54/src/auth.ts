@@ -95,7 +95,7 @@ export async function signInWithGoogle(returnTo?: string) {
     return null;
   }
 
-  const redirectTo = makeRedirectUri({ scheme: 'impulse', path: 'auth/callback' });
+  const redirectTo = makeRedirectUri({ path: 'auth/callback' }) // the app's scheme: impulse:// or impulse-staging://;
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo, skipBrowserRedirect: true },

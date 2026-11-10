@@ -25,6 +25,7 @@ import httpx
 from auth import SUPABASE_URL
 from database import SessionLocal
 from models import Venue, VenueReel
+from environment import refuse_production
 
 BUCKET = "venue-reels"
 ASSETS = Path(__file__).resolve().parent.parent / "mobile-sdk54" / "assets" / "demo-reels"
@@ -79,6 +80,7 @@ def main() -> None:
     ap.add_argument("--owner-id", required=True)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+    refuse_production("upload demo reels")
 
     db = SessionLocal()
     try:

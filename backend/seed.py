@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 from database import SessionLocal
 from booking_logic import deposit_split
 from models import Booking, BookingParticipant, Deal, User, UserVenueInteraction, Venue
+from environment import refuse_production
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -395,4 +396,5 @@ if __name__ == "__main__":
         help="Remove this user's existing venues/deals/bookings before re-seeding.",
     )
     args = parser.parse_args()
+    refuse_production("seed demo data")
     seed(owner_id=args.owner_id, wipe=args.wipe)
