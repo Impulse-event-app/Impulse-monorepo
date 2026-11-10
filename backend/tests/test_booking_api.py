@@ -246,19 +246,21 @@ def test_recent_bookings_and_booked_slots_are_one_call_each(env):
 
 def test_stats_count_only_paid_bookings_today(env):
     venue_id = ok(env["as"]("owner").get(f"/deals/{env['deals']['pp']}"))["venue_id"]
-    owner = env["as"]("owner")
-    before = ok(owner.get(f"/venues/{venue_id}/stats"))
+    # env["as"] switches the signed-in user for every client, so ask as the
+    # owner each time.
+    stats = lambda: ok(env["as"]("owner").get(f"/venues/{venue_id}/stats"))
+    before = stats()
 
     # Someone reaches the payment sheet and leaves: a booking row, no money.
     new_booking(env, who="jo", n=2, split=False)
-    after_abandon = ok(owner.get(f"/venues/{venue_id}/stats"))
+    after_abandon = stats()
     assert after_abandon["bookings_today"] == before["bookings_today"]
     assert after_abandon["revenue_today"] == before["revenue_today"]
 
     # A hold that goes through counts, at its full amount.
     paid = new_booking(env, who="jo", n=1, split=False)
     ok(pay(env["as"]("jo"), paid["id"], whole(paid)))
-    after_pay = ok(owner.get(f"/venues/{venue_id}/stats"))
+    after_pay = stats()
     assert after_pay["bookings_today"] == before["bookings_today"] + 1
     assert round(after_pay["revenue_today"] - before["revenue_today"], 2) == round(whole(paid) / 100, 2)
 
