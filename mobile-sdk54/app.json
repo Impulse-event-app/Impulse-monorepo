@@ -15,7 +15,7 @@
           "locationWhenInUsePermission": "Impulse uses your location to surface drops within a few suburbs — never in the background, only while you're looking.",
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false,
-          "motionUsagePermission": false,
+          "motionUsagePermission": "Impulse's location features can use motion data to keep your position accurate when showing deals near you. Impulse never tracks or stores your movement.",
           "isIosBackgroundLocationEnabled": false,
           "isAndroidBackgroundLocationEnabled": false
         }
@@ -54,8 +54,7 @@
       },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Impulse uses the camera to scan your card when you add one.",
-        "NSMotionUsageDescription": "Impulse's location features can use motion data to keep your position accurate when showing deals near you. Impulse never tracks or stores your movement."
+        "NSCameraUsageDescription": "Impulse uses the camera to scan your card when you add one."
       }
     },
     "android": {
