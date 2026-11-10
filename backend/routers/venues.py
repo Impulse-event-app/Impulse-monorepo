@@ -1,6 +1,6 @@
 import logging
 from datetime import date as dt_date
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -144,6 +144,21 @@ def list_venue_deals(
 
 
 DEAD_STATUSES = ("cancelled", "expired", "collapsed", "no_show")
+# A booking row exists from the moment someone taps claim ("collecting"), long
+# before any card is held. Only these went through: the hold is on the card and
+# the code is issued (confirmed), or it was charged at check-in (redeemed).
+PAID_STATUSES = ("confirmed", "redeemed")
+
+
+def _venue_today_utc_bounds() -> tuple:
+    """Start and end of today in the venue's timezone, as UTC instants. The
+    server runs in UTC, so a plain date.today() is yesterday until 11am Sydney."""
+    today = datetime.now(VENUE_TZ).date()
+    start = datetime.combine(today, datetime.min.time(), tzinfo=VENUE_TZ)
+    end = datetime.combine(today + timedelta(days=1), datetime.min.time(), tzinfo=VENUE_TZ)
+    return start.astimezone(timezone.utc), end.astimezone(timezone.utc)
+
+
 @router.get("/{venue_id}/bookings/recent", response_model=List[RecentBooking])
 def recent_venue_bookings(
     venue_id: str,
@@ -159,7 +174,7 @@ def recent_venue_bookings(
     rows = (
         db.query(Booking, Deal.title)
         .join(Deal, Deal.id == Booking.deal_id)
-        .filter(Deal.venue_id == venue_id)
+        .filter(Deal.venue_id == venue_id, Booking.status.in_(PAID_STATUSES))
         .order_by(Booking.created_at.desc())
         .limit(limit)
         .all()
@@ -380,11 +395,14 @@ def get_stats(
         for row in db.query(Deal.id).filter(Deal.venue_id == venue_id).all()
     ]
 
+    day_start, day_end = _venue_today_utc_bounds()
     today_bookings = (
         db.query(Booking)
         .filter(
             Booking.deal_id.in_(deal_ids),
-            func.date(Booking.created_at) == dt_date.today(),
+            Booking.status.in_(PAID_STATUSES),
+            Booking.created_at >= day_start,
+            Booking.created_at < day_end,
         )
         .all()
         if deal_ids
