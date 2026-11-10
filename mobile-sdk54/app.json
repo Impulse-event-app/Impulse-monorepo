@@ -54,7 +54,8 @@
       },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Impulse uses the camera to scan your card when you add one."
+        "NSCameraUsageDescription": "Impulse uses the camera to scan your card when you add one.",
+        "NSMotionUsageDescription": "Impulse's location features can use motion data to keep your position accurate when showing deals near you. Impulse never tracks or stores your movement."
       }
     },
     "android": {
