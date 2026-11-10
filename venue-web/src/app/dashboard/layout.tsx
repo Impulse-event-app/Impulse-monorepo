@@ -24,7 +24,11 @@ export default function DashboardLayout({
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "250px 1fr", minHeight: "100vh", background: "var(--bg)" }}>
             <Sidebar />
-            <main className="app-scroll" style={{ maxHeight: "100vh", overflowY: "auto" }}>
+            {/* position: relative makes main the containing block for absolutely
+                positioned descendants (e.g. visually-hidden labels). Without it they
+                resolve against the page, escape main's scroll clip and let the whole
+                window scroll past the content. */}
+            <main className="app-scroll" style={{ position: "relative", maxHeight: "100vh", overflowY: "auto" }}>
               {children}
             </main>
           </div>
