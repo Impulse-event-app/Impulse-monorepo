@@ -5,7 +5,7 @@
 | Database | Local Postgres or the staging DB | Supabase project (current one, `pdcevxkvgtptjczzsmkh`) | New Supabase project, real data only |
 | Stripe | Test keys | Test keys | Live keys |
 | Backend | `uv run uvicorn main:app --reload` | Render: `impulse-staging` | Render: `Impulse-monorepo` |
-| venue-web | `npm run dev` | `staging.venues.impulseapp.au` (Vercel, `dev` branch) | `venues.impulseapp.au` (Vercel, `main`) |
+| venue-web | `npm run dev` | `dev.venues.impulseapp.au` (Vercel, `dev` branch) | `venues.impulseapp.au` (Vercel, `main`) |
 | iOS app | Simulator / dev build | **Impulse Staging** (`au.impulseapp.impulse.staging`) on TestFlight | **Impulse** (`au.impulseapp.impulse`): TestFlight, then App Store |
 | Web app | `npx expo start --web` | `impulse--staging.expo.app` | `impulse.expo.app` |
 | EAS environment | `development` | `preview` | `production` |
@@ -62,7 +62,7 @@ somewhere else.
 ### 2. Staging Supabase project (the current one)
 1. Apple provider: add `au.impulseapp.impulse.staging` to the client ids.
 2. URL Configuration: add `impulse-staging://**`,
-   `https://impulse--staging.expo.app/**`, `https://staging.venues.impulseapp.au/**`.
+   `https://impulse--staging.expo.app/**`, `https://dev.venues.impulseapp.au/**`.
 3. Delete the old `_legacy_huddles` / `_legacy_huddle_members` tables when convenient.
 
 ### 3. Stripe
@@ -107,7 +107,7 @@ somewhere else.
 - Production env (`main`): new Supabase URL/anon key, production API URL,
   Stripe live publishable key.
 - Preview env, scoped to branch `dev`: staging values. Domains → add
-  `staging.venues.impulseapp.au` and assign it to the `dev` branch.
+  `dev.venues.impulseapp.au` and assign it to the `dev` branch.
 
 ### 8. GitHub
 - Create the `dev` branch from `main`, and make it the default branch so
