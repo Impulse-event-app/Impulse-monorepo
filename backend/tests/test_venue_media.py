@@ -319,3 +319,15 @@ def test_linking_a_place_fetches_popular_times(env, monkeypatch):
     assert r.status_code == 200, r.text
     v = env.api.get(f"/venues/{env.ids.mine}").json()
     assert v["google_place_id"] == "ChIJ_test_newtown" and v["popular_times"]["Fri"][21] == 100
+
+
+def test_real_serpapi_hours_list():
+    # place_results.hours as SerpApi returned it for Flight Club Newtown (2026-11-11).
+    hours = [{"wednesday": "11:30 am–11 pm"}, {"thursday": "11:30 am–12 am"}, {"friday": "11:30 am–1 am"},
+             {"saturday": "11:30 am–1 am"}, {"sunday": "11:30 am–11 pm"}, {"monday": "4–11 pm"}, {"tuesday": "4–11 pm"}]
+    p = google_places._place({"place_id": "x", "title": "Flight Club Newtown", "hours": hours})
+    assert p["opening_hours"] == (
+        "Mon: 4pm–11pm, Tue: 4pm–11pm, Wed: 11:30am–11pm, Thu: 11:30am–12am, "
+        "Fri: 11:30am–1am, Sat: 11:30am–1am, Sun: 11:30am–11pm"
+    )
+    assert p["popular_times"] is None
