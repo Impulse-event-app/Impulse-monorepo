@@ -17,7 +17,7 @@ APP_ENV = os.environ.get("APP_ENV", "local").strip().lower() or "local"
 # "postgres." in the pooler username, or the "db.<ref>.supabase.co" host.
 PRODUCTION_SUPABASE_REFS = {
     ref.strip()
-    for ref in os.environ.get("PRODUCTION_SUPABASE_REFS", "REPLACE_WITH_PROD_REF").split(",")
+    for ref in os.environ.get("PRODUCTION_SUPABASE_REFS", "brpjunovgkncafbopndh").split(",")
     if ref.strip()
 }
 
