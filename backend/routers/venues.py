@@ -14,7 +14,9 @@ import stripe_client
 from auth import SUPABASE_URL, get_current_user
 from database import SessionLocal, get_db
 from booking_logic import VENUE_TZ, pack_nights, slot_at
-from models import Booking, BookingParticipant, Deal, Venue, VenueReel, UNLIMITED_SPOTS
+from deal_schedules import deal_price_for
+from mailer import MailNotConfigured, MailSendFailed, send_email
+from models import Booking, BookingParticipant, Deal, DealSchedule, Venue, VenueReel, UNLIMITED_SPOTS
 from schemas import (
     BookedSlot,
     BookingResponse,
@@ -34,6 +36,7 @@ from schemas import (
     VenueReelItem,
     VenueResponse,
     VenueUpdate,
+    VideoShootRequest,
 )
 
 router = APIRouter()
@@ -266,6 +269,93 @@ def create_venue_reel(
     db.commit()
     db.refresh(reel)
     return reel
+
+
+# Who hears about a venue asking for a complimentary video shoot.
+VIDEO_SHOOT_TO: List[str] = [
+    a.strip() for a in os.environ.get("VIDEO_SHOOT_TO", "rahul@impulseapp.au").split(",") if a.strip()
+]
+_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+
+def _price(x, unit: Optional[str]) -> str:
+    unit = unit or "pp"
+    money = f"${float(x):,.2f}".replace(".00", "")
+    return money + unit if unit.startswith("/") else f"{money} {unit}"
+
+
+def _video_shoot_email(venue: Venue, user: dict, deal: Optional[Deal], schedule: Optional[DealSchedule]) -> str:
+    lines = [
+        f"{venue.name} would like a complimentary video shot by the Impulse media team.",
+        "",
+        "Venue",
+        f"  Name:     {venue.name}",
+        f"  Address:  {', '.join(p for p in (venue.address, venue.suburb) if p) or '-'}",
+        f"  Phone:    {venue.phone or '-'}",
+        f"  Email:    {venue.email or '-'}",
+        f"  Website:  {venue.website or '-'}",
+        f"  Login:    {user.get('email') or '-'}",
+        f"  Venue ID: {venue.id}",
+    ]
+    if deal:
+        lines += ["", "Deal they just published",
+                  f"  {deal.title}",
+                  f"  {_price(deal.deal_price, deal.unit)} (usually {_price(deal.original_price, deal.unit)})",
+                  f"  {deal.date} · {', '.join(deal.slots or [])}",
+                  f"  {'Live' if deal.is_active else 'Draft'} · Deal ID {deal.id}"]
+    if schedule:
+        days = ", ".join(_WEEKDAYS[d] for d in sorted(schedule.weekdays or []))
+        span = f"from {schedule.starts_on}" + (f" to {schedule.ends_on}" if schedule.ends_on else ", every week")
+        lines += ["", "Deal they just published (repeating)",
+                  f"  {schedule.title}",
+                  f"  {_price(deal_price_for(schedule.original_price, schedule.discount_pct), schedule.unit)}"
+                  f" (usually {_price(schedule.original_price, schedule.unit)})",
+                  f"  {days} {span} · {', '.join(schedule.slots or [])}",
+                  f"  {'Live' if schedule.is_active else 'Draft'} · Schedule ID {schedule.id}"]
+    lines += ["", "Reply to this email to reach the venue's login address."]
+    return "\n".join(lines)
+
+
+@router.post("/{venue_id}/video-shoot", status_code=202)
+def request_video_shoot(
+    venue_id: str,
+    body: VideoShootRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """The venue ticked "get a complimentary video shot by the Impulse media
+    team" on a deal. One per venue: it emails VIDEO_SHOOT_TO and records the
+    time, after which the portal stops offering it. A failed send records
+    nothing (so they can ask again) and is a 502, logged in full."""
+    # Locked so two tabs publishing at once can't both send.
+    venue = db.query(Venue).filter(Venue.id == venue_id).with_for_update().first()
+    if not venue:
+        raise HTTPException(status_code=404, detail="Venue not found")
+    _assert_owner(venue, user)
+    if venue.video_shoot_requested_at:
+        raise HTTPException(status_code=409, detail="You've already asked for your video shoot. We'll be in touch.")
+    deal = schedule = None
+    if body.deal_id:
+        deal = db.query(Deal).filter(Deal.id == body.deal_id, Deal.venue_id == venue_id).first()
+        if not deal:
+            raise HTTPException(status_code=404, detail="Deal not found")
+    if body.schedule_id:
+        schedule = (db.query(DealSchedule)
+                    .filter(DealSchedule.id == body.schedule_id, DealSchedule.venue_id == venue_id).first())
+        if not schedule:
+            raise HTTPException(status_code=404, detail="Deal not found")
+
+    subject = f"Video shoot request: {venue.name}"
+    text = _video_shoot_email(venue, user, deal, schedule)
+    try:
+        send_email(VIDEO_SHOOT_TO, subject, text, reply_to=user.get("email"))
+    except (MailNotConfigured, MailSendFailed) as e:
+        db.rollback()
+        logger.error("Video shoot request not emailed (%s):\n%s", e, text)
+        raise HTTPException(status_code=502, detail="Couldn't send the video request.")
+    venue.video_shoot_requested_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"status": "sent"}
 
 
 @router.delete("/{venue_id}", status_code=204)

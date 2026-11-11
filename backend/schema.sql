@@ -75,6 +75,7 @@ create table if not exists public.venues (
   google_place_id text,       -- Google Maps place linked in the portal
   popular_times  jsonb,       -- {"Mon": [24 ints 0-100], ...} hourly Google busyness
   popular_times_fetched_at timestamptz,
+  video_shoot_requested_at timestamptz,  -- the one complimentary video shoot was asked for
   -- disability-friendly features, e.g. '{"Step-free entry","Accessible bathroom"}'
   accessibility_features text[] not null default '{}',
   is_active      boolean     not null default true,

@@ -101,6 +101,8 @@ class Venue(Base):
     # for the deal composer's bars until the venue has bookings of its own.
     popular_times = Column(JSONB, nullable=True)
     popular_times_fetched_at = Column(DateTime(timezone=True), nullable=True)
+    # When the venue asked for its one complimentary video shoot (portal checkbox).
+    video_shoot_requested_at = Column(DateTime(timezone=True), nullable=True)
     accessibility_features = Column(ARRAY(Text()), nullable=False, server_default="{}")  # disability-friendly features the venue offers
     is_active = Column(Boolean, default=True, nullable=False)
     avg_rating = Column(Numeric(3, 2), nullable=False, server_default="0")

@@ -331,3 +331,67 @@ def test_real_serpapi_hours_list():
         "Fri: 11:30am–1am, Sat: 11:30am–1am, Sun: 11:30am–11pm"
     )
     assert p["popular_times"] is None
+
+
+# ── Complimentary video shoot request (one per venue) ─────────────────────────
+
+@pytest.fixture
+def mailbox(env, monkeypatch):
+    from models import Venue
+    from routers import venues
+    box = []
+    monkeypatch.setattr(venues, "send_email", lambda to, subject, body, reply_to=None: box.append(
+        {"to": to, "subject": subject, "body": body, "reply_to": reply_to}))
+    yield box
+    with env.Session() as db:        # each test starts with the shoot not yet asked for
+        db.query(Venue).update({Venue.video_shoot_requested_at: None})
+        db.commit()
+
+
+def test_video_shoot_request_emails_rahul_with_the_deal(env, mailbox, monkeypatch):
+    monkeypatch.setitem(env.user, "email", "frank@example.test")
+    deal = env.api.post("/deals", json=_deal_body(env)).json()
+    r = env.api.post(f"/venues/{env.ids.mine}/video-shoot", json={"deal_id": deal["id"]})
+    assert r.status_code == 202, r.text
+    [m] = mailbox
+    assert m["to"] == ["rahul@impulseapp.au"]
+    assert m["subject"] == "Video shoot request: Flight Club"
+    assert m["reply_to"] == "frank@example.test"
+    assert "Flight Club · $15 pp" in m["body"] and "$15 pp (usually $30 pp)" in m["body"]
+
+
+def test_video_shoot_is_one_per_venue(env, mailbox):
+    assert env.api.get(f"/venues/{env.ids.mine}").json()["video_shoot_requested_at"] is None
+    assert env.api.post(f"/venues/{env.ids.mine}/video-shoot", json={}).status_code == 202
+    assert env.api.get(f"/venues/{env.ids.mine}").json()["video_shoot_requested_at"]
+    r = env.api.post(f"/venues/{env.ids.mine}/video-shoot", json={})
+    assert r.status_code == 409 and len(mailbox) == 1
+
+
+def test_video_shoot_request_for_a_repeating_deal(env, mailbox):
+    body = {"venue_id": env.ids.mine, "category": "Bar", "original_price": 50, "discount_pct": 20,
+            "slots": ["10pm"], "weekdays": [4, 5], "starts_on": "2030-01-01", "total_spots": 3, "unit": "/group"}
+    s = env.api.post("/deal-schedules", json=body).json()
+    r = env.api.post(f"/venues/{env.ids.mine}/video-shoot", json={"schedule_id": s["id"]})
+    assert r.status_code == 202, r.text
+    assert "Fri, Sat from 2030-01-01, every week" in mailbox[0]["body"]
+    assert "$40/group (usually $50/group)" in mailbox[0]["body"]
+
+
+def test_video_shoot_request_is_owner_only(env, mailbox):
+    r = env.api.post(f"/venues/{env.ids.theirs}/video-shoot", json={})
+    assert r.status_code == 403 and not mailbox
+
+
+def test_failed_send_is_reported_and_can_be_retried(env, mailbox, monkeypatch):
+    from mailer import MailNotConfigured
+    from routers import venues
+    sent = venues.send_email
+
+    def boom(*a, **k):
+        raise MailNotConfigured("no smtp")
+    monkeypatch.setattr(venues, "send_email", boom)
+    assert env.api.post(f"/venues/{env.ids.mine}/video-shoot", json={}).status_code == 502
+    assert env.api.get(f"/venues/{env.ids.mine}").json()["video_shoot_requested_at"] is None
+    monkeypatch.setattr(venues, "send_email", sent)
+    assert env.api.post(f"/venues/{env.ids.mine}/video-shoot", json={}).status_code == 202
