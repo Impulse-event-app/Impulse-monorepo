@@ -39,7 +39,8 @@ def _storage_exists() -> bool:
 
 def upgrade() -> None:
     op.add_column('venues', sa.Column('image_urls', postgresql.ARRAY(sa.Text()), server_default='{}', nullable=False))
-    op.add_column('venues', sa.Column('google_place_id', sa.Text(), nullable=True))
+    # Live already had this column (empty, from a hand-applied schema change).
+    op.execute("alter table venues add column if not exists google_place_id text")
     op.add_column('venues', sa.Column('popular_times', postgresql.JSONB(), nullable=True))
     op.add_column('venues', sa.Column('popular_times_fetched_at', sa.DateTime(timezone=True), nullable=True))
     op.execute("update venues set image_urls = array[image_url] where image_url is not null and image_url <> ''")
