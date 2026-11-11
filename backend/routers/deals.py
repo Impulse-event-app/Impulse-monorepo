@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from auth import get_current_user
 from database import get_db
-from deal_schedules import SYDNEY, date_label, expires_for
-from models import Deal, Venue
+from deal_schedules import SYDNEY, auto_title, date_label, deal_price_for, expires_for
+from models import Deal, Venue, VenueReel
 from routers.merchants import can_publish_deals
 from schemas import DealCreate, DealResponse, DealUpdate, DealWithVenueResponse
 
@@ -41,6 +41,24 @@ def _assert_can_publish(venue: Venue) -> None:
     )
 
 
+def check_reel(db: Session, venue_id: str, reel_id: Optional[str]) -> None:
+    """A deal can only show one of its own venue's videos."""
+    if not reel_id:
+        return
+    reel = db.query(VenueReel).filter(VenueReel.id == reel_id).first()
+    if not reel or reel.venue_id != venue_id:
+        raise HTTPException(status_code=400, detail="That video doesn't belong to this venue")
+
+
+def title_fields(title: Optional[str], venue: Venue, deal_price: float, unit: Optional[str]) -> dict:
+    """The title to store: the venue's own name for the deal, or, when left
+    blank, "<venue> · <price>" flagged auto_title so it follows price changes."""
+    typed = (title or "").strip()
+    if typed:
+        return {"title": typed, "auto_title": False}
+    return {"title": auto_title(venue.name, deal_price, unit), "auto_title": True}
+
+
 @router.get("", response_model=List[DealWithVenueResponse])
 def list_deals(
     suburb: Optional[str] = Query(None),
@@ -50,7 +68,7 @@ def list_deals(
     db: Session = Depends(get_db),
 ):
     """Public: browse active deals with venue info included."""
-    q = db.query(Deal).options(joinedload(Deal.venue)).join(Venue, Deal.venue_id == Venue.id)
+    q = db.query(Deal).options(joinedload(Deal.venue), joinedload(Deal.reel)).join(Venue, Deal.venue_id == Venue.id)
     if active_only:
         # A deal is gone once its last slot has passed (expires_at), even if
         # nobody switched it off.
@@ -96,7 +114,9 @@ def create_deal(
         fields["date"] = date_label(body.deal_date)
         fields["expires_at"] = fields.get("expires_at") or expires_for(body.deal_date, body.slots)
 
-    deal_price = round(body.original_price * (1 - body.discount_pct / 100), 2)
+    check_reel(db, venue.id, body.reel_id)
+    deal_price = deal_price_for(body.original_price, body.discount_pct)
+    fields.update(title_fields(body.title, venue, deal_price, body.unit))
     deal = Deal(
         **fields,
         deal_price=deal_price,
@@ -112,7 +132,7 @@ def create_deal(
 def get_deal(deal_id: str, db: Session = Depends(get_db)):
     deal = (
         db.query(Deal)
-        .options(joinedload(Deal.venue))
+        .options(joinedload(Deal.venue), joinedload(Deal.reel))
         .filter(Deal.id == deal_id)
         .first()
     )
@@ -131,9 +151,12 @@ def update_deal(
     deal = _get_deal_or_404(deal_id, db)
     _assert_deal_owner(deal, user, db)
 
+    venue = db.query(Venue).filter(Venue.id == deal.venue_id).first()
     updates = body.model_dump(exclude_unset=True)
     if updates.get("is_active"):
-        _assert_can_publish(db.query(Venue).filter(Venue.id == deal.venue_id).first())
+        _assert_can_publish(venue)
+    if "reel_id" in updates:
+        check_reel(db, deal.venue_id, updates["reel_id"])
 
     # Recompute deal_price if pricing fields are being changed
     if "original_price" in updates or "discount_pct" in updates:
@@ -141,7 +164,17 @@ def update_deal(
         # and changing only one of the two would otherwise mix them and 500.
         new_original = float(updates.get("original_price", deal.original_price))
         new_discount = float(updates.get("discount_pct", deal.discount_pct))
-        updates["deal_price"] = round(new_original * (1 - new_discount / 100), 2)
+        updates["deal_price"] = deal_price_for(new_original, new_discount)
+
+    # Renamed, cleared back to automatic, or an automatic title whose price moved.
+    price_changed = any(k in updates for k in ("original_price", "discount_pct", "unit"))
+    if "title" in updates or (deal.auto_title and price_changed):
+        title = updates["title"] if "title" in updates else (None if deal.auto_title else deal.title)
+        updates.update(title_fields(
+            title, venue,
+            float(updates.get("deal_price", deal.deal_price)),
+            updates.get("unit", deal.unit),
+        ))
 
     # A dated deal keeps its label and end time in step with its day and slots.
     deal_date = updates.get("deal_date", deal.deal_date)

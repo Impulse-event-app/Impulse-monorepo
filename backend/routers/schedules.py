@@ -13,8 +13,9 @@ from sqlalchemy.orm import Session
 
 from auth import get_current_user
 from database import get_db
-from deal_schedules import generate_scheduled_deals
+from deal_schedules import deal_price_for, generate_scheduled_deals
 from models import DealSchedule, Venue
+from routers.deals import check_reel, title_fields
 from schemas import DealScheduleCreate, DealScheduleResponse, DealScheduleUpdate
 
 router = APIRouter()
@@ -55,8 +56,11 @@ def get_schedule(schedule_id: str, db: Session = Depends(get_db), user: dict = D
 
 @router.post("", response_model=DealScheduleResponse, status_code=201)
 def create_schedule(body: DealScheduleCreate, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
-    _owned_venue(body.venue_id, user, db)
-    schedule = DealSchedule(**body.model_dump())
+    venue = _owned_venue(body.venue_id, user, db)
+    check_reel(db, venue.id, body.reel_id)
+    fields = body.model_dump()
+    fields.update(title_fields(body.title, venue, deal_price_for(body.original_price, body.discount_pct), body.unit))
+    schedule = DealSchedule(**fields)
     db.add(schedule)
     db.commit()
     db.refresh(schedule)
@@ -73,7 +77,11 @@ def update_schedule(
     user: dict = Depends(get_current_user),
 ):
     schedule = _owned_schedule(schedule_id, user, db)
-    for key, value in body.model_dump().items():
+    venue = db.query(Venue).filter(Venue.id == schedule.venue_id).first()
+    check_reel(db, schedule.venue_id, body.reel_id)
+    fields = body.model_dump()
+    fields.update(title_fields(body.title, venue, deal_price_for(body.original_price, body.discount_pct), body.unit))
+    for key, value in fields.items():
         setattr(schedule, key, value)
     db.commit()
     generate_scheduled_deals(db, venue_id=schedule.venue_id)

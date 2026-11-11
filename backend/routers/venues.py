@@ -1,17 +1,22 @@
 import logging
+import os
+import time
 from datetime import date as dt_date
-from datetime import datetime, timezone
-from typing import List, Literal, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import and_, exists, false, func, or_
 from sqlalchemy.orm import Session, joinedload
 
+import google_places
 import stripe_client
-from auth import get_current_user
-from database import get_db
+from auth import SUPABASE_URL, get_current_user
+from database import SessionLocal, get_db
 from booking_logic import VENUE_TZ, pack_nights, slot_at
-from models import Booking, BookingParticipant, Deal, Venue, UNLIMITED_SPOTS
+from deal_schedules import deal_price_for
+from mailer import MailNotConfigured, MailSendFailed, send_email
+from models import Booking, BookingParticipant, Deal, DealSchedule, Venue, VenueReel, UNLIMITED_SPOTS
 from schemas import (
     BookedSlot,
     BookingResponse,
@@ -21,13 +26,17 @@ from schemas import (
     PayoutResponse,
     PayoutsResponse,
     PayoutSummary,
+    PlaceLookupResponse,
     RecentBooking,
     StatsResponse,
     VenueBookingsPage,
     VenueBookingTotals,
     VenueCreate,
+    VenueReelCreate,
+    VenueReelItem,
     VenueResponse,
     VenueUpdate,
+    VideoShootRequest,
 )
 
 router = APIRouter()
@@ -46,16 +55,63 @@ def _assert_owner(venue: Venue, user: dict) -> None:
         raise HTTPException(status_code=403, detail="Not authorized for this venue")
 
 
+MAX_PHOTOS = 8
+
+
+def _sync_photos(fields: dict) -> None:
+    """Keep image_url (the cover, all that older app builds read) equal to the
+    first gallery photo. A client that only knows one photo sends image_url,
+    which becomes a one-photo gallery."""
+    if "image_urls" in fields and fields["image_urls"] is not None:
+        urls: List[str] = []
+        for u in fields["image_urls"]:
+            u = (u or "").strip()
+            if u and u not in urls:
+                urls.append(u)
+        if len(urls) > MAX_PHOTOS:
+            raise HTTPException(status_code=400, detail=f"Up to {MAX_PHOTOS} photos")
+        fields["image_urls"] = urls
+        fields["image_url"] = urls[0] if urls else None
+    elif "image_url" in fields:
+        fields.pop("image_urls", None)
+        cover = (fields["image_url"] or "").strip() or None
+        fields["image_url"] = cover
+        fields["image_urls"] = [cover] if cover else []
+    else:
+        fields.pop("image_urls", None)
+
+
+def refresh_popular_times(venue_id: str) -> None:
+    """Fetch and store Google Popular Times for the venue's linked place. Runs
+    after the response, in its own session; a miss leaves what was there."""
+    with SessionLocal() as db:
+        venue = db.query(Venue).filter(Venue.id == venue_id).first()
+        if not venue or not venue.google_place_id:
+            return
+        place = google_places.place_details(venue.google_place_id)
+        if not place or not place.get("popular_times"):
+            logger.info("No Popular Times for %s (%s)", venue.name, venue.google_place_id)
+            return
+        venue.popular_times = place["popular_times"]
+        venue.popular_times_fetched_at = datetime.now(timezone.utc)
+        db.commit()
+
+
 @router.post("", response_model=VenueResponse, status_code=201)
 def create_venue(
     body: VenueCreate,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    venue = Venue(**body.model_dump(), owner_id=user["sub"])
+    fields = body.model_dump()
+    _sync_photos(fields)
+    venue = Venue(**fields, owner_id=user["sub"])
     db.add(venue)
     db.commit()
     db.refresh(venue)
+    if venue.google_place_id:
+        background.add_task(refresh_popular_times, venue.id)
     return venue
 
 
@@ -93,6 +149,45 @@ def get_my_venue(
     return venue
 
 
+# Each lookup is a paid SerpApi search: a few per venue owner per hour is
+# plenty to find their place, and caps what a stolen token could spend.
+_LOOKUP_LIMIT = int(os.environ.get("PLACE_LOOKUP_LIMIT", "20"))
+_lookups: Dict[str, List[float]] = {}
+
+
+def _lookup_limited(user_id: str) -> bool:
+    now = time.time()
+    hits = [t for t in _lookups.get(user_id, []) if now - t < 3600]
+    _lookups[user_id] = hits
+    if len(hits) >= _LOOKUP_LIMIT:
+        return True
+    hits.append(now)
+    return False
+
+
+@router.get("/lookup", response_model=PlaceLookupResponse)
+def lookup_place(
+    name: str = Query(..., min_length=2, max_length=120),
+    address: Optional[str] = Query(None, max_length=200),
+    suburb: Optional[str] = Query(None, max_length=80),
+    user: dict = Depends(get_current_user),
+):
+    """The venue's Google Maps place from the name and address they typed, so
+    the form can offer its opening hours, phone and website."""
+    if not google_places.configured():
+        return PlaceLookupResponse(found=False)
+    if _lookup_limited(user["sub"]):
+        raise HTTPException(status_code=429, detail="Too many lookups. Try again in a little while.")
+    place = google_places.find_place(name, address, suburb)
+    if not place or not place.get("place_id"):
+        return PlaceLookupResponse(found=False)
+    return PlaceLookupResponse(
+        found=True,
+        has_popular_times=bool(place.get("popular_times")),
+        **{k: place.get(k) for k in ("place_id", "name", "address", "phone", "website", "lat", "lng", "opening_hours")},
+    )
+
+
 @router.get("/{venue_id}", response_model=VenueResponse)
 def get_venue(venue_id: str, db: Session = Depends(get_db)):
     return _get_venue_or_404(venue_id, db)
@@ -102,16 +197,165 @@ def get_venue(venue_id: str, db: Session = Depends(get_db)):
 def update_venue(
     venue_id: str,
     body: VenueUpdate,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
     venue = _get_venue_or_404(venue_id, db)
     _assert_owner(venue, user)
-    for key, value in body.model_dump(exclude_unset=True).items():
+    fields = body.model_dump(exclude_unset=True)
+    _sync_photos(fields)
+    place_changed = "google_place_id" in fields and fields["google_place_id"] != venue.google_place_id
+    if place_changed:
+        venue.popular_times = None
+        venue.popular_times_fetched_at = None
+    for key, value in fields.items():
         setattr(venue, key, value)
     db.commit()
     db.refresh(venue)
+    if place_changed and venue.google_place_id:
+        background.add_task(refresh_popular_times, venue.id)
     return venue
+
+
+REELS_BUCKET = "venue-reels"
+
+
+def _own_upload(url: Optional[str], user: dict) -> bool:
+    """A public URL of a file this user uploaded to the venue-reels bucket."""
+    prefix = f"{SUPABASE_URL}/storage/v1/object/public/{REELS_BUCKET}/{user['sub']}/"
+    return bool(url) and url.startswith(prefix) and ".." not in url
+
+
+@router.get("/{venue_id}/reels", response_model=List[VenueReelItem])
+def list_venue_reels(
+    venue_id: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """The venue's own Discover videos, newest first, for reuse on a new deal."""
+    venue = _get_venue_or_404(venue_id, db)
+    _assert_owner(venue, user)
+    return (
+        db.query(VenueReel)
+        .filter(VenueReel.venue_id == venue_id, VenueReel.is_active == True)
+        .order_by(VenueReel.created_at.desc())
+        .all()
+    )
+
+
+@router.post("/{venue_id}/reels", response_model=VenueReelItem, status_code=201)
+def create_venue_reel(
+    venue_id: str,
+    body: VenueReelCreate,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Register a video the venue just uploaded to Storage. It shows in
+    Discover, and can be attached to any of the venue's deals."""
+    venue = _get_venue_or_404(venue_id, db)
+    _assert_owner(venue, user)
+    if not _own_upload(body.video_url, user):
+        raise HTTPException(status_code=400, detail="Upload the video from the venue portal first")
+    if body.poster_url and not _own_upload(body.poster_url, user):
+        raise HTTPException(status_code=400, detail="Upload the poster from the venue portal first")
+    reel = VenueReel(
+        venue_id=venue_id,
+        video_url=body.video_url,
+        poster_url=body.poster_url,
+        caption=(body.caption or "").strip() or None,
+    )
+    db.add(reel)
+    db.commit()
+    db.refresh(reel)
+    return reel
+
+
+# Who hears about a venue asking for a complimentary video shoot.
+VIDEO_SHOOT_TO: List[str] = [
+    a.strip() for a in os.environ.get("VIDEO_SHOOT_TO", "rahul@impulseapp.au").split(",") if a.strip()
+]
+_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+
+def _price(x, unit: Optional[str]) -> str:
+    unit = unit or "pp"
+    money = f"${float(x):,.2f}".replace(".00", "")
+    return money + unit if unit.startswith("/") else f"{money} {unit}"
+
+
+def _video_shoot_email(venue: Venue, user: dict, deal: Optional[Deal], schedule: Optional[DealSchedule]) -> str:
+    lines = [
+        f"{venue.name} would like a complimentary video shot by the Impulse media team.",
+        "",
+        "Venue",
+        f"  Name:     {venue.name}",
+        f"  Address:  {', '.join(p for p in (venue.address, venue.suburb) if p) or '-'}",
+        f"  Phone:    {venue.phone or '-'}",
+        f"  Email:    {venue.email or '-'}",
+        f"  Website:  {venue.website or '-'}",
+        f"  Login:    {user.get('email') or '-'}",
+        f"  Venue ID: {venue.id}",
+    ]
+    if deal:
+        lines += ["", "Deal they just published",
+                  f"  {deal.title}",
+                  f"  {_price(deal.deal_price, deal.unit)} (usually {_price(deal.original_price, deal.unit)})",
+                  f"  {deal.date} · {', '.join(deal.slots or [])}",
+                  f"  {'Live' if deal.is_active else 'Draft'} · Deal ID {deal.id}"]
+    if schedule:
+        days = ", ".join(_WEEKDAYS[d] for d in sorted(schedule.weekdays or []))
+        span = f"from {schedule.starts_on}" + (f" to {schedule.ends_on}" if schedule.ends_on else ", every week")
+        lines += ["", "Deal they just published (repeating)",
+                  f"  {schedule.title}",
+                  f"  {_price(deal_price_for(schedule.original_price, schedule.discount_pct), schedule.unit)}"
+                  f" (usually {_price(schedule.original_price, schedule.unit)})",
+                  f"  {days} {span} · {', '.join(schedule.slots or [])}",
+                  f"  {'Live' if schedule.is_active else 'Draft'} · Schedule ID {schedule.id}"]
+    lines += ["", "Reply to this email to reach the venue's login address."]
+    return "\n".join(lines)
+
+
+@router.post("/{venue_id}/video-shoot", status_code=202)
+def request_video_shoot(
+    venue_id: str,
+    body: VideoShootRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """The venue ticked "get a complimentary video shot by the Impulse media
+    team" on a deal. One per venue: it emails VIDEO_SHOOT_TO and records the
+    time, after which the portal stops offering it. A failed send records
+    nothing (so they can ask again) and is a 502, logged in full."""
+    # Locked so two tabs publishing at once can't both send.
+    venue = db.query(Venue).filter(Venue.id == venue_id).with_for_update().first()
+    if not venue:
+        raise HTTPException(status_code=404, detail="Venue not found")
+    _assert_owner(venue, user)
+    if venue.video_shoot_requested_at:
+        raise HTTPException(status_code=409, detail="You've already asked for your video shoot. We'll be in touch.")
+    deal = schedule = None
+    if body.deal_id:
+        deal = db.query(Deal).filter(Deal.id == body.deal_id, Deal.venue_id == venue_id).first()
+        if not deal:
+            raise HTTPException(status_code=404, detail="Deal not found")
+    if body.schedule_id:
+        schedule = (db.query(DealSchedule)
+                    .filter(DealSchedule.id == body.schedule_id, DealSchedule.venue_id == venue_id).first())
+        if not schedule:
+            raise HTTPException(status_code=404, detail="Deal not found")
+
+    subject = f"Video shoot request: {venue.name}"
+    text = _video_shoot_email(venue, user, deal, schedule)
+    try:
+        send_email(VIDEO_SHOOT_TO, subject, text, reply_to=user.get("email"))
+    except (MailNotConfigured, MailSendFailed) as e:
+        db.rollback()
+        logger.error("Video shoot request not emailed (%s):\n%s", e, text)
+        raise HTTPException(status_code=502, detail="Couldn't send the video request.")
+    venue.video_shoot_requested_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"status": "sent"}
 
 
 @router.delete("/{venue_id}", status_code=204)
@@ -144,6 +388,21 @@ def list_venue_deals(
 
 
 DEAD_STATUSES = ("cancelled", "expired", "collapsed", "no_show")
+# A booking row exists from the moment someone taps claim ("collecting"), long
+# before any card is held. Only these went through: the hold is on the card and
+# the code is issued (confirmed), or it was charged at check-in (redeemed).
+PAID_STATUSES = ("confirmed", "redeemed")
+
+
+def _venue_today_utc_bounds() -> tuple:
+    """Start and end of today in the venue's timezone, as UTC instants. The
+    server runs in UTC, so a plain date.today() is yesterday until 11am Sydney."""
+    today = datetime.now(VENUE_TZ).date()
+    start = datetime.combine(today, datetime.min.time(), tzinfo=VENUE_TZ)
+    end = datetime.combine(today + timedelta(days=1), datetime.min.time(), tzinfo=VENUE_TZ)
+    return start.astimezone(timezone.utc), end.astimezone(timezone.utc)
+
+
 @router.get("/{venue_id}/bookings/recent", response_model=List[RecentBooking])
 def recent_venue_bookings(
     venue_id: str,
@@ -159,7 +418,7 @@ def recent_venue_bookings(
     rows = (
         db.query(Booking, Deal.title)
         .join(Deal, Deal.id == Booking.deal_id)
-        .filter(Deal.venue_id == venue_id)
+        .filter(Deal.venue_id == venue_id, Booking.status.in_(PAID_STATUSES))
         .order_by(Booking.created_at.desc())
         .limit(limit)
         .all()
@@ -380,11 +639,14 @@ def get_stats(
         for row in db.query(Deal.id).filter(Deal.venue_id == venue_id).all()
     ]
 
+    day_start, day_end = _venue_today_utc_bounds()
     today_bookings = (
         db.query(Booking)
         .filter(
             Booking.deal_id.in_(deal_ids),
-            func.date(Booking.created_at) == dt_date.today(),
+            Booking.status.in_(PAID_STATUSES),
+            Booking.created_at >= day_start,
+            Booking.created_at < day_end,
         )
         .all()
         if deal_ids

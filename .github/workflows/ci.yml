@@ -36,6 +36,11 @@ concurrency:
 jobs:
   changes:
     runs-on: ubuntu-latest
+    # paths-filter lists a PR's files through the API; without this the
+    # read-only default token gets "Resource not accessible by integration".
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       mobile: ${{ steps.filter.outputs.mobile }}
