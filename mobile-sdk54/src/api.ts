@@ -96,8 +96,13 @@ export type ApiDeal = {
   venue_lng: number | null;
   venue_avg_rating: number;
   venue_image_url: string | null;
+  venue_image_urls?: string[];  // every venue photo, cover first (older servers omit it)
+  // the deal's Discover video, when the venue attached one
+  reel_video_url?: string | null;
+  reel_poster_url?: string | null;
   // deal fields
   title: string;
+  auto_title?: boolean;         // the venue didn't name it: title is "<venue> · <price>"
   category: string;
   description: string | null;
   unit: string | null;          // pricing unit, e.g. "pp", "/lane", "/room·hr"
@@ -260,6 +265,7 @@ export type ApiReel = {
   venue_category: string;
   venue_suburb: string | null;
   venue_image_url: string | null;
+  venue_image_urls?: string[];
   deal_id: string | null;
   deal_title: string | null;
   deal_price: number | null;

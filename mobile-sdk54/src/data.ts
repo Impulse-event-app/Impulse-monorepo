@@ -141,6 +141,8 @@ export type Drop = {
   latitude: number | null;
   longitude: number | null;
   image: string | null;   // real venue photo URL, or null → category placeholder
+  images: string[];       // every venue photo, cover first, for the detail slideshow
+  video: { url: string; poster: string | null } | null;  // the deal's Discover video
 };
 
 // max party each venue fits (drives the party-size filter)
@@ -153,7 +155,7 @@ const CAPS: Record<string, number> = {
 // on the most time-critical drops). window → human label for the rest.
 const T0 = Date.now();
 
-type RawDrop = Omit<Drop, 'target' | 'cap' | 'latitude' | 'longitude' | 'image'>;
+type RawDrop = Omit<Drop, 'target' | 'cap' | 'latitude' | 'longitude' | 'image' | 'images' | 'video'>;
 
 const RAW: RawDrop[] = [
   {
@@ -242,6 +244,8 @@ export const DROPS: Drop[] = RAW.map((d) => ({
   latitude: LATLNG[d.id]?.latitude ?? null,
   longitude: LATLNG[d.id]?.longitude ?? null,
   image: null,
+  images: [],
+  video: null,
 }));
 
 // region that frames all of the drops (Sydney inner-city)
@@ -403,13 +407,16 @@ export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): D
     hotMin,
     rating: d.venue_avg_rating,
     blurb: d.description ?? d.title,
-    gets: d.title,
+    // An unnamed deal's title just repeats the venue and price shown above it.
+    gets: d.auto_title ? d.description || `${Math.round(d.discount_pct)}% off` : d.title,
     addr: d.venue_address ?? '',
     target: expiresMs,
     cap: d.max_group_size,
     latitude: d.venue_lat,
     longitude: d.venue_lng,
     image: d.venue_image_url,
+    images: d.venue_image_urls?.length ? d.venue_image_urls : d.venue_image_url ? [d.venue_image_url] : [],
+    video: d.reel_video_url ? { url: d.reel_video_url, poster: d.reel_poster_url ?? null } : null,
   };
 }
 
