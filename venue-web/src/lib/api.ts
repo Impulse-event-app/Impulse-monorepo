@@ -86,7 +86,13 @@ export interface Venue {
   email: string | null;
   website: string | null;
   opening_hours: string | null;
+  /** The cover photo, always image_urls[0]. */
   image_url: string | null;
+  /** Every photo, cover first; the app shows them as a slideshow. */
+  image_urls: string[];
+  google_place_id: string | null;
+  /** Google's hourly busyness for the linked place: "Mon" → 24 values, 0–100, midnight first. */
+  popular_times: Record<string, number[]> | null;
   accessibility_features: string[];
   is_active: boolean;
   avg_rating: number;
@@ -107,7 +113,35 @@ export interface VenueCreate {
   website?: string;
   opening_hours?: string;
   image_url?: string;
+  /** Cover first; the backend keeps image_url in step. */
+  image_urls?: string[];
+  google_place_id?: string;
   accessibility_features?: string[];
+}
+
+/** The venue's Google Maps place, from what they typed, to prefill the form. */
+export interface PlaceLookup {
+  found: boolean;
+  place_id: string | null;
+  name: string | null;
+  address: string | null;
+  phone: string | null;
+  website: string | null;
+  lat: number | null;
+  lng: number | null;
+  /** "Mon: 11am–10pm, …", the same form opening_hours is stored in. */
+  opening_hours: string | null;
+  has_popular_times: boolean;
+}
+
+/** One of the venue's Discover videos. */
+export interface VenueReel {
+  id: string;
+  video_url: string;
+  poster_url: string | null;
+  caption: string | null;
+  is_active: boolean;
+  created_at: string;
 }
 
 /** null clears an optional field; an omitted key leaves it unchanged. */
@@ -216,6 +250,15 @@ export const venueApi = {
     request<DealPerformanceItem[]>("GET", `/venues/${id}/deal-performance?limit=${limit}`),
   payouts: (id: string) =>
     request<PayoutsResponse>("GET", `/venues/${id}/payouts`),
+  lookup: (q: { name: string; address?: string; suburb?: string }) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(q)) if (v?.trim()) qs.set(k, v.trim());
+    return request<PlaceLookup>("GET", `/venues/lookup?${qs}`);
+  },
+  reels: (id: string) =>
+    request<VenueReel[]>("GET", `/venues/${id}/reels`),
+  createReel: (id: string, body: { video_url: string; poster_url?: string; caption?: string }) =>
+    request<VenueReel>("POST", `/venues/${id}/reels`, body),
 };
 
 // ── Deals ─────────────────────────────────────────────────────────────────────
@@ -238,6 +281,8 @@ export interface Deal {
   date: string;
   deal_date: string | null;      // "2026-11-03"; null on older free-text deals
   schedule_id: string | null;    // set when a weekly schedule made this deal
+  reel_id: string | null;        // the Discover video advertising it
+  auto_title: boolean;           // the name was left blank: "<venue> · <price>"
   slots: string[];
   max_group_size: number;
   total_spots: number;
@@ -249,7 +294,9 @@ export interface Deal {
 
 export interface DealCreate {
   venue_id: string;
-  title: string;
+  /** Optional: left out, the deal is called "<venue> · <price>". */
+  title?: string;
+  reel_id?: string | null;
   category: string;
   description?: string;
   unit?: string;
@@ -265,7 +312,9 @@ export interface DealCreate {
 }
 
 export interface DealUpdate {
+  /** "" goes back to the automatic "<venue> · <price>". */
   title?: string;
+  reel_id?: string | null;
   category?: string;
   description?: string;
   unit?: string;
@@ -311,11 +360,14 @@ export interface DealSchedule {
   max_group_size: number;
   total_spots: number;         // per evening
   is_active: boolean;
+  reel_id: string | null;
+  auto_title: boolean;
   created_at: string;
 }
 
 export interface DealScheduleInput {
-  title: string;
+  title?: string;
+  reel_id?: string | null;
   category: string;
   description?: string;
   unit?: string;

@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatCurrency } from "@/lib/utils";
+import { autoDealTitle, formatCurrency } from "@/lib/utils";
+import { useVenue } from "@/providers/VenueProvider";
 import type { DealCreate, DealUpdate, Deal, DealSchedule, DealScheduleInput } from "@/lib/api";
 import { FONT_DISPLAY, card, fieldLabel, fieldInput, btnPrimary, btnGhost, numeric, switchTrack, switchKnob } from "@/lib/ui";
 
@@ -65,7 +66,10 @@ export function DealForm({ venueId, initial: initialDeal, initialSchedule, onSub
   const [kind, setKind] = useState<"deal" | "schedule">(initialSchedule ? "schedule" : "deal");
   const kindLocked = !!initial;
 
-  const [title, setTitle] = useState(initial?.title ?? "");
+  const { venue } = useVenue();
+  // An automatic title shows as an empty box: typing a name replaces it,
+  // leaving it empty keeps "<venue> · <price>" in step with the price.
+  const [title, setTitle] = useState(initial && !initial.auto_title ? initial.title : "");
   const [category, setCategory] = useState(initial?.category ?? CATEGORIES[0]);
   const [description, setDescription] = useState(initial?.description ?? "");
   const [unit, setUnit] = useState(initial?.unit ?? "pp");
@@ -122,7 +126,9 @@ export function DealForm({ venueId, initial: initialDeal, initialSchedule, onSub
     setSaving(true);
     try {
       const common = {
-        title,
+        title: title.trim(),
+        // A schedule save replaces every field, so carry its video across.
+        ...(kind === "schedule" ? { reel_id: initialSchedule?.reel_id ?? null } : {}),
         category,
         description: description || undefined,
         unit: unit || undefined,
@@ -163,8 +169,8 @@ export function DealForm({ venueId, initial: initialDeal, initialSchedule, onSub
       <div style={{ ...card, padding: 28, marginBottom: 22 }}>
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 18 }}>
           <div>
-            <label style={fieldLabel}>Title</label>
-            <input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Two-for-one cocktails" style={fieldInput} />
+            <label style={fieldLabel}>Name <span style={{ fontWeight: 400, color: "var(--faint)" }}>(optional)</span></label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={autoDealTitle(venue?.name ?? "Your venue", computedPrice, unit)} style={fieldInput} />
           </div>
           <div>
             <label style={fieldLabel}>Category</label>

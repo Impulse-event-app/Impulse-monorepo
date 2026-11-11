@@ -70,7 +70,11 @@ create table if not exists public.venues (
   email          text,
   website        text,
   opening_hours  text,
-  image_url      text,        -- hero photo, uploaded via venue-web to Supabase Storage
+  image_url      text,        -- cover photo (= image_urls[1]), kept for builds that know one photo
+  image_urls     text[]      not null default '{}',  -- photo gallery, cover first (venue-photos bucket)
+  google_place_id text,       -- Google Maps place linked in the portal
+  popular_times  jsonb,       -- {"Mon": [24 ints 0-100], ...} hourly Google busyness
+  popular_times_fetched_at timestamptz,
   -- disability-friendly features, e.g. '{"Step-free entry","Accessible bathroom"}'
   accessibility_features text[] not null default '{}',
   is_active      boolean     not null default true,
@@ -164,6 +168,24 @@ create policy "merchant_documents: owner read"
     where v.id = merchant_documents.venue_id and v.owner_id = auth.uid()
   ));
 
+-- ── public.venue_reels ────────────────────────────────────────
+-- Short vertical videos for the Discover feed. Backend-only: RLS on, no policies.
+
+create table if not exists public.venue_reels (
+  id          uuid        primary key default gen_random_uuid(),
+  venue_id    uuid        not null references public.venues(id) on delete cascade,
+  video_url   text        not null,      -- public MP4 in the venue-reels bucket
+  poster_url  text,                      -- first-frame JPEG
+  caption     text,
+  source_url  text,                      -- where a stock clip came from
+  sort_order  integer     not null default 0,
+  is_active   boolean     not null default true,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists ix_venue_reels_venue_id on public.venue_reels (venue_id);
+alter table public.venue_reels enable row level security;
+
 -- ── public.deal_schedules ─────────────────────────────────────
 -- A venue's weekly deal. The backend generator turns it into a deals row on
 -- each evening it runs. Backend-only: RLS on, no policies.
@@ -184,6 +206,8 @@ create table if not exists public.deal_schedules (
   max_group_size   integer     not null default 6,
   total_spots      integer     not null,      -- per evening
   is_active        boolean     not null default true,
+  reel_id          uuid        references public.venue_reels(id) on delete set null,
+  auto_title       boolean     not null default false,  -- name left blank: "<venue> · <price>"
   created_at       timestamptz not null default now()
 );
 
@@ -210,6 +234,8 @@ create table if not exists public.deals (
   is_active        boolean     not null default true,
   expires_at       timestamptz,
   schedule_id      uuid        references public.deal_schedules(id) on delete set null,
+  reel_id          uuid        references public.venue_reels(id) on delete set null,  -- Discover video for this deal
+  auto_title       boolean     not null default false,  -- name left blank: "<venue> · <price>"
   created_at       timestamptz not null default now()
 );
 
@@ -458,5 +484,45 @@ create policy "venue-photos: owner delete"
   to authenticated
   using (
     bucket_id = 'venue-photos'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+-- ── Storage: venue-reels bucket ───────────────────────────────
+-- Discover videos and their posters, uploaded from venue-web's new-deal page
+-- under "<auth.uid()>/<uuid>.<ext>", same rules as venue-photos.
+
+insert into storage.buckets (id, name, public)
+values ('venue-reels', 'venue-reels', true)
+on conflict (id) do nothing;
+
+drop policy if exists "venue-reels: public read" on storage.objects;
+create policy "venue-reels: public read"
+  on storage.objects for select
+  using (bucket_id = 'venue-reels');
+
+drop policy if exists "venue-reels: owner insert" on storage.objects;
+create policy "venue-reels: owner insert"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'venue-reels'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "venue-reels: owner modify" on storage.objects;
+create policy "venue-reels: owner modify"
+  on storage.objects for update
+  to authenticated
+  using (
+    bucket_id = 'venue-reels'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "venue-reels: owner delete" on storage.objects;
+create policy "venue-reels: owner delete"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'venue-reels'
     and (storage.foldername(name))[1] = auth.uid()::text
   );
