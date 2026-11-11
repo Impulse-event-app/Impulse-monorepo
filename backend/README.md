@@ -1,3 +1,11 @@
+## Database
+
+Schema changes are Alembic migrations (`uv run alembic revision -m "..."`);
+each deploy runs `alembic upgrade head` on boot. A brand-new database is set up
+with `uv run python scripts/bootstrap_db.py` (applies `db/baseline.sql`, then
+stamps Alembic). Demo-data scripts refuse to run against production. See
+[docs/environments.md](../docs/environments.md) for staging vs production.
+
 
 ## Tests
 

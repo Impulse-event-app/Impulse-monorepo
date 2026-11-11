@@ -19,6 +19,16 @@
         "buildType": "apk"
       }
     },
+    "staging": {
+      "environment": "preview",
+      "autoIncrement": true,
+      "env": {
+        "APP_VARIANT": "staging"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
     "production": {
       "environment": "production",
       "autoIncrement": true,
@@ -31,6 +41,12 @@
     "production": {
       "ios": {
         "ascAppId": "6811502068",
+        "appleTeamId": "546PY362R7"
+      }
+    },
+    "staging": {
+      "ios": {
+        "ascAppId": "REPLACE_WITH_STAGING_ASC_APP_ID",
         "appleTeamId": "546PY362R7"
       }
     }

@@ -1,20 +1,31 @@
-# CI on every PR and push to main; CD on push to main.
+# CI on every PR and push to dev/main; CD on push to dev (staging) and main (production).
+#
+#   dev  → staging:    staging Render service, "Impulse Staging" iOS app → TestFlight,
+#                      web at impulse--staging.expo.app. Stripe test mode, staging DB.
+#   main → production: production Render service, "Impulse" iOS app → TestFlight
+#                      (you press "Submit for review" in App Store Connect),
+#                      web at impulse.expo.app. Stripe live mode, production DB.
 #
 # Each app is tested only when its folder changes, and each deploy waits for
 # its own tests:
 #   backend/       → pytest (incl. the DB suite on a throwaway Postgres) → Render
 #   mobile-sdk54/  → typecheck → EAS iOS build + TestFlight submit, EAS Hosting (web)
-#   venue-web/     → typecheck, lint, build (no deploy here)
+#   venue-web/     → typecheck, lint, build (Vercel deploys it from its git integration)
+#
+# Database migrations run when the backend boots (Render start command:
+# `uv run alembic upgrade head && uv run uvicorn ...`), so each environment's
+# schema follows the code deployed to it.
 #
 # Secrets (repo → Settings → Secrets and variables → Actions):
-#   RENDER_DEPLOY_HOOK_URL  Render service → Settings → Deploy Hook
-#   EXPO_TOKEN              expo.dev → Account settings → Access tokens
+#   RENDER_DEPLOY_HOOK_URL          production Render service → Settings → Deploy Hook
+#   RENDER_STAGING_DEPLOY_HOOK_URL  staging Render service → Settings → Deploy Hook
+#   EXPO_TOKEN                      expo.dev → Account settings → Access tokens
 
 name: CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
   workflow_dispatch:
 
@@ -124,27 +135,36 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
-  # ── deploys (main only) ────────────────────────────────────
+  # ── deploys (dev → staging, main → production) ────────────
 
   deploy-backend:
     needs: backend-test
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    concurrency: deploy-backend
+    concurrency: deploy-backend-${{ github.ref_name }}
     steps:
       - name: Trigger Render deploy of this commit
         env:
-          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-        run: curl -fsS -X POST "$HOOK&ref=$GITHUB_SHA"
+          HOOK: ${{ github.ref == 'refs/heads/main' && secrets.RENDER_DEPLOY_HOOK_URL || secrets.RENDER_STAGING_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$HOOK" ]; then echo "Deploy hook secret for ${GITHUB_REF_NAME} is not set"; exit 1; fi
+          curl -fsS -X POST "$HOOK&ref=$GITHUB_SHA"
 
   deploy-mobile:
     needs: mobile-test
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    concurrency: deploy-mobile
+    concurrency: deploy-mobile-${{ github.ref_name }}
     defaults:
       run:
         working-directory: mobile-sdk54
+    env:
+      # main: the real app, production EAS environment (live keys).
+      # dev:  "Impulse Staging" (APP_VARIANT=staging via the staging profile),
+      #       preview EAS environment (staging backend, Stripe test keys).
+      PROFILE: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+      EAS_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
+      WEB_TARGET: ${{ github.ref == 'refs/heads/main' && '--prod' || '--alias staging' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -159,11 +179,13 @@ jobs:
       - run: npm ci
       # iOS: build on EAS and submit to TestFlight when it finishes. --no-wait
       # hands off to EAS, so progress is on expo.dev rather than in this job.
+      # Nothing here submits to App Review; that stays a manual step.
       - name: iOS build → TestFlight
-        run: eas build -p ios --profile production --auto-submit --non-interactive --no-wait
-      # Web: export with the production EXPO_PUBLIC_* vars inlined, then
-      # publish to EAS Hosting (impulse.expo.app).
+        run: eas build -p ios --profile "$PROFILE" --auto-submit-with-profile "$PROFILE" --non-interactive --no-wait
+      # Web: export with this environment's EXPO_PUBLIC_* vars inlined, then
+      # publish to EAS Hosting (production → impulse.expo.app,
+      # staging → impulse--staging.expo.app).
       - name: Web export
-        run: eas env:exec production "npx expo export --platform web" --non-interactive
+        run: eas env:exec "$EAS_ENV" "npx expo export --platform web" --non-interactive
       - name: EAS Hosting deploy
-        run: eas deploy --prod --environment production --non-interactive
+        run: eas deploy $WEB_TARGET --environment "$EAS_ENV" --non-interactive

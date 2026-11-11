@@ -24,6 +24,9 @@ import auth  # noqa: E402
 import main  # noqa: E402
 import stripe_client  # noqa: E402
 from database import SessionLocal  # noqa: E402
+from environment import refuse_production  # noqa: E402
+
+refuse_production("run sandbox end-to-end tests")
 from models import Booking, BookingParticipant, Deal, User, Venue  # noqa: E402
 import database  # noqa: E402
 

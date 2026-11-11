@@ -11,6 +11,7 @@
 //   overlay — always null here (the native sheet presents itself); the web
 //     version renders its form through it, so callers render it either way.
 import { useStripe } from '@stripe/stripe-react-native';
+import * as Linking from 'expo-linking';
 import type { ReactNode } from 'react';
 import { ApiBooking, confirmCardUpdate, confirmHold, startCardSetup, startCardUpdate, startHold } from './api';
 import { useApp } from './theme';
@@ -39,7 +40,9 @@ export function useStripePay(): {
       ...intent,
       applePay: { merchantCountryCode: 'AU' },
       googlePay: { merchantCountryCode: 'AU', testEnv: __DEV__ },
-      returnURL: 'impulse://stripe-redirect',
+      // The app's own scheme (impulse:// or impulse-staging://), so 3D Secure
+      // returns to whichever variant started the payment.
+      returnURL: Linking.createURL('stripe-redirect'),
       defaultBillingDetails: {
         name: profile.name && profile.name !== 'You' ? profile.name : undefined,
         email: profile.email || undefined,

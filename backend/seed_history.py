@@ -31,6 +31,7 @@ from booking_logic import deposit_split
 from database import SessionLocal
 from deal_schedules import date_label
 from models import Booking, BookingParticipant, Deal, Venue
+from environment import refuse_production
 
 SYDNEY = ZoneInfo("Australia/Sydney")
 NAMESPACE = uuid.UUID("6f1d1c3e-3c1a-4f5e-9a51-5eed0b0c4a11")
@@ -294,6 +295,7 @@ def main() -> None:
     parser.add_argument("--quiet", default=None, help="dull hours to show in the history, e.g. 'Mon,Tue,Wed 11:30am-3pm'")
     parser.add_argument("--seed", type=int, default=None, help="random seed, for a repeatable history")
     args = parser.parse_args()
+    refuse_production("seed booking history")
 
     db = SessionLocal()
     try:
