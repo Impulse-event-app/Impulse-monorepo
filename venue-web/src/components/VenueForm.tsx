@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
-import type { Venue, VenueCreate } from "@/lib/api";
-import { supabase } from "@/lib/supabase";
-import { FONT_DISPLAY, numeric, card, fieldLabel, fieldInput, btnPrimary, requiredMark, switchTrack, switchKnob } from "@/lib/ui";
+import { venueApi, type PlaceLookup, type Venue, type VenueCreate } from "@/lib/api";
+import { PHOTO_BUCKET, extOf, uploadPublic } from "@/lib/storage";
+import { FONT_DISPLAY, numeric, card, fieldLabel, fieldInput, btnPrimary, btnGhost, requiredMark, switchTrack, switchKnob } from "@/lib/ui";
 import { DAYS, parseHours, serializeHours, type Day, type DayHours, type WeekHours } from "@/lib/hours";
 
-const PHOTO_BUCKET = "venue-photos";
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
+const MAX_PHOTOS = 8;                    // mirrors MAX_PHOTOS in backend/routers/venues.py
 
 const CATEGORIES = [
   "Bar", "Restaurant", "Cafe", "Bowling", "Mini Golf",
@@ -37,7 +37,11 @@ function toForm(v?: Venue): VenueCreate {
     email: v?.email ?? "",
     website: v?.website ?? "",
     opening_hours: v?.opening_hours ?? "",
-    image_url: v?.image_url ?? "",
+    // Venues from before the gallery only have the one photo.
+    image_urls: v?.image_urls?.length ? v.image_urls : v?.image_url ? [v.image_url] : [],
+    google_place_id: v?.google_place_id ?? undefined,
+    lat: v?.lat ?? undefined,
+    lng: v?.lng ?? undefined,
     accessibility_features: v?.accessibility_features ?? [],
   };
 }
@@ -87,6 +91,12 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit }: Venue
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Google lookup: idle, searching, a match to confirm, applied, or nothing found.
+  const [lookup, setLookup] = useState<
+    | { state: "idle" | "searching" | "missing" }
+    | { state: "found" | "applied"; place: PlaceLookup }
+  >({ state: "idle" });
+  const photos = form.image_urls ?? [];
 
   // Keep a category that predates the current list selectable rather than
   // silently showing (and saving) the first option instead.
@@ -109,36 +119,69 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit }: Venue
     });
   }
 
-  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  async function handlePhotos(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
     e.target.value = "";
-    if (!file) return;
+    if (!files.length) return;
     setError(null);
 
-    if (!file.type.startsWith("image/")) { setError("Please choose an image file (JPG or PNG)."); return; }
-    if (file.size > MAX_PHOTO_BYTES) { setError("Image must be under 5 MB."); return; }
+    const room = MAX_PHOTOS - photos.length;
+    if (room <= 0) { setError(`You can add up to ${MAX_PHOTOS} photos. Remove one to add another.`); return; }
+    const bad = files.find((f) => !f.type.startsWith("image/"));
+    if (bad) { setError(`"${bad.name}" isn't an image. Choose JPG or PNG files.`); return; }
+    const big = files.find((f) => f.size > MAX_PHOTO_BYTES);
+    if (big) { setError(`"${big.name}" is over 5 MB.`); return; }
 
     setUploading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id;
-      if (!userId) throw new Error("You must be signed in to upload a photo.");
-
-      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-      const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-
-      const { error: upErr } = await supabase.storage
-        .from(PHOTO_BUCKET)
-        .upload(path, file, { cacheControl: "3600", upsert: false, contentType: file.type });
-      if (upErr) throw upErr;
-
-      const { data } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
-      setField("image_url", data.publicUrl);
+      for (const file of files.slice(0, room)) {
+        const url = await uploadPublic(PHOTO_BUCKET, file, extOf(file, "jpg"), file.type);
+        setForm((f) => ({ ...f, image_urls: [...(f.image_urls ?? []), url] }));
+      }
+      if (files.length > room) setError(`Added ${room}. You can have up to ${MAX_PHOTOS} photos.`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to upload photo.");
     } finally {
       setUploading(false);
     }
+  }
+
+  function removePhoto(url: string) {
+    setForm((f) => ({ ...f, image_urls: (f.image_urls ?? []).filter((u) => u !== url) }));
+  }
+
+  function makeCover(url: string) {
+    setForm((f) => ({ ...f, image_urls: [url, ...(f.image_urls ?? []).filter((u) => u !== url)] }));
+  }
+
+  async function findOnGoogle() {
+    setError(null);
+    setLookup({ state: "searching" });
+    try {
+      const place = await venueApi.lookup({ name: form.name, address: form.address, suburb: form.suburb });
+      setLookup(place.found ? { state: "found", place } : { state: "missing" });
+    } catch (err: unknown) {
+      setLookup({ state: "idle" });
+      setError(err instanceof Error ? err.message : "Couldn't reach Google just now.");
+    }
+  }
+
+  /** Fill the form from the matched place. Hours replace the week shown; phone
+   *  and website only fill boxes that are still empty. */
+  function applyPlace(place: PlaceLookup) {
+    if (place.opening_hours) {
+      const { week: fromGoogle, unread } = parseHours(place.opening_hours);
+      if (!unread) setWeek(fromGoogle);
+    }
+    setForm((f) => ({
+      ...f,
+      phone: f.phone?.trim() ? f.phone : place.phone ?? "",
+      website: f.website?.trim() ? f.website : place.website ?? "",
+      lat: place.lat ?? f.lat,
+      lng: place.lng ?? f.lng,
+      google_place_id: place.place_id ?? f.google_place_id,
+    }));
+    setLookup({ state: "applied", place });
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -153,7 +196,7 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit }: Venue
       await onSubmit({
         ...form,
         opening_hours: serializeHours(week),
-        image_url: form.image_url?.trim() || undefined,
+        image_urls: photos,
       });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to save venue");
@@ -170,29 +213,35 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit }: Venue
         <p style={{ borderRadius: 12, padding: "12px 16px", marginBottom: 24, fontSize: 13, background: "var(--accent-soft)", color: "var(--accent)" }}>{error}</p>
       )}
 
-      {/* Hero photo */}
+      {/* Photos */}
       <div style={{ marginBottom: 34 }}>
-        <div style={{ ...fieldLabel, letterSpacing: ".12em", marginBottom: 12 }}>Hero photo</div>
-        {form.image_url ? (
-          <div style={{ position: "relative", height: 220, borderRadius: 18, overflow: "hidden", border: "1px solid var(--line)" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={form.image_url} alt="Venue hero" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            <button
-              type="button"
-              onClick={() => setField("image_url", "")}
-              style={{ position: "absolute", right: 12, top: 12, borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, background: "rgba(0,0,0,0.6)", color: "#fff", border: "none", cursor: "pointer" }}
-            >
-              Remove
-            </button>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+          <div style={{ ...fieldLabel, letterSpacing: ".12em", margin: 0 }}>Photos</div>
+          <div style={{ fontSize: 12.5, color: "var(--muted)" }}>
+            Guests swipe through these in the app. The first is your cover. {photos.length}/{MAX_PHOTOS}
           </div>
-        ) : (
-          <label style={{ position: "relative", height: 220, borderRadius: 18, border: "1.5px dashed var(--line2)", background: "repeating-linear-gradient(135deg, var(--surface), var(--surface) 12px, var(--surface2) 12px, var(--surface2) 24px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, cursor: "pointer" }}>
-            <div style={{ width: 46, height: 46, borderRadius: "50%", background: "var(--accent-soft)", display: "grid", placeItems: "center", color: "var(--accent)", fontSize: 22 }}>↑</div>
-            <div style={{ fontWeight: 600 }}>{uploading ? "Uploading…" : "Drop a photo or click to upload"}</div>
-            <div style={{ ...numeric, fontSize: 11, color: "var(--faint)" }}>JPG / PNG · max 5MB</div>
-            <input type="file" accept="image/*" onChange={handlePhotoChange} disabled={uploading} style={{ display: "none" }} />
-          </label>
-        )}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12 }}>
+          {photos.map((url, i) => (
+            <div key={url} style={{ position: "relative", aspectRatio: "4 / 3", borderRadius: 14, overflow: "hidden", border: `1px solid ${i === 0 ? "var(--accent)" : "var(--line)"}` }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt={i === 0 ? "Cover photo" : `Photo ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              {i === 0 && <span style={{ ...photoChip, left: 8, top: 8, background: "var(--accent)", color: "var(--accent-ink)" }}>Cover</span>}
+              <div style={{ position: "absolute", right: 8, bottom: 8, display: "flex", gap: 6 }}>
+                {i > 0 && <button type="button" onClick={() => makeCover(url)} style={photoBtn}>Make cover</button>}
+                <button type="button" onClick={() => removePhoto(url)} aria-label={`Remove photo ${i + 1}`} style={photoBtn}>Remove</button>
+              </div>
+            </div>
+          ))}
+          {photos.length < MAX_PHOTOS && (
+            <label style={{ aspectRatio: photos.length ? "4 / 3" : undefined, height: photos.length ? undefined : 220, gridColumn: photos.length ? undefined : "1 / -1", borderRadius: 14, border: "1.5px dashed var(--line2)", background: "repeating-linear-gradient(135deg, var(--surface), var(--surface) 12px, var(--surface2) 12px, var(--surface2) 24px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, cursor: uploading ? "wait" : "pointer", textAlign: "center", padding: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--accent-soft)", display: "grid", placeItems: "center", color: "var(--accent)", fontSize: 20 }}>↑</div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{uploading ? "Uploading…" : photos.length ? "Add photos" : "Drop photos or click to upload"}</div>
+              <div style={{ ...numeric, fontSize: 11, color: "var(--faint)" }}>JPG / PNG · max 5MB each</div>
+              <input type="file" accept="image/*" multiple onChange={handlePhotos} disabled={uploading} style={{ display: "none" }} />
+            </label>
+          )}
+        </div>
       </div>
 
       {/* The basics */}
@@ -245,6 +294,49 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit }: Venue
             <label style={fieldLabel}>Website <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
             <input type="url" value={form.website} onChange={(e) => setField("website", e.target.value)} placeholder="e.g. myvenue.com.au" style={fieldInput} />
           </div>
+        </div>
+
+        {/* Google Maps: prefill hours, phone and website from the venue's listing */}
+        <div style={{ marginTop: 22, paddingTop: 20, borderTop: "1px solid var(--line)" }}>
+          {lookup.state === "found" ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 220 }}>
+                <div style={{ fontWeight: 600 }}>Is this you? {lookup.place.name}</div>
+                <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 3 }}>
+                  {lookup.place.address}
+                  {lookup.place.opening_hours ? " · opening hours listed" : " · no opening hours listed"}
+                </div>
+              </div>
+              <button type="button" onClick={() => setLookup({ state: "missing" })} style={btnGhost}>Not my venue</button>
+              <button type="button" onClick={() => applyPlace(lookup.place)} style={btnPrimary}>Use these details</button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 220, fontSize: 13, lineHeight: 1.5, color: "var(--muted)" }}>
+                {lookup.state === "applied"
+                  ? lookup.place.opening_hours
+                    ? `Filled from Google Maps (${lookup.place.name}). Check your opening hours below and change anything that's off.`
+                    : `Linked to ${lookup.place.name} on Google Maps. It has no opening hours listed, so set them below.`
+                  : lookup.state === "missing"
+                    ? "We couldn't match your venue on Google Maps. Check the name and address, or set your hours below."
+                    : form.google_place_id
+                      ? "Linked to your Google Maps listing. Search again if your hours have changed."
+                      : "Save time: we can fill in your opening hours, phone and website from your Google Maps listing."}
+                {lookup.state === "applied" && lookup.place.has_popular_times && (
+                  <span style={{ display: "block", marginTop: 4 }}>Google&apos;s busy times for your venue will start off your deal planner.</span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={findOnGoogle}
+                disabled={lookup.state === "searching" || !form.name?.trim() || !form.address?.trim()}
+                title={!form.name?.trim() || !form.address?.trim() ? "Enter your venue name and street address first" : undefined}
+                style={{ ...btnGhost, opacity: !form.name?.trim() || !form.address?.trim() ? 0.5 : 1 }}
+              >
+                {lookup.state === "searching" ? "Searching Google…" : lookup.state === "idle" && !form.google_place_id ? "Fill from Google" : "Search Google again"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -314,6 +406,14 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit }: Venue
     </form>
   );
 }
+
+const photoChip: React.CSSProperties = {
+  position: "absolute", padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, letterSpacing: ".04em",
+};
+
+const photoBtn: React.CSSProperties = {
+  borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 600, background: "rgba(0,0,0,0.62)", color: "#fff", border: "none", cursor: "pointer",
+};
 
 const errStyle: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: "var(--accent)", margin: "8px 0 0" };
 

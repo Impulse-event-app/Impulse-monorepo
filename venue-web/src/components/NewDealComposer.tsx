@@ -23,7 +23,8 @@ import {
   type Venue,
 } from "@/lib/api";
 import { DAYS, parseHours, type WeekHours } from "@/lib/hours";
-import { formatCurrency } from "@/lib/utils";
+import { autoDealTitle, formatCurrency } from "@/lib/utils";
+import { DealVideoPicker, type DealVideo } from "@/components/DealVideoPicker";
 import { numeric, switchKnob, switchTrack } from "@/lib/ui";
 
 const CATEGORIES = [
@@ -231,6 +232,13 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
   const [groupUnlimited, setGroupUnlimited] = useState(false);
   const [description, setDescription] = useState("");
   const [live, setLive] = useState(true);
+  // The Discover video for this deal: none, one of the venue's, or a fresh upload.
+  const [video, setVideo] = useState<DealVideo | null>(null);
+  const [videoBusy, setVideoBusy] = useState(false);
+  // Which photo the guest card shows, so the venue can click through the slideshow.
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const photos = venue.image_urls?.length ? venue.image_urls : venue.image_url ? [venue.image_url] : [];
+  const coverPhoto = photos[photoIndex % Math.max(1, photos.length)] ?? null;
 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -270,7 +278,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
   const pool = byWeekday ? sameWeekday : history;
   const poolDays = Math.max(1, new Set(pool.map((b) => b.dealDate ?? b.created_at.slice(0, 10))).size);
   const booked = pool.reduce((a, b) => a + b.num_people, 0);
-  const busy = (() => {
+  const bookedBusy = (() => {
     const counts = new Array(cells).fill(0) as number[];
     for (const b of pool) {
       const m = slotMinutes(b.slot_time);
@@ -280,9 +288,26 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
     return counts.map((c) => c / poolDays);
   })();
 
-  // The two hours with the fewest people booked, if there's history to go on.
+  // Until the venue has bookings of its own, Google's Popular Times for its
+  // place stand in: how busy each hour usually is, 0–100 relative to the
+  // venue's peak, averaged over the picked weekdays.
+  const googleBusy = (() => {
+    const pt = venue.popular_times;
+    if (!pt) return null;
+    const perDay = pickedWeekdays.map((w) => pt[DAYS[w]]).filter((d): d is number[] => Array.isArray(d) && d.length === 24);
+    if (!perDay.length) return null;
+    const cellsOut = Array.from({ length: cells }, (_, i) => {
+      const hour = Math.floor((range.start + i * STEP) / 60) % 24;
+      return perDay.reduce((a, d) => a + d[hour], 0) / perDay.length;
+    });
+    return cellsOut.some((v) => v > 0) ? cellsOut : null;
+  })();
+  const fromGoogle = booked < MIN_HISTORY && googleBusy !== null;
+  const busy = fromGoogle ? googleBusy : bookedBusy;
+
+  // The two hours with the fewest people, from bookings or Google's busy times.
   const quietest = (() => {
-    if (booked < MIN_HISTORY) return null;
+    if (booked < MIN_HISTORY && !fromGoogle) return null;
     const len = Math.min(QUIET_LENGTH, range.end - minStart);
     let best: { start: number; end: number; total: number } | null = null;
     for (let s = minStart; s + len <= range.end; s += STEP) {
@@ -457,8 +482,11 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
     return () => document.removeEventListener("keydown", onKey);
   }, [previewOpen]);
 
+  // Left blank, the backend names the deal "<venue> · <price>"; shown the same way here.
+  const shownTitle = title.trim() || autoDealTitle(venue.name, guestPays, unit);
+
   function problem(): string | null {
-    if (!title.trim()) return "Give the deal a title.";
+    if (videoBusy) return "Wait for the video to finish uploading.";
     if (guestPays === null || usual <= 0) return "Enter the usual price.";
     if (!(discount > 0 && discount < 100)) return "Set a discount between 1% and 99%.";
     if (tonightPicked && span.start < Math.ceil(nowMinutes() / STEP) * STEP) {
@@ -483,7 +511,8 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
     if (p) return;
 
     const common = {
-      title: title.trim(),
+      title: title.trim() || undefined,
+      reel_id: video?.reel.id ?? null,
       category,
       description: description.trim() || undefined,
       unit,
@@ -542,7 +571,11 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
   const dailyGuests = busy.reduce((a, b) => a + b, 0);
   const projected = Math.min(spotsUnlimited ? Infinity : spots, Math.round((dailyGuests * upliftPct) / 100));
   const extraPerCell = projected / Math.max(1, lit.filter(Boolean).length);
-  const chartMax = Math.max(1, ...busy.map((n, i) => n + (lit[i] ? extraPerCell : 0)));
+  // Google's numbers are relative busyness, not guests, so the deal's lift is
+  // drawn as that much busier in each hour the window covers.
+  const extraAt = (i: number) => (!lit[i] ? 0 : fromGoogle ? (busy[i] * upliftPct) / 100 : extraPerCell);
+  const showProjection = fromGoogle ? upliftPct > 0 && lit.some(Boolean) : projected > 0;
+  const chartMax = Math.max(1, ...busy.map((n, i) => n + extraAt(i)));
   const typicalLabel = !byWeekday
     ? "Typical day"
     : pickedWeekdays.length === 1 ? `Typical ${WEEKDAY_LONG[pickedWeekdays[0]]}` : `Typical ${joinAnd(pickedWeekdays.map((w) => DAYS[w]))}`;
@@ -555,10 +588,26 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
   // The guest's card: in the preview, and again on the success screen with a status badge.
   const guestCard = (badge?: "live" | "draft") => (
       <div style={{ ...cardStyle, borderRadius: 20, overflow: "hidden", padding: 0 }}>
-        <div style={{ position: "relative", height: 196, background: venue.image_url ? undefined : "repeating-linear-gradient(135deg, var(--surface2), var(--surface2) 22px, var(--surface3) 22px, var(--surface3) 44px)" }}>
-          {venue.image_url && (
+        <div style={{ position: "relative", height: video ? 300 : 196, background: coverPhoto || video ? "#000" : "repeating-linear-gradient(135deg, var(--surface2), var(--surface2) 22px, var(--surface3) 22px, var(--surface3) 44px)" }}>
+          {video ? (
+            <video key={video.reel.id} src={video.reel.video_url} poster={video.reel.poster_url ?? undefined} autoPlay muted loop playsInline style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          ) : coverPhoto && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={venue.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+            <img src={coverPhoto} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          )}
+          {!video && photos.length > 1 && (
+            <button
+              type="button"
+              aria-label={`Photo ${photoIndex % photos.length + 1} of ${photos.length}. Show the next one`}
+              onClick={() => setPhotoIndex((i) => i + 1)}
+              style={{ position: "absolute", inset: 0, background: "none", border: 0, cursor: "pointer" }}
+            >
+              <span style={{ position: "absolute", left: 0, right: 0, top: 12, display: "flex", justifyContent: "center", gap: 5 }}>
+                {photos.map((p, i) => (
+                  <span key={p} style={{ width: 6, height: 6, borderRadius: "50%", background: i === photoIndex % photos.length ? "#FFFFFF" : "rgba(255,255,255,.45)" }} />
+                ))}
+              </span>
+            </button>
           )}
           <span style={{ position: "absolute", left: 16, bottom: 14, padding: "4px 9px", borderRadius: 6, background: "var(--accent)", color: "#FFFFFF", fontSize: 12, fontWeight: 600, letterSpacing: ".1em" }}>
             {discount}% OFF
@@ -568,14 +617,14 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor" }} />
               {badge === "live" ? "Live" : "Draft"}
             </span>
-          ) : !venue.image_url && (
-            <span style={{ position: "absolute", right: 16, bottom: 14, fontSize: 12.5, color: "var(--muted)" }}>Venue hero photo</span>
+          ) : !coverPhoto && !video && (
+            <span style={{ position: "absolute", right: 16, bottom: 14, fontSize: 12.5, color: "var(--muted)" }}>Venue photos</span>
           )}
         </div>
         <div style={{ padding: "20px 22px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.015em", color: title.trim() ? "var(--text)" : "var(--faint)" }}>
-              {title.trim() || "Your deal title"}
+            <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.015em", color: "var(--text)" }}>
+              {shownTitle}
             </div>
             <div style={{ fontSize: 14, color: "var(--muted)", marginTop: 3 }}>
               {[venue.name, venue.suburb, category].filter(Boolean).join(" · ")}
@@ -641,7 +690,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
               <Check size={30} strokeWidth={2.25} aria-hidden />
             </div>
             <h2 style={{ margin: "0 0 12px", fontSize: 40, lineHeight: 1.12, fontWeight: 600, letterSpacing: "-0.03em" }}>
-              {title.trim()}<br />{published.live ? "is live." : "is saved as a draft."}
+              {shownTitle}<br />{published.live ? "is live." : "is saved as a draft."}
             </h2>
             <p style={{ margin: "0 0 28px", maxWidth: 520, fontSize: 16, lineHeight: 1.6, color: "var(--muted)" }}>
               {published.live
@@ -720,8 +769,10 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
             <div style={{ padding: "24px 24px 26px", borderBottom: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 22 }}>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em" }}>What&apos;s the offer?</h2>
             <label style={{ display: "block" }}>
-              <span style={labelStyle}>Title</span>
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Two-for-one cocktails" style={inputStyle} />
+              <span style={labelStyle}>
+                Name <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500 }}>(optional · guests see the price either way)</span>
+              </span>
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={shownTitle} style={inputStyle} />
             </label>
 
             <label style={{ display: "block" }}>
@@ -807,9 +858,11 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
                 <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", margin: `0 ${INSET}px -4px`, fontSize: 12.5, color: "var(--muted)" }}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                     <span style={{ width: 10, height: 10, borderRadius: 3, background: "var(--accent)" }} />
-                    {booked ? `Guests booked, avg of ${poolDays} past day${poolDays === 1 ? "" : "s"}` : "No bookings yet to compare against"}
+                    {fromGoogle
+                      ? "How busy you usually are · Google Maps"
+                      : booked ? `Guests booked, avg of ${poolDays} past day${poolDays === 1 ? "" : "s"}` : "No bookings yet to compare against"}
                   </span>
-                  {projected > 0 && (
+                  {showProjection && (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                       <span style={{ width: 10, height: 10, borderRadius: 3, background: projectedFill }} />
                       With this deal (estimate)
@@ -826,16 +879,17 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
                 <span style={{ ...rowLabel, color: "var(--text)", fontWeight: 600 }}>{typicalLabel}</span>
                 <div
                   role="img"
-                  aria-label={`${typicalLabel}: average guests by start time${upliftPct ? `, with about ${upliftPct}% more guests at ${discount}% off` : ""}`}
+                  aria-label={`${typicalLabel}: ${fromGoogle ? "how busy the venue usually is, from Google Maps," : "average guests"} by start time${upliftPct ? `, with about ${upliftPct}% more guests at ${discount}% off` : ""}`}
                   style={{ height: 112, margin: `0 ${INSET}px`, display: "grid", gridTemplateColumns: `repeat(${cells}, minmax(0, 1fr))`, gap: 4, alignItems: "end" }}
                 >
                   {busy.map((n, i) => {
                     const t = range.start + i * STEP;
-                    const extra = lit[i] ? extraPerCell : 0;
+                    const extra = extraAt(i);
+                    const amount = fromGoogle ? `usually ${Math.round(n)}% as busy as your peak` : `${n.toFixed(1)} guests`;
                     return (
                       <div
                         key={i}
-                        title={`${shortTime(t)} · ${n.toFixed(1)} guests on a ${typicalLabel.toLowerCase()}${extra ? ` · busier with this deal (estimate)` : ""}`}
+                        title={`${shortTime(t)} · ${amount} on a ${typicalLabel.toLowerCase()}${extra ? ` · busier with this deal (estimate)` : ""}`}
                         style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}
                       >
                         <span className="nd-anim" style={{ height: `${(extra / chartMax) * 100}%`, borderRadius: "4px 4px 0 0", background: projectedFill, transition: `height .5s ${SPRING}` }} />
@@ -1024,6 +1078,10 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
             </div>
               </div>
             </div>
+          </section>
+
+          <section style={{ ...cardStyle, padding: "24px 24px 26px" }}>
+            <DealVideoPicker venueId={venue.id} value={video} onChange={setVideo} onBusy={setVideoBusy} />
           </section>
         </div>
 
