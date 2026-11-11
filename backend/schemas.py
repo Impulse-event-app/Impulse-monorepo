@@ -106,6 +106,7 @@ class VenueResponse(BaseModel):
     image_urls: List[str] = []
     google_place_id: Optional[str] = None
     popular_times: Optional[Dict[str, List[int]]] = None
+    video_shoot_requested_at: Optional[datetime] = None
     accessibility_features: List[str]
     is_active: bool
     avg_rating: float
@@ -135,6 +136,13 @@ class VenueReelCreate(BaseModel):
     video_url: str
     poster_url: Optional[str] = None
     caption: Optional[str] = Field(None, max_length=200)
+
+
+class VideoShootRequest(BaseModel):
+    """A venue ticked "get a complimentary video shot by the Impulse media
+    team" while publishing; points at what they just published."""
+    deal_id: Optional[str] = None
+    schedule_id: Optional[str] = None
 
 
 class VenueReelItem(BaseModel):

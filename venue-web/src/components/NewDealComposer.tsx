@@ -15,6 +15,7 @@ import {
   merchantApi,
   scheduleApi,
   venueApi,
+  ApiError,
   type Deal,
   type DealCreate,
   type DealSchedule,
@@ -235,6 +236,10 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
   // The Discover video for this deal: none, one of the venue's, or a fresh upload.
   const [video, setVideo] = useState<DealVideo | null>(null);
   const [videoBusy, setVideoBusy] = useState(false);
+  // Ask the Impulse media team to shoot a video for the venue's deals. One
+  // per venue: once asked for, the option isn't offered again.
+  const [wantShoot, setWantShoot] = useState(false);
+  const canAskForShoot = !venue.video_shoot_requested_at;
   // Which photo the guest card shows, so the venue can click through the slideshow.
   const [photoIndex, setPhotoIndex] = useState(0);
   const photos = venue.image_urls?.length ? venue.image_urls : venue.image_url ? [venue.image_url] : [];
@@ -243,7 +248,8 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   // Set once the deal is saved: whether it went live or stayed a draft.
-  const [published, setPublished] = useState<{ live: boolean } | null>(null);
+  // shoot: how the video-shoot request went, if they ticked it.
+  const [published, setPublished] = useState<{ live: boolean; shoot?: "sent" | "failed" } | null>(null);
 
   // ── Data ──
   const { data: deals = [] } = useQuery<Deal[]>({
@@ -505,6 +511,25 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
     setPreviewOpen(true);
   }
 
+  // The deal is already saved by now, so a failed request must not read as a
+  // failed publish: it's reported on the success screen instead.
+  async function askForShoot(ref: { deal_id?: string; schedule_id?: string }): Promise<"sent" | "failed" | undefined> {
+    if (!wantShoot || !canAskForShoot) return undefined;
+    try {
+      await venueApi.requestVideoShoot(venue.id, ref);
+      // Refresh the venue so the next deal no longer offers it.
+      qc.invalidateQueries({ queryKey: ["my-venues"] });
+      return "sent";
+    } catch (err) {
+      // 409: already asked for (another tab, say), so the request is in.
+      if (err instanceof ApiError && err.status === 409) {
+        qc.invalidateQueries({ queryKey: ["my-venues"] });
+        return "sent";
+      }
+      return "failed";
+    }
+  }
+
   async function publish() {
     const p = problem();
     setError(p);
@@ -536,11 +561,11 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
           ends_on: repeat ? null : chosen[chosen.length - 1].iso,
           venue_id: venue.id,
         } satisfies DealScheduleInput & { venue_id: string });
-        setPublished({ live: created.is_active });
+        setPublished({ live: created.is_active, shoot: await askForShoot({ schedule_id: created.id }) });
       } else {
         // The backend keeps it a draft until Stripe has verified the venue.
         const created = await dealApi.create({ ...common, venue_id: venue.id, deal_date: day.iso } satisfies DealCreate);
-        setPublished({ live: created.is_active });
+        setPublished({ live: created.is_active, shoot: await askForShoot({ deal_id: created.id }) });
       }
       setPreviewOpen(false);
       setSaving(false);
@@ -699,6 +724,13 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
                   ? "It goes live as soon as Stripe verifies your payments. You'll find it under Deals."
                   : "Guests can't see it yet. Switch it on from Deals when you're ready."}
             </p>
+            {published.shoot && (
+              <p role="status" style={{ margin: "-12px 0 28px", maxWidth: 520, fontSize: 15, lineHeight: 1.6, color: published.shoot === "sent" ? "var(--text)" : "var(--accent-text)" }}>
+                {published.shoot === "sent"
+                  ? "Video shoot requested. The Impulse media team will be in touch to set up a time."
+                  : <>We couldn&apos;t send your video shoot request. Email <a href="mailto:rahul@impulseapp.au" style={{ color: "inherit" }}>rahul@impulseapp.au</a> and we&apos;ll set it up.</>}
+              </p>
+            )}
 
             <ol style={{ listStyle: "none", margin: "0 0 30px", padding: 0, maxWidth: 620, ...cardStyle, overflow: "hidden" }}>
               {steps.map(([lead, rest], i) => (
@@ -1082,6 +1114,13 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
 
           <section style={{ ...cardStyle, padding: "24px 24px 26px" }}>
             <DealVideoPicker venueId={venue.id} value={video} onChange={setVideo} onBusy={setVideoBusy} />
+            {canAskForShoot && <label style={{ display: "flex", alignItems: "flex-start", gap: 12, marginTop: 18, padding: "14px 16px", borderRadius: 12, border: `1px solid ${wantShoot ? "var(--accent)" : "var(--line2)"}`, background: wantShoot ? "var(--accent-soft)" : "var(--surface2)", cursor: "pointer" }}>
+              <input type="checkbox" checked={wantShoot} onChange={(e) => setWantShoot(e.target.checked)} style={{ width: 18, height: 18, margin: "2px 0 0", flexShrink: 0, accentColor: "var(--accent)", cursor: "pointer" }} />
+              <span>
+                <span style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--text)" }}>Get a complimentary video shot by the Impulse media team for your deals</span>
+                <span style={{ display: "block", marginTop: 3, fontSize: 13, color: "var(--muted)" }}>We&apos;ll be in touch after you publish to set up a time.</span>
+              </span>
+            </label>}
           </section>
         </div>
 

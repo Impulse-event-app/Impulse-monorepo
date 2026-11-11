@@ -93,6 +93,8 @@ export interface Venue {
   google_place_id: string | null;
   /** Google's hourly busyness for the linked place: "Mon" → 24 values, 0–100, midnight first. */
   popular_times: Record<string, number[]> | null;
+  /** When the venue asked for its one complimentary video shoot; null until then. */
+  video_shoot_requested_at?: string | null;
   accessibility_features: string[];
   is_active: boolean;
   avg_rating: number;
@@ -259,6 +261,9 @@ export const venueApi = {
     request<VenueReel[]>("GET", `/venues/${id}/reels`),
   createReel: (id: string, body: { video_url: string; poster_url?: string; caption?: string }) =>
     request<VenueReel>("POST", `/venues/${id}/reels`, body),
+  // The venue ticked "get a complimentary video shot by the Impulse media team".
+  requestVideoShoot: (id: string, body: { deal_id?: string; schedule_id?: string }) =>
+    request<{ status: string }>("POST", `/venues/${id}/video-shoot`, body),
 };
 
 // ── Deals ─────────────────────────────────────────────────────────────────────
