@@ -50,6 +50,19 @@ def expires_for(day: date, slots: Iterable[str]) -> datetime:
     return datetime.combine(day, last, tzinfo=SYDNEY)
 
 
+def auto_title(venue_name: str, deal_price: float, unit: Optional[str]) -> str:
+    """The title of a deal the venue didn't name: 'Flight Club · $15 pp'.
+    Whole dollars drop the cents; '/group'-style units sit flush to the price."""
+    price = float(deal_price)
+    amount = f"${price:.0f}" if price == int(price) else f"${price:.2f}"
+    u = (unit or "pp").strip()
+    return f"{venue_name} · {amount}{u if u.startswith('/') else ' ' + u}"
+
+
+def deal_price_for(original_price: float, discount_pct: float) -> float:
+    return round(float(original_price) * (1 - float(discount_pct) / 100), 2)
+
+
 def runs_on(schedule: DealSchedule, day: date) -> bool:
     if day.weekday() not in (schedule.weekdays or []):
         return False
@@ -67,12 +80,14 @@ def deal_from_schedule(schedule: DealSchedule, day: date) -> Deal:
         venue_id=schedule.venue_id,
         schedule_id=schedule.id,
         title=schedule.title,
+        auto_title=schedule.auto_title,
+        reel_id=schedule.reel_id,
         category=schedule.category,
         description=schedule.description,
         unit=schedule.unit,
         original_price=original,
         discount_pct=discount,
-        deal_price=round(original * (1 - discount / 100), 2),
+        deal_price=deal_price_for(original, discount),
         date=date_label(day),
         deal_date=day,
         slots=list(schedule.slots),

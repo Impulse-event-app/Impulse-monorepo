@@ -94,7 +94,13 @@ class Venue(Base):
     email = Column(Text, nullable=True)
     website = Column(Text, nullable=True)
     opening_hours = Column(Text, nullable=True)
-    image_url = Column(Text, nullable=True)                    # hero photo, uploaded via venue-web to Supabase Storage
+    image_url = Column(Text, nullable=True)                    # cover photo (= image_urls[0]), kept for builds that know one photo
+    image_urls = Column(ARRAY(Text()), nullable=False, server_default="{}")  # photo gallery, cover first, in the venue-photos bucket
+    google_place_id = Column(Text, nullable=True)              # Google Maps place the venue linked in the portal
+    # {"Mon": [24 ints 0-100], ...}: Google's hourly busyness for the place, used
+    # for the deal composer's bars until the venue has bookings of its own.
+    popular_times = Column(JSONB, nullable=True)
+    popular_times_fetched_at = Column(DateTime(timezone=True), nullable=True)
     accessibility_features = Column(ARRAY(Text()), nullable=False, server_default="{}")  # disability-friendly features the venue offers
     is_active = Column(Boolean, default=True, nullable=False)
     avg_rating = Column(Numeric(3, 2), nullable=False, server_default="0")
@@ -225,10 +231,15 @@ class Deal(Base):
     expires_at = Column(DateTime(timezone=True), nullable=True)
     # Set when the weekly schedule generator made this deal; one deal per schedule per evening.
     schedule_id = Column(UUID(as_uuid=False), ForeignKey("deal_schedules.id", ondelete="SET NULL"), nullable=True)
+    # The Discover video advertising this deal, if the venue picked one.
+    reel_id = Column(UUID(as_uuid=False), ForeignKey("venue_reels.id", ondelete="SET NULL"), nullable=True)
+    # The venue left the name blank: the title is "<venue> · <price>" and follows price changes.
+    auto_title = Column(Boolean, default=False, server_default="false", nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     venue: "Venue" = relationship("Venue", back_populates="deals")
     bookings: List["Booking"] = relationship("Booking", back_populates="deal")
+    reel: Optional["VenueReel"] = relationship("VenueReel")
 
     __table_args__ = (
         Index("uq_deals_schedule_date", "schedule_id", "deal_date", unique=True,
@@ -257,6 +268,8 @@ class DealSchedule(Base):
     max_group_size = Column(Integer, default=6, nullable=False)
     total_spots = Column(Integer, nullable=False)              # per evening
     is_active = Column(Boolean, default=True, nullable=False)
+    reel_id = Column(UUID(as_uuid=False), ForeignKey("venue_reels.id", ondelete="SET NULL"), nullable=True)
+    auto_title = Column(Boolean, default=False, server_default="false", nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 

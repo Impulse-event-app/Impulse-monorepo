@@ -7,6 +7,15 @@ from booking_logic import slot_at
 from deal_schedules import normalize_slot
 
 
+def gallery(venue: Any) -> List[str]:
+    """A venue's photos, cover first. Venues from before the gallery only
+    have image_url."""
+    urls = list(getattr(venue, "image_urls", None) or [])
+    if not urls and getattr(venue, "image_url", None):
+        urls = [venue.image_url]
+    return urls
+
+
 # ── User ──────────────────────────────────────────────────────────────────────
 
 class UserUpdate(BaseModel):
@@ -53,6 +62,8 @@ class VenueCreate(BaseModel):
     website: Optional[str] = None
     opening_hours: Optional[str] = None
     image_url: Optional[str] = None
+    image_urls: Optional[List[str]] = None       # gallery, cover first; image_url follows image_urls[0]
+    google_place_id: Optional[str] = None        # from GET /venues/lookup; the backend fetches popular times
     accessibility_features: Optional[List[str]] = None
 
 
@@ -69,6 +80,8 @@ class VenueUpdate(BaseModel):
     website: Optional[str] = None
     opening_hours: Optional[str] = None
     image_url: Optional[str] = None
+    image_urls: Optional[List[str]] = None       # gallery, cover first; image_url follows image_urls[0]
+    google_place_id: Optional[str] = None        # from GET /venues/lookup; the backend fetches popular times
     accessibility_features: Optional[List[str]] = None
     is_active: Optional[bool] = None
 
@@ -90,6 +103,9 @@ class VenueResponse(BaseModel):
     website: Optional[str]
     opening_hours: Optional[str]
     image_url: Optional[str]
+    image_urls: List[str] = []
+    google_place_id: Optional[str] = None
+    popular_times: Optional[Dict[str, List[int]]] = None
     accessibility_features: List[str]
     is_active: bool
     avg_rating: float
@@ -100,11 +116,45 @@ class VenueResponse(BaseModel):
     pilot_ends_at: Optional[datetime] = None
 
 
+class PlaceLookupResponse(BaseModel):
+    """The venue's Google Maps place, to prefill the venue form. Any field can
+    be missing; found=False when nothing matched or lookups are off."""
+    found: bool
+    place_id: Optional[str] = None
+    name: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    website: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    opening_hours: Optional[str] = None      # "Mon: 11am–10pm, ..." like the venue form stores
+    has_popular_times: bool = False
+
+
+class VenueReelCreate(BaseModel):
+    video_url: str
+    poster_url: Optional[str] = None
+    caption: Optional[str] = Field(None, max_length=200)
+
+
+class VenueReelItem(BaseModel):
+    """One of the venue's own videos, for the new-deal page's picker."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    video_url: str
+    poster_url: Optional[str]
+    caption: Optional[str]
+    is_active: bool
+    created_at: datetime
+
+
 # ── Deal ──────────────────────────────────────────────────────────────────────
 
 class DealCreate(BaseModel):
     venue_id: str
-    title: str
+    title: Optional[str] = None        # blank → "<venue> · <price>" (auto_title)
+    reel_id: Optional[str] = None      # the venue's Discover video for this deal
     category: str
     description: Optional[str] = None
     unit: Optional[str] = None         # pricing unit, e.g. "pp", "/lane", "/room·hr"
@@ -131,7 +181,8 @@ class DealCreate(BaseModel):
 
 
 class DealUpdate(BaseModel):
-    title: Optional[str] = None
+    title: Optional[str] = None        # "" → back to the automatic title
+    reel_id: Optional[str] = None      # null clears the video
     description: Optional[str] = None
     unit: Optional[str] = None
     original_price: Optional[float] = None
@@ -159,7 +210,8 @@ def _normalize_slots(slots: List[str]) -> List[str]:
 # ── Weekly deal schedules ─────────────────────────────────────────────────────
 
 class DealScheduleBase(BaseModel):
-    title: str
+    title: Optional[str] = None        # blank → "<venue> · <price>" (auto_title)
+    reel_id: Optional[str] = None
     category: str
     description: Optional[str] = None
     unit: Optional[str] = None
@@ -216,6 +268,8 @@ class DealScheduleResponse(BaseModel):
     max_group_size: int
     total_spots: int
     is_active: bool
+    reel_id: Optional[str] = None
+    auto_title: bool = False
     created_at: datetime
 
     @model_validator(mode="before")
@@ -243,6 +297,8 @@ class DealResponse(BaseModel):
     date: str
     deal_date: Optional[Date] = None
     schedule_id: Optional[str] = None
+    reel_id: Optional[str] = None
+    auto_title: bool = False
     slots: List[str]
     max_group_size: int
     total_spots: int
@@ -261,7 +317,11 @@ class DealWithVenueResponse(DealResponse):
     venue_lng: Optional[float]
     venue_avg_rating: float
     venue_image_url: Optional[str]
+    venue_image_urls: List[str] = []
     venue_accessibility_features: List[str]
+    # The deal's Discover video, if it has one.
+    reel_video_url: Optional[str] = None
+    reel_poster_url: Optional[str] = None
 
     @classmethod
     def from_deal(cls, deal: object) -> "DealWithVenueResponse":
@@ -281,6 +341,8 @@ class DealWithVenueResponse(DealResponse):
             date=d.date,
             deal_date=d.deal_date,
             schedule_id=d.schedule_id,
+            reel_id=d.reel_id,
+            auto_title=bool(d.auto_title),
             slots=d.slots,
             max_group_size=d.max_group_size,
             total_spots=d.total_spots,
@@ -296,7 +358,10 @@ class DealWithVenueResponse(DealResponse):
             venue_lng=d.venue.lng,
             venue_avg_rating=float(d.venue.avg_rating),
             venue_image_url=d.venue.image_url,
+            venue_image_urls=gallery(d.venue),
             venue_accessibility_features=d.venue.accessibility_features or [],
+            reel_video_url=d.reel.video_url if getattr(d, "reel", None) else None,
+            reel_poster_url=d.reel.poster_url if getattr(d, "reel", None) else None,
         )
 
 
@@ -314,6 +379,7 @@ class ReelResponse(BaseModel):
     venue_category: str
     venue_suburb: Optional[str]
     venue_image_url: Optional[str]
+    venue_image_urls: List[str] = []
     deal_id: Optional[str] = None
     deal_title: Optional[str] = None
     deal_price: Optional[float] = None
@@ -335,6 +401,7 @@ class ReelResponse(BaseModel):
             venue_category=r.venue.category,
             venue_suburb=r.venue.suburb,
             venue_image_url=r.venue.image_url,
+            venue_image_urls=gallery(r.venue),
             **(dict(
                 deal_id=d.id,
                 deal_title=d.title,
