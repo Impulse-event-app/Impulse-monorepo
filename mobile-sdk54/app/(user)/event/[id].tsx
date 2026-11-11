@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { money, apiDealToDrop, venuePhotoUrl, dropCoords } from '../../../src/data';
+import { money, apiDealToDrop, dropCoords } from '../../../src/data';
+import { HeroMedia } from '../../../src/HeroMedia';
 import { VenueMap } from '../../../src/VenueMap';
 import { fontMono, fontUI, useApp } from '../../../src/theme';
 import { logInteraction } from '../../../src/api';
@@ -70,7 +71,7 @@ export default function DetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <Placeholder label={`${d.cat} · venue photo`} uri={venuePhotoUrl(d)} style={{ height: 300 }} />
+        <HeroMedia d={d} height={d.video ? 420 : 300} />
 
         <ReadableColumn style={{ paddingHorizontal: 16, paddingTop: 24, paddingBottom: 150 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14 }}>
