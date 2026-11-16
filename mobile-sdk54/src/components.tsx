@@ -944,7 +944,7 @@ export function DropCardEditorial({ d, onPress, a11yLabel, a11yHint }: { d: Drop
       {/* Whole card is glass, tinted by its own blurred photo; the photo sits inset. */}
       <GlassCard backdrop={venuePhotoUrl(d)} radius={22}>
         <View style={{ margin: 8, marginBottom: 0 }}>
-          <Placeholder label={`${d.cat} · venue photo`} uri={venuePhotoUrl(d)} radius={15} style={{ height: 162 }} />
+          <Placeholder label={d.cat} uri={venuePhotoUrl(d)} radius={15} style={{ height: 162 }} />
           <View style={{ position: 'absolute', top: 10, left: 10, right: 10, flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
             <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               <GlassBadge>

@@ -18,7 +18,7 @@ import { BackButton, Btn, CodeInput, ErrorText, Field, Radar, TextBtn, Wordmark 
 import { GoogleLogo, MailGlyph, PhoneGlyph } from '../../src/icons';
 import {
   fetchUserProfile, isOnboarded, markIntroSeen, markOnboarded, sendPhoneOtp, signInWithApple, signInWithGoogle,
-  signInWithEmail, signUpWithEmail, syncUserProfile, verifyPhoneOtp,
+  resetPasswordWithCode, sendPasswordResetCode, signInWithEmail, signUpWithEmail, syncUserProfile, verifyPhoneOtp,
 } from '../../src/auth';
 import { supabase } from '../../src/supabase';
 import { Lede, Panel, usePagerWidth } from '../../src/onboardingUI';
@@ -59,7 +59,7 @@ export default function SignIn() {
   // account — skip the brand hero and go straight to the options.
   const [panel, setPanel] = useState(next ? AUTH_PANEL : 0);
 
-  const [phoneView, setPhoneView] = useState<'buttons' | 'phone' | 'otp' | 'email'>('buttons');
+  const [phoneView, setPhoneView] = useState<'buttons' | 'phone' | 'otp' | 'email' | 'reset'>('buttons');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [email, setEmail] = useState('');
@@ -69,6 +69,7 @@ export default function SignIn() {
   const [emailMode, setEmailMode] = useState<'signin' | 'signup'>('signin');
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
 
   // Signed in: return to where the user came from, or the feed.
   const leave = () => {
@@ -152,6 +153,21 @@ export default function SignIn() {
       setPhoneView('otp');
     }).catch((e) => setAuthError(e.message ?? 'Could not send code. Check the number.'));
 
+  const handleSendReset = () =>
+    withAuth(async () => {
+      await sendPasswordResetCode(email);
+      setAuthNotice(null);
+      setOtpCode('');
+      setPassword('');
+      setPhoneView('reset');
+    }).catch((e) => setAuthError(e.message ?? 'Could not send a code. Check the email address.'));
+
+  const handleResetPassword = () =>
+    withAuth(async () => {
+      const user = await resetPasswordWithCode(email, otpCode, password);
+      if (user) { setOtpCode(''); setPassword(''); await afterAuth(); }
+    }).catch((e) => setAuthError(e.message ?? 'That code didn’t work. Try again.'));
+
   const handleVerifyOtp = () =>
     withAuth(async () => {
       const user = await verifyPhoneOtp(phoneNumber, otpCode);
@@ -168,10 +184,18 @@ export default function SignIn() {
         return;
       }
       // Sign-up → create the account, save their name, then onboard.
-      const user = await signUpWithEmail(email, password);
+      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+      const { user, session } = await signUpWithEmail(email, password, fullName || undefined);
       if (!user) return;
       markIntroSeen();
-      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+      if (!session) {
+        // Email confirmation is on: there's no session until they confirm.
+        // Onboarding would bounce them straight back here, so say what to do.
+        setPassword('');
+        setEmailMode('signin');
+        setAuthNotice(`We've sent a confirmation link to ${email}. Tap it, then sign in here.`);
+        return;
+      }
       if (fullName) {
         setProfile((p) => ({ ...p, name: fullName }));
         await syncUserProfile({ full_name: fullName }).catch(() => {/* best effort */});
@@ -394,12 +418,54 @@ export default function SignIn() {
                   autoComplete={emailMode === 'signin' ? 'current-password' : 'new-password'}
                 />
                 {authError ? <ErrorText>{authError}</ErrorText> : null}
+                {authNotice && !authError ? (
+                  <Text accessibilityLiveRegion="polite" style={{ ...fontUI(400), fontSize: 15, lineHeight: 21, color: T.text }}>{authNotice}</Text>
+                ) : null}
                 <Btn full onPress={handleEmailAuth} disabled={!email || password.length < 6 || (emailMode === 'signup' && (!firstName.trim() || !lastName.trim())) || authLoading}>
                   {authLoading ? 'Please wait…' : emailMode === 'signin' ? 'Sign in' : 'Create account'}
                 </Btn>
-                <TextBtn size={15} onPress={() => { setEmailMode(emailMode === 'signin' ? 'signup' : 'signin'); setAuthError(null); }}>
+                <TextBtn size={15} onPress={() => { setEmailMode(emailMode === 'signin' ? 'signup' : 'signin'); setAuthError(null); setAuthNotice(null); }}>
                   {emailMode === 'signin' ? 'No account? Sign up' : 'Have an account? Sign in'}
                 </TextBtn>
+                {emailMode === 'signin' && (
+                  <TextBtn
+                    size={15}
+                    disabled={authLoading}
+                    onPress={() => {
+                      if (!email.includes('@')) { setAuthError('Enter your email above, then tap Forgot password.'); return; }
+                      handleSendReset();
+                    }}
+                  >
+                    Forgot password?
+                  </TextBtn>
+                )}
+              </View>
+            </KeyboardAvoidingView>
+          )}
+
+          {phoneView === 'reset' && (
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+              <View style={{ paddingHorizontal: 16, marginBottom: 30 }}>
+                <BackButton onPress={() => { setPhoneView('email'); setAuthError(null); setOtpCode(''); setPassword(''); }} />
+              </View>
+              <Lede title="Reset your password." body={`If ${email.trim()} has an account, we've emailed it a six-digit code.`} />
+              <View style={{ paddingHorizontal: 22, paddingTop: 30, gap: 16 }}>
+                <CodeInput value={otpCode} onChange={setOtpCode} autoFocus />
+                <Field
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="New password (6+ characters)"
+                  accessibilityLabel="New password"
+                  secureTextEntry
+                  textContentType="newPassword"
+                  autoCapitalize="none"
+                  autoComplete="new-password"
+                />
+                {authError ? <ErrorText center>{authError}</ErrorText> : null}
+                <Btn full onPress={handleResetPassword} disabled={otpCode.length < 6 || password.length < 6 || authLoading}>
+                  {authLoading ? 'Saving…' : 'Set new password'}
+                </Btn>
+                <TextBtn size={15} onPress={handleSendReset} disabled={authLoading}>Send a new code</TextBtn>
               </View>
             </KeyboardAvoidingView>
           )}

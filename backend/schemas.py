@@ -763,6 +763,26 @@ class AppleTokenRegister(BaseModel):
     authorization_code: str = Field(min_length=1, max_length=2048)
 
 
+class ContactMatchRequest(BaseModel):
+    """SHA-256 hex hashes of normalised phone numbers and emails from the
+    user's address book. Never the contacts themselves."""
+    hashes: List[str] = Field(max_length=2000)
+
+
+class ContactMatch(BaseModel):
+    """A friend found in your contacts. `hash` says which contact matched, so
+    the app can show them under the name saved in your phone."""
+    id: str
+    display_name: str
+    hash: str
+
+
+class ContactIdentityResponse(BaseModel):
+    """Whether friends can currently find you from their contacts."""
+    phone_findable: bool
+    email_findable: bool
+
+
 class UserSearchResult(BaseModel):
     """Just enough to pick the right friend — never their email or phone."""
     id: str

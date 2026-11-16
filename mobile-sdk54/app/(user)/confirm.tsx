@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Animated, Platform, ScrollView, Text, View } from 'react-native';
+import { Alert, Animated, Platform, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fontUI, useApp } from '../../src/theme';
 import {
@@ -9,6 +9,8 @@ import {
 import { Check } from '../../src/icons';
 import { hapticSuccess } from '../../src/haptics';
 import { CardUpdate } from '../../src/CardUpdate';
+import { ApiError, cancelBooking } from '../../src/api';
+import { confirmDestructive } from '../../src/confirm';
 
 export default function ConfirmScreen() {
   const { code, balance } = useLocalSearchParams<{ code: string; balance?: string }>();
@@ -17,7 +19,9 @@ export default function ConfirmScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReduceMotion();
-  const plan = plans.find((p) => p.code === code) || plans[0] || null;
+  // A code that doesn't match must never show a different booking's door code.
+  const plan = (code ? plans.find((p) => p.code === code) : plans[0]) || null;
+  const [cancelling, setCancelling] = useState(false);
 
   const pop = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -46,6 +50,31 @@ export default function ConfirmScreen() {
   }
 
   const verified = plan.status === 'redeemed';
+  // Huddles are cancelled from the huddle screen; the backend refuses here.
+  const canCancel = !verified && !!plan.bookingId && !plan.hasVoting
+    && !['cancelled', 'expired', 'collapsed'].includes(plan.status);
+
+  const onCancel = async () => {
+    if (!plan.bookingId) return;
+    const ok = await confirmDestructive(
+      'Cancel this booking?',
+      'The 10% deposit is non-refundable and will be charged. The rest of the hold on your card is released.',
+      'Cancel booking',
+      'Keep booking',
+    );
+    if (!ok) return;
+    setCancelling(true);
+    try {
+      await cancelBooking(plan.bookingId);
+      await refreshBookings();
+      router.replace('/(user)/plans');
+    } catch (err) {
+      const msg = err instanceof ApiError || err instanceof Error ? err.message : 'Please try again.';
+      if (Platform.OS === 'web') { if (typeof window !== 'undefined') window.alert(msg); } else Alert.alert('Couldn’t cancel', msg);
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
@@ -89,7 +118,7 @@ export default function ConfirmScreen() {
               <>
                 <CodeDisplay code={plan.code} size="lg" label="Your door code" />
                 <Label style={{ maxWidth: 320, lineHeight: 19, textAlign: 'center' }}>
-                  Show this at the door at {plan.venue}. Held for twenty minutes.
+                  Show this at the door at {plan.venue}.
                 </Label>
               </>
             )}
@@ -112,6 +141,11 @@ export default function ConfirmScreen() {
       <FloatingFooter>
         <Btn full onPress={() => router.replace('/(user)/plans')}>View in plans</Btn>
         <Btn full variant="ghost" onPress={() => router.replace('/(user)/home')}>Back to tonight</Btn>
+        {canCancel && (
+          <Btn full variant="ghost" onPress={onCancel} disabled={cancelling}>
+            {cancelling ? 'Cancelling…' : 'Cancel booking'}
+          </Btn>
+        )}
       </FloatingFooter>
     </View>
   );

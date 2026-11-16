@@ -39,7 +39,7 @@ export function HeroMedia({ d, height }: { d: Drop; height: number }) {
   ];
 
   if (pages.length === 0) {
-    return <Placeholder label={`${d.cat} · venue photo`} style={{ height }} />;
+    return <Placeholder label={d.cat} style={{ height }} />;
   }
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
