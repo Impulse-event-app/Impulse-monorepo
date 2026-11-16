@@ -35,11 +35,11 @@ const DOCS: Record<string, Doc> = {
   },
   terms: {
     title: 'Terms of service',
-    updated: 'Last updated 6 November 2026',
+    updated: 'Last updated 16 November 2026',
     intro: 'These terms govern your use of Impulse. By creating an account or booking a deal, you agree to them. Please read them carefully.',
     sections: [
       { h: '1. Your account', body: [
-        'You must be 18 or over to hold an account and to book deals at venues that serve alcohol. You are responsible for activity on your account and for keeping your login secure.',
+        'You must be 18 or over to hold an account and to book deals at venues that serve alcohol. Each account needs a mobile number verified by a text message code. You are responsible for activity on your account and for keeping your login secure.',
       ] },
       { h: '2. Bookings & payments', body: [
         'Impulse is a marketplace connecting you with venues; the venue provides the experience. When you book a deal, you enter an agreement with that venue, and we process payment on their behalf at the price shown.',
@@ -89,14 +89,14 @@ const DOCS: Record<string, Doc> = {
       { h: 'Who can see your information', body: [
         'Venues you book with see your name, party size, booking time and door code.',
         'People in a split booking or huddle with you see your display name and your share. Someone who has your mobile number (or your Google or Apple email) saved in their contacts can find you to invite you to a booking; they see your display name, never your number. There is no public search of Impulse users.',
-        'Service providers that help us run Impulse: Stripe (payments), Supabase (accounts and database), Render (servers), Expo and Apple (push notifications), Apple and Google (sign-in) and our SMS provider (sign-in codes). Some of them store data outside Australia, including in the United States, under their own security and privacy commitments.',
+        'Service providers that help us run Impulse: Stripe (payments), Supabase (accounts and database), Render (servers), Vercel (websites), Expo and Apple (push notifications), Apple and Google (sign-in) and our SMS provider (sign-in and verification codes). Some of them store data outside Australia, including in the United States, under their own security and privacy commitments.',
         'We may disclose information where the law requires it.',
       ] },
       { h: 'How long we keep it', body: [
         'We keep your account information until you delete your account. Booking and payment records are kept without your name or contact details for up to 7 years, as required for tax and accounting.',
       ] },
       { h: 'Your rights', body: [
-        'You can delete your account at any time in the app: open You, then Delete account. That removes your profile, preferences, activity, saved cards and sign-in straight away, and revokes Sign in with Apple. To access or correct your data, email privacy@impulseapp.au.',
+        'You can delete your account at any time in the app: open You, then Delete account. That removes your profile, preferences, activity, saved cards and sign-in straight away, and revokes Sign in with Apple. If you can\'t get into the app, email privacy@impulseapp.au and we\'ll delete it for you. To access or correct your data, email privacy@impulseapp.au.',
         'If you are unhappy with how we have handled your information, email us first. You can also complain to the Office of the Australian Information Commissioner (oaic.gov.au).',
       ] },
     ],
