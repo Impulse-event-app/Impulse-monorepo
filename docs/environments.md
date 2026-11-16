@@ -58,6 +58,18 @@ somewhere else.
    Google Cloud), Apple (client id `au.impulseapp.impulse`).
 4. Authentication → URL Configuration: add `impulse://**`,
    `https://impulse.expo.app/**` and `https://venues.impulseapp.au/**`.
+5. Authentication → Email Templates → **Reset Password**: the app resets
+   passwords with a 6-digit code typed in the app, not a link. Make the body
+   show the code, e.g. `<p>Your Impulse password reset code is
+   <strong>{{ .Token }}</strong>. It expires in 1 hour.</p>`. Do the same on
+   staging. Check Authentication → Providers → Email → "Email OTP Length" is 6.
+6. Phone numbers are required on every account and verified by SMS
+   (`updateUser({ phone })` → `verifyOtp({ type: 'phone_change' })`), so the
+   Phone provider and its SMS sender must be on in **both** projects. Every
+   new account costs at least one SMS.
+7. Set up custom SMTP (Authentication → Emails) so reset and confirmation
+   emails aren't held to Supabase's built-in sender rate limit. Or turn
+   "Confirm email" off.
 
 ### 2. Staging Supabase project (the current one)
 1. Apple provider: add `au.impulseapp.impulse.staging` to the client ids.

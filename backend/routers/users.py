@@ -9,6 +9,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 import apple_auth
+import contact_match
 import push
 import stripe_client
 import wallet
@@ -17,6 +18,9 @@ from database import get_db
 from models import Booking, BookingParticipant, PaymentMethod, User, UserVenueInteraction, Venue
 from schemas import (
     AppleTokenRegister,
+    ContactIdentityResponse,
+    ContactMatch,
+    ContactMatchRequest,
     UserSearchResult,
     CardSetupResponse,
     PaymentMethodResponse,
@@ -32,7 +36,6 @@ router = APIRouter()
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
 
-SEARCH_MIN_CHARS = 3
 SEARCH_LIMIT = 8
 
 
@@ -46,15 +49,13 @@ def search_users(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Find a friend to invite into a booking.
+    """People you've already shared a booking with, most recent first.
 
-    Privacy: returns only an id and a display name — never email or phone.
-    Names match by word prefix and need at least 3 characters; an email or
-    phone number only matches exactly, so the directory can't be browsed by
-    contact details. With no query, returns people you've already shared a
-    booking with, most recent first. Capped at 8 results."""
+    Privacy: there is no directory search by name, email or phone. New
+    friends are found from your own contacts (POST /users/match-contacts) or
+    invited by link. `q` is accepted and ignored so older app builds that
+    still send it keep working."""
     me = user["sub"]
-    # People I've been in a booking with — shown first, and on their own when q is empty.
     mine = db.query(BookingParticipant.booking_id).filter(BookingParticipant.user_id == me)
     recent_rows = (
         db.query(User, func.max(BookingParticipant.joined_at).label("last"))
@@ -65,32 +66,53 @@ def search_users(
         .limit(SEARCH_LIMIT)
         .all()
     )
-    recent_ids = {u.id for u, _ in recent_rows}
+    return [UserSearchResult(id=u.id, display_name=_search_name(u), recent=True) for u, _ in recent_rows]
 
-    term = (q or "").strip()
-    if len(term) < SEARCH_MIN_CHARS:
-        return [UserSearchResult(id=u.id, display_name=_search_name(u), recent=True) for u, _ in recent_rows]
 
-    like = term.replace("%", "").replace("_", "")
-    matches = (
+@router.post("/me/contact-identity", response_model=ContactIdentityResponse)
+def sync_contact_identity(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Make you findable by friends who have your number (or Google/Apple
+    email) saved, using only what your verified sign-in token proves. The app
+    calls this after sign-in and after verifying a phone number."""
+    phone, email = contact_match.verified_identity(user)
+    row = _get_or_create_user(db, user)
+    if phone:
+        row.phone = phone
+    row.phone_hash = contact_match.hash_identifier(phone) if phone else None
+    row.email_hash = contact_match.hash_identifier(email) if email else None
+    db.commit()
+    return ContactIdentityResponse(phone_findable=bool(phone), email_findable=bool(email))
+
+
+@router.post("/match-contacts", response_model=List[ContactMatch])
+def match_contacts(
+    body: ContactMatchRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Which of these contact hashes belong to people on Impulse. Returns an
+    id and display name only. Nothing that was sent is stored or logged."""
+    hashes = contact_match.clean_hashes(body.hashes)
+    if not hashes:
+        return []
+    if not contact_match.budget.take(user["sub"], len(hashes)):
+        raise HTTPException(status_code=429, detail="Too many contact checks today. Try again tomorrow.")
+    wanted = set(hashes)
+    rows = (
         db.query(User)
-        .filter(
-            User.id != me,
-            or_(
-                User.full_name.ilike(f"{like}%"),
-                User.full_name.ilike(f"% {like}%"),
-                func.lower(User.email) == term.lower(),
-                User.phone == term,
-            ),
-        )
-        .limit(SEARCH_LIMIT * 2)
+        .filter(User.id != user["sub"], or_(User.phone_hash.in_(hashes), User.email_hash.in_(hashes)))
+        .limit(500)
         .all()
     )
-    matches.sort(key=lambda u: (u.id not in recent_ids, _search_name(u).lower()))
-    return [
-        UserSearchResult(id=u.id, display_name=_search_name(u), recent=u.id in recent_ids)
-        for u in matches[:SEARCH_LIMIT]
-    ]
+    out = []
+    for u in rows:
+        hit = u.phone_hash if u.phone_hash in wanted else u.email_hash
+        out.append(ContactMatch(id=u.id, display_name=_search_name(u), hash=hit))
+    out.sort(key=lambda m: m.display_name.lower())
+    return out
 
 
 @router.get("/me", response_model=UserResponse)

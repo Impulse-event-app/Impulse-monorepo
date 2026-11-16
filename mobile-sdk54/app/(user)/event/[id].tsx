@@ -17,7 +17,6 @@ import {
   Label,
   Live,
   MetaLine,
-  Placeholder,
   PriceBlock,
   RatingDot,
   ReadableColumn,
@@ -104,11 +103,10 @@ export default function DetailScreen() {
             ))}
           </View>
 
+          {/* No coordinates: leave the map out rather than show a placeholder. */}
           {coords ? (
             <VenueMap latitude={coords.latitude} longitude={coords.longitude} style={{ marginTop: 28 }} />
-          ) : (
-            <Placeholder label="Map" style={{ height: 130, borderCurve: 'continuous', borderRadius: 12, marginTop: 28 }} />
-          )}
+          ) : null}
         </ReadableColumn>
       </ScrollView>
 

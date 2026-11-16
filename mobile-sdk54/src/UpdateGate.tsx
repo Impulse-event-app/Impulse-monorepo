@@ -8,7 +8,7 @@ import { Linking, Pressable, Text, View } from 'react-native';
 import { getAppConfig } from './api';
 import type { Theme } from './theme';
 
-const STORE_URL = process.env.EXPO_PUBLIC_APP_STORE_URL ?? 'https://apps.apple.com/app/impulse';
+const STORE_URL = process.env.EXPO_PUBLIC_APP_STORE_URL ?? 'https://apps.apple.com/app/id6811502068';
 
 /** "1.10.0" > "1.9.2"; missing parts count as 0. */
 export function isOlder(version: string, minimum: string): boolean {

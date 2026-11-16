@@ -8,7 +8,7 @@ import {
   applyFilters,
 } from '../../../src/data';
 import { getHuddle, submitBallot, ApiError, ApiHuddle } from '../../../src/api';
-import { fontMono, fontUI, useApp } from '../../../src/theme';
+import { fontMono, fontUI, useApp, emailName } from '../../../src/theme';
 import {
   Avatar,
   Btn,
@@ -174,7 +174,7 @@ export default function HomeScreen() {
     setMapMounted(true);
     setView((v) => (v === 'list' ? 'map' : 'list'));
   };
-  const displayName = profile.name || (profile.email ? profile.email.split('@')[0] : '') || 'You';
+  const displayName = profile.name || emailName(profile.email) || 'You';
   const initials = displayName.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase() || 'U';
   const router = useRouter();
   const requireAuth = useRequireAuth();
@@ -428,7 +428,22 @@ export default function HomeScreen() {
                 <>
                   {section('On now', now)}
                   {section('Later tonight', later, now.length)}
-                  {filtered.length === 0 && (
+                  {drops.length === 0 && (
+                    // Nothing live anywhere: not a filter problem, so don't
+                    // tell the user to change their filters.
+                    <EmptyState
+                      mark={false}
+                      style={{ marginTop: 80 }}
+                      title="No drops live right now."
+                      body="Venues post new spots through the day. Check back this afternoon or evening."
+                      action={
+                        <TextBtn onPress={retryDeals} color={T.accent} weight={500}>
+                          Refresh
+                        </TextBtn>
+                      }
+                    />
+                  )}
+                  {drops.length > 0 && filtered.length === 0 && (
                     <EmptyState
                       mark={false}
                       style={{ marginTop: 80 }}
