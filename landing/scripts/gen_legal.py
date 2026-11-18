@@ -24,11 +24,11 @@ PAGES = {
     "privacy": {
         "title": "Privacy policy",
         "desc": "What Impulse collects, why, who sees it, and how to delete it.",
-        "updated": "Last updated 16 November 2026",
+        "updated": "Last updated 18 November 2026",
         "intro": "This policy explains what we collect, why, and the choices you have. It covers the Impulse app, the venue portal and this website. We aim to collect only what we need to run Impulse.",
         "sections": [
             ("Who we are", [
-                "Impulse (“we”, “us”) runs the Impulse app, the venue portal and impulseapp.au from Sydney, Australia. We handle personal information under the Australian Privacy Principles in the Privacy Act 1988 (Cth).",
+                "Impulse is run by Impulse Labs Pty Ltd (ABN 31 704 068 931) (“Impulse”, “we”, “us”), which operates the Impulse app, the venue portal and impulseapp.au from Sydney, Australia. We handle personal information under the Australian Privacy Principles in the Privacy Act 1988 (Cth).",
                 f"Questions or requests: {E_PRIVACY}.",
             ]),
             ("What we collect in the app", [
@@ -71,8 +71,8 @@ PAGES = {
     "terms": {
         "title": "Terms of service",
         "desc": "The terms for using Impulse and booking deals at venues.",
-        "updated": "Last updated 16 November 2026",
-        "intro": "These terms govern your use of Impulse. By creating an account or booking a deal, you agree to them. Please read them carefully.",
+        "updated": "Last updated 18 November 2026",
+        "intro": "These terms are an agreement between you and Impulse Labs Pty Ltd (ABN 31 704 068 931), which runs Impulse. They govern your use of Impulse. By creating an account or booking a deal, you agree to them. Please read them carefully.",
         "sections": [
             ("1. Your account", [
                 "You must be 18 or over to hold an account and to book deals at venues that serve alcohol. Each account needs a mobile number verified by a text message code. You are responsible for activity on your account and for keeping your login secure.",
@@ -207,7 +207,7 @@ def render(key, page):
 {secs}
     </main>
     <footer>
-      <span>Impulse · Made in Sydney</span>
+      <span>© 2026 Impulse Labs Pty Ltd · ABN 31 704 068 931 · Made in Sydney</span>
       <span><a href="/support/">Help</a> · <a href="/terms/">Terms</a> · <a href="/privacy/">Privacy</a></span>
     </footer>
   </div>

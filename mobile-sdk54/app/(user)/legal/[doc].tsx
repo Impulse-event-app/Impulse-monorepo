@@ -35,8 +35,8 @@ const DOCS: Record<string, Doc> = {
   },
   terms: {
     title: 'Terms of service',
-    updated: 'Last updated 16 November 2026',
-    intro: 'These terms govern your use of Impulse. By creating an account or booking a deal, you agree to them. Please read them carefully.',
+    updated: 'Last updated 18 November 2026',
+    intro: 'These terms are an agreement between you and Impulse Labs Pty Ltd (ABN 31 704 068 931), which runs Impulse. They govern your use of Impulse. By creating an account or booking a deal, you agree to them. Please read them carefully.',
     sections: [
       { h: '1. Your account', body: [
         'You must be 18 or over to hold an account and to book deals at venues that serve alcohol. Each account needs a mobile number verified by a text message code. You are responsible for activity on your account and for keeping your login secure.',
@@ -64,11 +64,11 @@ const DOCS: Record<string, Doc> = {
   },
   privacy: {
     title: 'Privacy policy',
-    updated: 'Last updated 16 November 2026',
+    updated: 'Last updated 18 November 2026',
     intro: 'This policy explains what we collect, why, and the choices you have. We aim to collect only what we need to run Impulse.',
     sections: [
       { h: 'Who we are', body: [
-        'Impulse ("we", "us") runs the Impulse app and venue portal from Sydney, Australia. We handle personal information under the Australian Privacy Principles in the Privacy Act 1988 (Cth). Questions or requests: privacy@impulseapp.au.',
+        'Impulse is run by Impulse Labs Pty Ltd (ABN 31 704 068 931) ("Impulse", "we", "us"), which operates the Impulse app and venue portal from Sydney, Australia. We handle personal information under the Australian Privacy Principles in the Privacy Act 1988 (Cth). Questions or requests: privacy@impulseapp.au.',
       ] },
       { h: 'What we collect', body: [
         'Account details: your name, your mobile number (required, and verified by a text message code), your email address if you sign in with one, and which sign-in method you use (Apple, Google, email or SMS code).',
