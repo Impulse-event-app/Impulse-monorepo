@@ -10,10 +10,10 @@ import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { money, apiDealToDrop, dropCoords } from './data';
+import { apiDealToDrop, dropCoords } from './data';
 import { HeroMedia } from './HeroMedia';
 import { VenueMap } from './VenueMap';
-import { fontMono, fontUI, useApp } from './theme';
+import { fontUI, useApp } from './theme';
 import { logInteraction } from './api';
 import { useRequireAuth } from './auth';
 import {
@@ -28,7 +28,6 @@ import {
   RatingDot,
   ReadableColumn,
   ScreenTitle,
-  unitLabel,
 } from './components';
 
 export function DealDetail({ id, embedded = false }: { id: string | undefined; embedded?: boolean }) {
@@ -123,21 +122,15 @@ export function DealDetail({ id, embedded = false }: { id: string | undefined; e
 
       {head}
 
-      {/* booking bar */}
-      <FloatingFooter row gap={16}>
-        <View accessible accessibilityLabel={`${money(d.now)} ${unitLabel(d.unit)}`}>
-          <Text style={{ ...fontMono(600), fontSize: 22, letterSpacing: -0.4, color: T.text }}>{money(d.now)}</Text>
-          <Text style={{ ...fontUI(400), fontSize: 12.5, color: T.muted }}>{unitLabel(d.unit)}</Text>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Btn
-            full
-            onPress={() => requireAuth(() => router.push(`/(user)/claim/${d.id}`))}
-            accessibilityHint={signedIn ? undefined : 'You’ll be asked to sign in first.'}
-          >
-            Book now
-          </Btn>
-        </View>
+      {/* Book now on its own: the price is already on screen in the PriceBlock. */}
+      <FloatingFooter>
+        <Btn
+          full
+          onPress={() => requireAuth(() => router.push(`/(user)/claim/${d.id}`))}
+          accessibilityHint={signedIn ? undefined : 'You’ll be asked to sign in first.'}
+        >
+          Book now
+        </Btn>
       </FloatingFooter>
     </View>
   );
