@@ -10,17 +10,28 @@ import { UpdateGate } from '../src/UpdateGate';
 import { tokens } from '../src/theme';
 
 /**
- * Phones stay portrait (the layouts are designed for it). iPad and Android
- * tablets rotate and multitask freely — app.json allows every orientation, and
- * iPad Split View ignores orientation locks anyway.
+ * Compact windows prefer portrait (the phone layouts are designed for it).
+ * Larger windows (iPad, an open iPhone Duo, Android tablets) rotate freely and
+ * use the split layouts in src/layout.ts.
+ *
+ * Decided by window size, never by device idiom: an iPhone Duo is a phone
+ * whose window grows when it unfolds. And it is only a preference: from
+ * iOS 27 the system may refuse the lock (iPhone apps are resizable), so every
+ * layout must still fill whatever window it is given.
  */
+const COMPACT_MAX = 500;
+
 function usePhonePortraitLock() {
   const { width, height } = useWindowDimensions();
-  const isTablet = Platform.OS === 'ios' ? Platform.isPad : Math.min(width, height) >= 600;
+  const compact = Math.min(width, height) < COMPACT_MAX;
   useEffect(() => {
-    if (Platform.OS === 'web' || isTablet) return;
-    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
-  }, [isTablet]);
+    if (Platform.OS === 'web') return;
+    if (compact) {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    } else {
+      ScreenOrientation.unlockAsync().catch(() => {});
+    }
+  }, [compact]);
 }
 
 export default function RootLayout() {

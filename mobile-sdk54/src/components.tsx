@@ -22,6 +22,7 @@ import {
   type DimensionValue,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type TextInputInstance,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -87,9 +88,19 @@ export const useReduceMotion = () => useA11yFlag('reduceMotion');
 export const useReduceTransparency = () => useA11yFlag('reduceTransparency');
 
 // ── readable column ──────────────────────────────────────────
-/** Centres content at a comfortable reading width on iPad; full width on phones. */
+/**
+ * Centres content at a comfortable reading width on wide windows (iPad, an
+ * open iPhone Duo); full width on phones. Also keeps the content clear of the
+ * left and right safe areas, where iPhone Duo puts its tab rail and status
+ * bar. The padding sits outside the column, so backgrounds stay full-bleed.
+ */
 export function ReadableColumn({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
-  return <View style={[{ width: '100%', maxWidth: READABLE_WIDTH, alignSelf: 'center' }, style]}>{children}</View>;
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={{ width: '100%', paddingLeft: insets.left, paddingRight: insets.right }}>
+      <View style={[{ width: '100%', maxWidth: READABLE_WIDTH, alignSelf: 'center' }, style]}>{children}</View>
+    </View>
+  );
 }
 
 // ── press-scale wrapper ──────────────────────────────────────
@@ -269,7 +280,7 @@ export function NavBar({
         <GlassFill />
         <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 0.5, backgroundColor: T.line }} />
       </Animated.View>
-      <View pointerEvents="box-none" style={{ position: 'absolute', top: insets.top, left: 0, right: 0, height: 44, alignItems: 'center' }}>
+      <View pointerEvents="box-none" style={{ position: 'absolute', top: insets.top, left: insets.left, right: insets.right, height: 44, alignItems: 'center' }}>
         <View
           pointerEvents="box-none"
           style={{ width: '100%', maxWidth: READABLE_WIDTH, height: 44, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}
@@ -375,14 +386,17 @@ export function FloatingFooter({ children, gap = 10, row }: { children: React.Re
   return (
     <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 20 }}>
       <FooterScrim />
-      <View
-        style={{
-          width: '100%', maxWidth: READABLE_WIDTH, alignSelf: 'center',
-          paddingHorizontal: 16, paddingTop: 14, paddingBottom: insets.bottom > 0 ? insets.bottom + 6 : 24,
-          gap, flexDirection: row ? 'row' : 'column', alignItems: row ? 'center' : 'stretch',
-        }}
-      >
-        {children}
+      {/* Side insets outside the column: clear of iPhone Duo's rail, scrim still full-bleed. */}
+      <View pointerEvents="box-none" style={{ paddingLeft: insets.left, paddingRight: insets.right }}>
+        <View
+          style={{
+            width: '100%', maxWidth: READABLE_WIDTH, alignSelf: 'center',
+            paddingHorizontal: 16, paddingTop: 14, paddingBottom: insets.bottom > 0 ? insets.bottom + 6 : 24,
+            gap, flexDirection: row ? 'row' : 'column', alignItems: row ? 'center' : 'stretch',
+          }}
+        >
+          {children}
+        </View>
       </View>
     </View>
   );
@@ -1217,7 +1231,7 @@ export function CodeInput({
 }
 
 // ── text field ───────────────────────────────────────────────
-export const Field = forwardRef<TextInput, TextInputProps & { prefix?: string; containerStyle?: StyleProp<ViewStyle> }>(
+export const Field = forwardRef<TextInputInstance, TextInputProps & { prefix?: string; containerStyle?: StyleProp<ViewStyle> }>(
   function Field({ prefix, style, containerStyle, onFocus, onBlur, ...rest }, ref) {
     const T = useTheme();
     const [focused, setFocused] = useState(false);

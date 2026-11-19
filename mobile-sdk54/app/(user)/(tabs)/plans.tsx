@@ -16,7 +16,7 @@ import {
 } from '../../../src/components';
 import { ChevronRight } from '../../../src/icons';
 import type { Plan } from '../../../src/data';
-import { FLOATING_TAB_CLEARANCE } from './_layout';
+import { useTabBarClearance } from '../../../src/layout';
 
 const STATUS_LABEL: Record<Plan['status'], string> = {
   voting: 'Voting',
@@ -87,6 +87,7 @@ function PlanListSkeleton() {
 }
 
 export default function PlansScreen() {
+  const tabClearance = useTabBarClearance();
   const { T, plans: allPlans, bookingsLoading, bookingsLoaded, refreshBookings, signedIn } = useApp();
   const now = Date.now();
   const plans = allPlans.filter((p) => isUpcoming(p, now));
@@ -100,7 +101,7 @@ export default function PlansScreen() {
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={16}
-        contentContainerStyle={{ flexGrow: 1, paddingTop: navTop, paddingBottom: 24 + FLOATING_TAB_CLEARANCE }}
+        contentContainerStyle={{ flexGrow: 1, paddingTop: navTop, paddingBottom: 24 + tabClearance }}
         refreshControl={
           signedIn ? (
             <RefreshControl refreshing={bookingsLoading} onRefresh={refreshBookings} tintColor={T.accent} progressViewOffset={navTop} />

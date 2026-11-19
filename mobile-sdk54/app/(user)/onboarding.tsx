@@ -6,7 +6,7 @@
 // (or who's already onboarded) just in case.
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View, type ScrollViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ACCESSIBILITY_OPTIONS, CATEGORIES, SYDNEY_SUBURBS } from '../../src/data';
 import { fontMono, fontUI, useApp } from '../../src/theme';
@@ -28,7 +28,7 @@ export default function Onboarding() {
   const { T, setProfile } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const [W, onPagerLayout] = usePagerWidth();
   const [page, setPage] = useState(0);
   const [suburb, setSuburb] = useState<string | null>(null);
@@ -145,7 +145,7 @@ export default function Onboarding() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: T.bg }}>
+    <View style={{ flex: 1, backgroundColor: T.bg, paddingLeft: insets.left, paddingRight: insets.right }}>
       {/* Progress — read-only, so no step can be skipped from the header. */}
       <View style={{ position: 'absolute', top: insets.top + 14, left: 22, right: 22, zIndex: 20 }}>
         <PageDots count={STEPS} index={page} />

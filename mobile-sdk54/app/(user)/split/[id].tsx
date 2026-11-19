@@ -299,7 +299,7 @@ export default function HuddlePayScreen() {
         </ReadableColumn>
       </ScrollView>
 
-      <View style={{ position: 'absolute', top: insets.top + 4, left: 16, zIndex: 22 }}>
+      <View style={{ position: 'absolute', top: insets.top + 4, left: insets.left + 16, zIndex: 22 }}>
         <BackButton onPress={() => (router.canGoBack() ? router.back() : router.replace('/(user)/plans'))} />
       </View>
 

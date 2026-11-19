@@ -78,7 +78,7 @@ export default function HuddleJoinScreen() {
     <View style={{ flex: 1, backgroundColor: T.bg }}>
       <ScrollView
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingTop: insets.top + 60, paddingHorizontal: 16, paddingBottom: 40 }}
+        contentContainerStyle={{ paddingTop: insets.top + 60, paddingLeft: insets.left + 16, paddingRight: insets.right + 16, paddingBottom: 40 }}
       >
         <HuddleMark size={56} />
         <ScreenTitle style={{ marginTop: 22 }}>You're invited.</ScreenTitle>

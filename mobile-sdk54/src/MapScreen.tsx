@@ -59,7 +59,7 @@ export function MapTopBar({ activeCount, onFilters, onShowList }: { activeCount:
   const { T } = useApp();
   const insets = useSafeAreaInsets();
   return (
-    <View style={{ position: 'absolute', top: insets.top + 4, right: 16, flexDirection: 'row', alignItems: 'center', gap: 8, zIndex: 8 }}>
+    <View style={{ position: 'absolute', top: insets.top + 4, right: insets.right + 16, flexDirection: 'row', alignItems: 'center', gap: 8, zIndex: 8 }}>
       {onShowList && <ViewSwitch to="list" onPress={onShowList} height={44} />}
       <Touchable onPress={onFilters} scale={0.96} accessibilityLabel={activeCount ? `Filters, ${activeCount} on` : 'Filters'}>
         {activeCount ? (
@@ -167,7 +167,7 @@ export default function MapScreen({ onShowList }: { onShowList?: () => void }) {
       <MapTopBar activeCount={activeCount} onFilters={() => router.push('/(user)/filters')} onShowList={onShowList} />
 
       {located.length > 0 && shown.length === 0 && (
-        <View style={{ position: 'absolute', top: insets.top + 60, left: 16, right: 16, alignItems: 'center' }}>
+        <View style={{ position: 'absolute', top: insets.top + 60, left: insets.left + 16, right: insets.right + 16, alignItems: 'center' }}>
           <Glass radius={12} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: 14, paddingRight: 10, paddingVertical: 8 }}>
             <Text style={{ ...fontUI(400, 14), fontSize: 14, color: T.text }}>No deals match your filters</Text>
             <TextBtn onPress={() => setFilters(DEFAULT_FILTERS)} color={T.accent} size={15} weight={500}>Clear</TextBtn>
@@ -177,7 +177,7 @@ export default function MapScreen({ onShowList }: { onShowList?: () => void }) {
 
       {/* selected mini card */}
       {selDrop && (
-        <FadeIn key={selDrop.id} style={{ position: 'absolute', left: 16, right: 16, bottom: barTop + 12, alignItems: 'center' }}>
+        <FadeIn key={selDrop.id} style={{ position: 'absolute', left: insets.left + 16, right: insets.right + 16, bottom: barTop + 12, alignItems: 'center' }}>
           <View style={{ width: '100%', maxWidth: SELECTED_CARD_MAX_WIDTH }}>
             <DropCardCompact d={selDrop} onPress={() => router.push(`/(user)/event/${selDrop.id}`)} />
           </View>
