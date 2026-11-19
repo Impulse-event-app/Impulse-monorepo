@@ -10,7 +10,7 @@ import { Platform, View } from 'react-native';
 import { ArrangementView, Host, RNHostView, VStack } from '@expo/ui/swift-ui';
 import { arrangementViewStyle, splitArrangementLayoutSize } from '@expo/ui/swift-ui/modifiers';
 import { LIST_PANE_WIDTH } from './layout';
-import { PaneInsets, SplitPane as FlexSplitPane, type SplitPaneProps } from './SplitPane.shared';
+import { DetailCard, ListPane, SplitPane as FlexSplitPane, type SplitPaneProps } from './SplitPane.shared';
 
 const HAS_ARRANGEMENT = parseFloat(String(Platform.Version)) >= 27.1;
 
@@ -23,7 +23,7 @@ export function SplitPane(props: SplitPaneProps) {
           <VStack modifiers={[splitArrangementLayoutSize({ minWidth: 320, idealWidth: LIST_PANE_WIDTH, maxWidth: 480 })]}>
             <RNHostView>
               <View style={{ flex: 1 }}>
-                <PaneInsets side="leading">{props.list}</PaneInsets>
+                <ListPane>{props.list}</ListPane>
               </View>
             </RNHostView>
           </VStack>
@@ -31,7 +31,7 @@ export function SplitPane(props: SplitPaneProps) {
         <ArrangementView.Secondary>
           <RNHostView>
             <View style={{ flex: 1 }}>
-              <PaneInsets side="trailing">{props.detail}</PaneInsets>
+              <DetailCard>{props.detail}</DetailCard>
             </View>
           </RNHostView>
         </ArrangementView.Secondary>

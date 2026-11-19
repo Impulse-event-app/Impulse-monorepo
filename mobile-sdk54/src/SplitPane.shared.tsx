@@ -1,11 +1,12 @@
 // The split (two-pane) layout: a list on the leading side, the selected item's
-// detail beside it. Used by Home and Discover when useLayoutMode() is 'split'
-// (an open iPhone Duo, iPad, a wide browser window).
+// detail beside it in a floating card. Used by Home and Discover when
+// useLayoutMode() is 'split' (an open iPhone Duo in landscape, iPad, a large
+// browser window).
 //
 // The plain flexbox version: web, Android, and iOS below 27.1 (SplitPane.ts
-// re-exports it; SplitPane.ios.tsx falls back to it).
-// iOS 27.1+ uses SplitPane.ios.tsx, which lets the system place the split so
-// it lands on the fold of a partially open iPhone Duo.
+// re-exports it; SplitPane.ios.tsx falls back to it). iOS 27.1+ uses
+// SplitPane.ios.tsx, which lets the system place the split so it lands on the
+// fold of a partially open iPhone Duo. Both use ListPane and DetailCard below.
 import { View } from 'react-native';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from './theme';
@@ -17,27 +18,76 @@ export type SplitPaneProps = {
 };
 
 /**
- * Gives each pane only the safe-area insets on its own outer edge. Screens
- * pad by useSafeAreaInsets(), so without this the list pane would also pad
- * for a rail on the far (detail) edge of the window, and the detail pane for
- * one on the list's edge.
+ * Space kept between content and the display's rounded corners. An open iPhone
+ * Duo in landscape has its status bar in the side rail, so insets.top is 0 and
+ * a header would otherwise start in the corner (the logo was clipped).
  */
-export function PaneInsets({ side, children }: { side: 'leading' | 'trailing'; children: React.ReactNode }) {
+const CORNER_TOP = 18;
+const CORNER_SIDE = 14;
+/** Gutter around the floating detail card. */
+const GUTTER = 10;
+/** Echoes the display's own corner radius. */
+const CARD_RADIUS = 30;
+
+/**
+ * The list pane. Screens pad by useSafeAreaInsets(), so the pane hands them
+ * insets for its own edges only: the leading side and top (with a minimum, to
+ * clear the rounded corners), and nothing on the side facing the detail card.
+ */
+export function ListPane({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets();
-  const value = side === 'leading' ? { ...insets, right: 0 } : { ...insets, left: 0 };
+  const value = {
+    top: Math.max(insets.top, CORNER_TOP),
+    bottom: insets.bottom,
+    left: Math.max(insets.left, CORNER_SIDE),
+    right: 0,
+  };
   return <SafeAreaInsetsContext.Provider value={value}>{children}</SafeAreaInsetsContext.Provider>;
+}
+
+/**
+ * The detail pane: a rounded card floating in a gutter, clear of the corners,
+ * the rail and the home indicator. Inside it the safe area is zero, since the
+ * card itself already sits clear of everything.
+ */
+export function DetailCard({ children }: { children: React.ReactNode }) {
+  const T = useTheme();
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      style={{
+        flex: 1,
+        marginTop: Math.max(insets.top, GUTTER),
+        marginBottom: Math.max(insets.bottom, GUTTER),
+        marginRight: insets.right + GUTTER,
+        marginLeft: GUTTER / 2,
+      }}
+    >
+      <View style={[{ flex: 1, borderCurve: 'continuous', borderRadius: CARD_RADIUS }, T.floatShadow]}>
+        <View
+          style={{
+            flex: 1, overflow: 'hidden', borderCurve: 'continuous', borderRadius: CARD_RADIUS,
+            backgroundColor: T.bg, borderWidth: 1, borderColor: T.line,
+          }}
+        >
+          <SafeAreaInsetsContext.Provider value={{ top: 0, bottom: 0, left: 0, right: 0 }}>
+            {children}
+          </SafeAreaInsetsContext.Provider>
+        </View>
+      </View>
+    </View>
+  );
 }
 
 export function SplitPane({ list, detail }: SplitPaneProps) {
   const T = useTheme();
   return (
-    <View style={{ flex: 1, flexDirection: 'row' }}>
+    <View style={{ flex: 1, flexDirection: 'row', backgroundColor: T.bg }}>
       <View style={{ width: LIST_PANE_WIDTH, maxWidth: '50%' }}>
-        <PaneInsets side="leading">{list}</PaneInsets>
+        <ListPane>{list}</ListPane>
       </View>
-      <View style={{ width: 1, backgroundColor: T.line }} />
       <View style={{ flex: 1 }}>
-        <PaneInsets side="trailing">{detail}</PaneInsets>
+        <DetailCard>{detail}</DetailCard>
       </View>
     </View>
   );

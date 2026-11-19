@@ -308,7 +308,13 @@ export default function HomeScreen() {
       <FadeIn key={d.id} delay={Math.min(i, 8) * 55}>
         {/* Dimming lives on an inner view: FadeIn animates its own opacity. */}
         <View style={{ opacity: voting && !pickable ? 0.4 : 1 }}>
-          <DropCardEditorial d={d} onPress={() => onCard(d.id)} a11yLabel={a11yLabel} a11yHint={a11yHint} />
+          <DropCardEditorial
+            d={d}
+            onPress={() => onCard(d.id)}
+            a11yLabel={a11yLabel}
+            a11yHint={a11yHint}
+            selected={layoutMode === 'split' && selected === d.id}
+          />
           {voting && (
             <View
               pointerEvents="none"

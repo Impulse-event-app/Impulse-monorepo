@@ -249,9 +249,12 @@ export function useScrolled(threshold = 44): [boolean, (e: NativeSyntheticEvent<
   return [scrolled, onScroll];
 }
 
-/** Top clearance for content under a NavBar with a large title. */
+/**
+ * Top clearance for content under a NavBar with a large title: the 44pt bar
+ * plus 14pt of air, so the large title doesn't crowd the brand row above it.
+ */
 export function useNavTop() {
-  return useSafeAreaInsets().top + 52;
+  return useSafeAreaInsets().top + 58;
 }
 
 /**
@@ -380,12 +383,23 @@ function FooterScrim({ opacity = 0.86, extend = 40 }: { opacity?: number; extend
   );
 }
 
-/** Pinned bottom action area that content scrolls beneath. Pad content by ~150. */
-export function FloatingFooter({ children, gap = 10, row }: { children: React.ReactNode; gap?: number; row?: boolean }) {
+/**
+ * Pinned bottom action area that content scrolls beneath. Pad content by ~150.
+ * `solid`: an opaque bar with a hairline instead of the fade. For short panes
+ * (the split layout's detail card), where the fade left text showing through.
+ */
+export function FloatingFooter({ children, gap = 10, row, solid }: { children: React.ReactNode; gap?: number; row?: boolean; solid?: boolean }) {
   const insets = useSafeAreaInsets();
+  const T = useTheme();
   return (
-    <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 20 }}>
-      <FooterScrim />
+    <View
+      pointerEvents="box-none"
+      style={[
+        { position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 20 },
+        solid && { backgroundColor: T.bg, borderTopWidth: 1, borderTopColor: T.line },
+      ]}
+    >
+      {solid ? null : <FooterScrim />}
       {/* Side insets outside the column: clear of iPhone Duo's rail, scrim still full-bleed. */}
       <View pointerEvents="box-none" style={{ paddingLeft: insets.left, paddingRight: insets.right }}>
         <View
@@ -951,10 +965,26 @@ export function dropA11yLabel(d: Drop): string {
   ].filter(Boolean).join(', ');
 }
 
-export function DropCardEditorial({ d, onPress, a11yLabel, a11yHint }: { d: Drop; onPress?: () => void; a11yLabel?: string; a11yHint?: string }) {
+export function DropCardEditorial({ d, onPress, a11yLabel, a11yHint, selected }: {
+  d: Drop; onPress?: () => void; a11yLabel?: string; a11yHint?: string;
+  /** Shown in the split layout's detail card: ringed in the accent. */
+  selected?: boolean;
+}) {
   const T = useTheme();
   return (
-    <Touchable onPress={onPress} scale={0.99} accessibilityLabel={a11yLabel ?? dropA11yLabel(d)} accessibilityHint={a11yHint}>
+    <Touchable
+      onPress={onPress}
+      scale={0.99}
+      accessibilityLabel={a11yLabel ?? dropA11yLabel(d)}
+      accessibilityHint={a11yHint}
+      accessibilityState={selected ? { selected: true } : undefined}
+    >
+      {selected ? (
+        <View
+          pointerEvents="none"
+          style={{ position: 'absolute', top: -4, left: -4, right: -4, bottom: -4, borderCurve: 'continuous', borderRadius: 26, borderWidth: 2, borderColor: T.accent }}
+        />
+      ) : null}
       {/* Whole card is glass, tinted by its own blurred photo; the photo sits inset. */}
       <GlassCard backdrop={venuePhotoUrl(d)} radius={22}>
         <View style={{ margin: 8, marginBottom: 0 }}>

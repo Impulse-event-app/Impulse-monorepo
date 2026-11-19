@@ -54,7 +54,7 @@ export function DealDetail({ id, embedded = false }: { id: string | undefined; e
     <View
       pointerEvents="box-none"
       style={{
-        position: 'absolute', top: insets.top + 4, left: (embedded ? 0 : insets.left) + 16, right: insets.right + 16, zIndex: 22,
+        position: 'absolute', top: insets.top + (embedded ? 14 : 4), left: insets.left + 16, right: insets.right + 16, zIndex: 22,
         flexDirection: 'row', alignItems: 'center', justifyContent: embedded ? 'flex-end' : 'space-between',
       }}
     >
@@ -125,7 +125,7 @@ export function DealDetail({ id, embedded = false }: { id: string | undefined; e
       {head}
 
       {/* booking bar */}
-      <FloatingFooter row gap={16}>
+      <FloatingFooter row gap={16} solid={embedded}>
         <View accessible accessibilityLabel={`${money(d.now)} ${unitLabel(d.unit)}`}>
           <Text style={{ ...fontMono(600), fontSize: 22, letterSpacing: -0.4, color: T.text }}>{money(d.now)}</Text>
           <Text style={{ ...fontUI(400), fontSize: 12.5, color: T.muted }}>{unitLabel(d.unit)}</Text>
