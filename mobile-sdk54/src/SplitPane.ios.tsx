@@ -17,7 +17,10 @@ const HAS_ARRANGEMENT = parseFloat(String(Platform.Version)) >= 27.1;
 export function SplitPane(props: SplitPaneProps) {
   if (!HAS_ARRANGEMENT) return <FlexSplitPane {...props} />;
   return (
-    <Host style={{ flex: 1 }}>
+    // The panes handle safe areas themselves (PaneInsets); without this the
+    // SwiftUI host also kept clear of the home indicator, leaving a strip
+    // across the bottom of both panes.
+    <Host style={{ flex: 1 }} ignoreSafeArea="container">
       <ArrangementView modifiers={[arrangementViewStyle('split', { axes: 'horizontal' })]}>
         <ArrangementView.Primary>
           <VStack modifiers={[splitArrangementLayoutSize({ minWidth: 320, idealWidth: LIST_PANE_WIDTH, maxWidth: 480 })]}>

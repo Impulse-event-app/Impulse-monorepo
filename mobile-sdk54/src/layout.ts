@@ -59,27 +59,29 @@ export function useSideInsets(extra = 0): { paddingLeft: number; paddingRight: n
 }
 
 // ── split-layout selection ───────────────────────────────────
-// The drop shown in the detail pane. A tiny module store rather than screen
-// state, so it survives the screen remounting and is shared by the tab screen
-// (which shows it in its pane) and the event route (which hands it over when
-// the phone unfolds).
-let selectedDeal: string | null = null;
+// The drop shown in each tab's detail pane. Tiny module stores rather than
+// screen state, so they survive the screen remounting and can be set from the
+// event route (which hands its drop to Home's pane when the phone unfolds).
+// Home and Discover keep separate selections: Discover's follows the reel
+// that's playing, and that mustn't change what Home's pane shows.
+export type SplitPaneKey = 'home' | 'discover';
+const selectedDeal: Record<SplitPaneKey, string | null> = { home: null, discover: null };
 const listeners = new Set<() => void>();
 
-export function setSelectedDeal(id: string | null) {
-  if (id === selectedDeal) return;
-  selectedDeal = id;
+export function setSelectedDeal(id: string | null, key: SplitPaneKey = 'home') {
+  if (id === selectedDeal[key]) return;
+  selectedDeal[key] = id;
   listeners.forEach((l) => l());
 }
 
-export function useSelectedDeal(): string | null {
+export function useSelectedDeal(key: SplitPaneKey = 'home'): string | null {
   return useSyncExternalStore(
     (l) => {
       listeners.add(l);
       return () => listeners.delete(l);
     },
-    () => selectedDeal,
-    () => selectedDeal,
+    () => selectedDeal[key],
+    () => selectedDeal[key],
   );
 }
 
