@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect, useIsFocused, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { AppState, FlatList, Image, Pressable, Text, View, type ListViewToken } from 'react-native';
+import { AppState, FlatList, Image, Pressable, Text, useWindowDimensions, View, type ListViewToken } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DarkScope, fontMono, fontUI, useApp } from '../../../src/theme';
 import { Btn, DiscountChip, EmptyState, Scrim, Skeleton, unitLabel, useReduceMotion } from '../../../src/components';
@@ -60,7 +60,12 @@ function ReelItem({ r, height, width, near, playing, paused, onTogglePause }: {
   onTogglePause: () => void;
 }) {
   const tabClearance = useTabBarClearance();
-  const sideInsets = useSideInsets(16);
+  // Pad for the window's safe areas only when the reel reaches the window's
+  // edges. On a wide window (landscape) the 9:16 reel sits in the middle,
+  // clear of the Dynamic Island or rail, and the insets would squash its text.
+  const windowWidth = useWindowDimensions().width;
+  const edgeInsets = useSideInsets(16);
+  const sideInsets = width >= windowWidth - 1 ? edgeInsets : { paddingLeft: 16, paddingRight: 16 };
   const { T, apiDeals } = useApp();
   const router = useRouter();
   const layoutMode = useLayoutMode();

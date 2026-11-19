@@ -13,19 +13,26 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 /** Below this window width the app uses the single-column phone layout. */
 export const SPLIT_MIN_WIDTH = 700;
 
+/**
+ * And below this height. An iPhone in landscape is wide enough (about 874pt)
+ * but only about 400pt tall: the list pane's header and filters would fill it,
+ * leaving no room for drops. Seen on the iPhone 17 Pro simulator.
+ */
+export const SPLIT_MIN_HEIGHT = 500;
+
 /** Width of the list pane in the split layout. The detail pane takes the rest. */
 export const LIST_PANE_WIDTH = 400;
 
 export type LayoutMode = 'compact' | 'split';
 
 /**
- * `'split'` when the window is wide enough for a list and a detail side by
- * side: an open iPhone Duo, an iPad, a wide browser window. Every normal
- * iPhone and a folded Duo are `'compact'` in both orientations.
+ * `'split'` when the window has room for a list and a detail side by side: an
+ * open iPhone Duo in landscape, an iPad, a large browser window. Every normal
+ * iPhone (in either orientation) and a folded Duo are `'compact'`.
  */
 export function useLayoutMode(): LayoutMode {
-  const { width } = useWindowDimensions();
-  return width >= SPLIT_MIN_WIDTH ? 'split' : 'compact';
+  const { width, height } = useWindowDimensions();
+  return width >= SPLIT_MIN_WIDTH && height >= SPLIT_MIN_HEIGHT ? 'split' : 'compact';
 }
 
 /**

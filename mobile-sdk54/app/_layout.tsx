@@ -4,38 +4,60 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import * as Device from 'expo-device';
 import { DesktopNotice } from '../src/DesktopNotice';
 import { StripeRoot } from '../src/StripeRoot';
 import { UpdateGate } from '../src/UpdateGate';
 import { tokens } from '../src/theme';
 
 /**
- * Compact windows prefer portrait (the phone layouts are designed for it).
- * Larger windows (iPad, an open iPhone Duo, Android tablets) rotate freely and
- * use the split layouts in src/layout.ts.
+ * Orientation.
  *
- * Decided by window size, never by device idiom: an iPhone Duo is a phone
- * whose window grows when it unfolds. And it is only a preference: from
- * iOS 27 the system may refuse the lock (iPhone apps are resizable), so every
- * layout must still fill whatever window it is given.
+ * Normal iPhones: portrait only. Locked once at launch and never unlocked.
+ *
+ * iPhone Duo: never locked. It follows the pose and uses the split layout
+ * (src/layout.ts) when open in landscape. A lock is harmful there: a portrait
+ * lock taken while the phone is folded can't be released (unlockAsync()
+ * doesn't hand rotation back), so after unfolding the app stays sideways on
+ * the open display (seen in the Duo simulator, iOS 27.2). Folded, a Duo's
+ * window is phone-sized and the hinge API reports nothing, so the device model
+ * (expo-device) is what tells it apart from a normal iPhone. app.json allows
+ * every orientation so the Duo can rotate; this lock is what keeps other
+ * iPhones upright.
+ *
+ * Android: phone-sized windows stay portrait; tablets and unfolded foldables
+ * rotate freely, decided by window size.
  */
 const COMPACT_MAX = 500;
 
-function usePhonePortraitLock() {
+/**
+ * iPhone Duo (and any future foldable iPhone expo-device names the same way).
+ * Simulators count too: expo-device can only see "arm64" there, never the
+ * simulated model, so the lock is skipped on every simulator to keep the
+ * iPhone Duo simulator testable. Real iPhones report their model.
+ */
+const IS_FOLDABLE_IPHONE =
+  Platform.OS === 'ios' && (!Device.isDevice || /\bDuo\b|Fold/i.test(Device.modelName ?? ''));
+
+function usePortraitLock() {
   const { width, height } = useWindowDimensions();
-  const compact = Math.min(width, height) < COMPACT_MAX;
+  const lock =
+    Platform.OS === 'ios' ? !IS_FOLDABLE_IPHONE
+    : Platform.OS === 'android' ? Math.min(width, height) < COMPACT_MAX
+    : false;
   useEffect(() => {
     if (Platform.OS === 'web') return;
-    if (compact) {
+    if (lock) {
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
-    } else {
+    } else if (Platform.OS === 'android') {
+      // iOS never unlocks: normal iPhones stay locked, and a Duo is never locked.
       ScreenOrientation.unlockAsync().catch(() => {});
     }
-  }, [compact]);
+  }, [lock]);
 }
 
 export default function RootLayout() {
-  usePhonePortraitLock();
+  usePortraitLock();
   // Before the app's own appearance preference loads, follow the system.
   const T = tokens(useColorScheme() !== 'light');
   // Brand v2 uses the system face, so there are no fonts to wait on.
