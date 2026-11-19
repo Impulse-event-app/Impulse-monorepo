@@ -134,8 +134,8 @@ function ReelItem({ r, height, width, near, playing, paused, onTogglePause }: {
 }
 
 /**
- * `fill`: reels span the full width instead of a centred 9:16 column (the
- * split layout's list pane, where the column left black bars either side).
+ * `fill`: reels span the full width even on a wide window (the split layout's
+ * list pane). Portrait-shaped windows always fill.
  * `onActiveDeal`: called with the playing reel's live drop (or null), so the
  * split layout's detail pane can follow the reel on screen.
  */
@@ -149,7 +149,10 @@ function DiscoverFeed({ fill = false, onActiveDeal }: { fill?: boolean; onActive
   const [failed, setFailed] = useState(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const height = size.height;
-  const reelWidth = fill ? size.width : Math.min(size.width, Math.round(size.height * 9 / 16));
+  // Fill the width on any portrait-shaped window: a folded iPhone Duo's outer
+  // screen (about 466×678pt) is squatter than 9:16 and got black bars. Only a
+  // wide window (a desktop browser) keeps the centred 9:16 column.
+  const reelWidth = fill || size.width <= size.height ? size.width : Math.min(size.width, Math.round(size.height * 9 / 16));
   const [activeIndex, setActiveIndex] = useState(0);
   // Reels the viewer has paused — or, under Reduce Motion, not yet started.
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
