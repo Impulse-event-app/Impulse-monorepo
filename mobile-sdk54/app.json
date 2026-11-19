@@ -28,6 +28,7 @@
       "expo-video",
       ["expo-widgets", { "enablePushNotifications": true, "frequentUpdates": true }],
       "expo-status-bar",
+      ["expo-build-properties", { "ios": { "useFrameworks": "dynamic" } }],
       [
         "@stripe/stripe-react-native",
         { "merchantIdentifier": "merchant.au.impulseapp.impulse", "enableGooglePay": true }
