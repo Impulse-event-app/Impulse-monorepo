@@ -116,13 +116,13 @@ function ReelItem({ r, height, width, near, playing, paused, onTogglePause }: {
                   {r.original_price ? <DiscountChip now={r.deal_price ?? 0} usual={r.original_price} /> : null}
                 </View>
               </View>
-              <Btn
-                small
-                onPress={() => (layoutMode === 'split' ? setSelectedDeal(r.deal_id, 'discover') : router.push(`/(user)/event/${r.deal_id}`))}
-                accessibilityHint="Opens the drop to book."
-              >
-                Book
-              </Btn>
+              {/* Open Duo / split layout: no Book here, the drop's own Book now
+                  is in the detail pane beside the reel. */}
+              {layoutMode === 'split' ? null : (
+                <Btn small onPress={() => router.push(`/(user)/event/${r.deal_id}`)} accessibilityHint="Opens the drop to book.">
+                  Book
+                </Btn>
+              )}
             </View>
           ) : (
             <Text style={{ ...fontUI(500), fontSize: 14, color: T.muted, marginTop: 4 }}>No drop live right now</Text>
