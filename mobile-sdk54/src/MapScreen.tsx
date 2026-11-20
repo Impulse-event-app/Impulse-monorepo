@@ -12,6 +12,7 @@ import { fontUI, useApp } from './theme';
 import { DropCardCompact, FadeIn, Glass, Pin, TextBtn, Touchable, ViewSwitch } from './components';
 import { Filter } from './icons';
 import { hapticSelection } from './haptics';
+import { setSelectedDeal, useLayoutMode, useSelectedDeal } from './layout';
 
 // The selected-drop card stays card-sized on iPad instead of spanning the map.
 const SELECTED_CARD_MAX_WIDTH = 460;
@@ -81,7 +82,15 @@ export default function MapScreen({ onShowList }: { onShowList?: () => void }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
-  const [sel, setSel] = useState<string | null>(null);
+  const [cardSel, setCardSel] = useState<string | null>(null);
+  // Split layout (open iPhone Duo, iPad): the map fills the list pane, and a
+  // tapped pin opens its drop in the detail pane beside it, as a list card
+  // does, so there's no card over the map. The highlighted pin follows the
+  // pane's drop, including one picked from the list before switching to the map.
+  const split = useLayoutMode() === 'split';
+  const paneSel = useSelectedDeal();
+  const sel = split ? paneSel : cardSel;
+  const setSel = (id: string | null) => (split ? setSelectedDeal(id) : setCardSel(id));
 
   // Resolve a coordinate for every deal — exact venue location when the backend
   // has it, otherwise the deal's suburb centre. Only mappable deals get a pin.
@@ -102,7 +111,7 @@ export default function MapScreen({ onShowList }: { onShowList?: () => void }) {
   const firstFilters = useRef(true);
   useEffect(() => {
     if (firstFilters.current) { firstFilters.current = false; return; }
-    if (sel && !matchIds.has(sel)) setSel(null);
+    if (!split && sel && !matchIds.has(sel)) setSel(null);
     const coords = shown.map((x) => x.coord);
     if (coords.length === 1) {
       mapRef.current?.animateToRegion({ ...coords[0], latitudeDelta: 0.02, longitudeDelta: 0.02 }, 400);
@@ -146,7 +155,8 @@ export default function MapScreen({ onShowList }: { onShowList?: () => void }) {
         showsMyLocationButton={false}
         toolbarEnabled={false}
         onPress={() => {
-          if (Date.now() - lastMarkerPress.current > 400) setSel(null);
+          // In the split layout an empty-map tap leaves the pane's drop open.
+          if (!split && Date.now() - lastMarkerPress.current > 400) setSel(null);
         }}
         mapPadding={{ top: insets.top + 56, right: 0, bottom: barTop, left: 0 }}
       >
@@ -175,8 +185,8 @@ export default function MapScreen({ onShowList }: { onShowList?: () => void }) {
         </View>
       )}
 
-      {/* selected mini card */}
-      {selDrop && (
+      {/* selected mini card (compact layout only; the split shows the drop in its pane) */}
+      {!split && selDrop && (
         <FadeIn key={selDrop.id} style={{ position: 'absolute', left: insets.left + 16, right: insets.right + 16, bottom: barTop + 12, alignItems: 'center' }}>
           <View style={{ width: '100%', maxWidth: SELECTED_CARD_MAX_WIDTH }}>
             <DropCardCompact d={selDrop} onPress={() => router.push(`/(user)/event/${selDrop.id}`)} />
