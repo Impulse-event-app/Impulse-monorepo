@@ -23,6 +23,7 @@ import {
 import { supabase } from '../../src/supabase';
 import { Lede, Panel, usePagerWidth } from '../../src/onboardingUI';
 import { HeroMotion, HeroWord } from '../../src/HeroMotion';
+import { auPhoneE164, PHONE_PREFIX, stripAuPrefix } from '../../src/PhoneVerify';
 
 function GoogleBtn({ onPress, loading }: { onPress: () => void; loading?: boolean }) {
   const { T } = useApp();
@@ -148,7 +149,9 @@ export default function SignIn() {
 
   const handleSendOtp = () =>
     withAuth(async () => {
-      await sendPhoneOtp(phoneNumber);
+      const e164 = auPhoneE164(phoneNumber);
+      if (!e164) throw new Error('Enter your mobile number, e.g. 412 345 678.');
+      await sendPhoneOtp(e164);
       setOtpCode('');
       setPhoneView('otp');
     }).catch((e) => setAuthError(e.message ?? 'Could not send code. Check the number.'));
@@ -170,7 +173,7 @@ export default function SignIn() {
 
   const handleVerifyOtp = () =>
     withAuth(async () => {
-      const user = await verifyPhoneOtp(phoneNumber, otpCode);
+      const user = await verifyPhoneOtp(auPhoneE164(phoneNumber) ?? '', otpCode);
       if (user) { setPhoneNumber(''); setOtpCode(''); await afterAuth(); }
     }).catch((e) => setAuthError(e.message ?? 'That code didn’t work. Try again.'));
 
@@ -327,18 +330,18 @@ export default function SignIn() {
               <Lede title="What's your number?" body="We text a six-digit code to check it's you." />
               <View style={{ paddingHorizontal: 22, paddingTop: 30, gap: 14 }}>
                 <Field
-                  prefix="+"
+                  prefix={PHONE_PREFIX}
                   value={phoneNumber}
-                  onChangeText={setPhoneNumber}
-                  placeholder="61 412 345 678"
-                  accessibilityLabel="Phone number, with country code"
+                  onChangeText={(t) => setPhoneNumber(stripAuPrefix(t))}
+                  placeholder="412 345 678"
+                  accessibilityLabel="Australian mobile number"
                   keyboardType="phone-pad"
                   textContentType="telephoneNumber"
                   autoComplete="tel"
                   autoFocus
                 />
                 {authError ? <ErrorText>{authError}</ErrorText> : null}
-                <Btn full onPress={handleSendOtp} disabled={phoneNumber.length < 8 || authLoading}>
+                <Btn full onPress={handleSendOtp} disabled={!auPhoneE164(phoneNumber) || authLoading}>
                   {authLoading ? 'Sending…' : 'Send code'}
                 </Btn>
               </View>
@@ -348,7 +351,7 @@ export default function SignIn() {
           {phoneView === 'otp' && (
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
               {backTo('phone', true)}
-              <Lede title="Enter the code." body={`Sent to +${phoneNumber}. It can take a moment to arrive.`} />
+              <Lede title="Enter the code." body={`Sent to ${auPhoneE164(phoneNumber)}. It can take a moment to arrive.`} />
               <View style={{ paddingHorizontal: 22, paddingTop: 30, gap: 16 }}>
                 <CodeInput value={otpCode} onChange={setOtpCode} autoFocus />
                 {authError ? <ErrorText center>{authError}</ErrorText> : null}
