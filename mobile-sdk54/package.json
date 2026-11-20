@@ -30,6 +30,7 @@
     "expo-splash-screen": "~58.0.14",
     "expo-status-bar": "~58.0.5",
     "expo-symbols": "~58.0.5",
+    "expo-system-ui": "~58.0.7",
     "expo-video": "~58.0.14",
     "expo-web-browser": "~58.1.0",
     "expo-widgets": "~58.0.29",

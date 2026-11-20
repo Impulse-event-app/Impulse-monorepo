@@ -44,3 +44,5 @@ yarn-error.*
 /ios
 /android
 credentials.json
+google-services.json
+google-play-service-account.json
