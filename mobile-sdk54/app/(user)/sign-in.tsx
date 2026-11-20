@@ -10,7 +10,7 @@
 // drops them right where they left off.
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View, type ScrollViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { fontUI, useApp } from '../../src/theme';
@@ -52,7 +52,7 @@ export default function SignIn() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { next, back } = useLocalSearchParams<{ next?: string; back?: string }>();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const [W, onPagerLayout] = usePagerWidth();
   // Which panel we're on, so a viewport change can put us back on it. Arriving
   // with a destination means the user asked for something that needs an
@@ -217,7 +217,7 @@ export default function SignIn() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: T.bg }}>
+    <View style={{ flex: 1, backgroundColor: T.bg, paddingLeft: insets.left, paddingRight: insets.right }}>
       <ScrollView
         ref={scrollRef}
         horizontal

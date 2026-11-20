@@ -13,7 +13,7 @@ import { usePushRouting } from '../../src/pushRouting';
 export const unstable_settings = {
   // Deep links (straight to an event, say) get the tabs underneath, so Back
   // lands on the feed rather than the sign-in hero.
-  initialRouteName: '(tabs)',
+  anchor: '(tabs)',
 };
 
 // Routes reachable without a session. The deal feed is public, so guests can

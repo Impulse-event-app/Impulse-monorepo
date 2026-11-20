@@ -256,7 +256,12 @@ export function SplitSelector({
 function Avatar({ name, filled, size = 36 }: { name: string; filled?: Animated.AnimatedInterpolation<number> | number; size?: number }) {
   const { T } = useApp();
   const initial = name.trim().charAt(0).toUpperCase() || '?';
-  const fill = typeof filled === 'number' ? new Animated.Value(filled) : filled ?? new Animated.Value(0);
+  // One interpolation type for both inputs: RN 0.88's strict types can't call
+  // .interpolate on an Animated.Value | AnimatedInterpolation union.
+  const fill: Animated.AnimatedInterpolation<number> =
+    typeof filled === 'number' || filled == null
+      ? new Animated.Value(filled ?? 0).interpolate({ inputRange: [0, 1], outputRange: [0, 1] })
+      : filled;
   return (
     <View style={{ width: size, height: size }}>
       <View
