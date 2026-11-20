@@ -157,11 +157,18 @@ def update_me(
 # Venue owners are refused — their venue, deals and payouts would go with them.
 
 
-def _delete_auth_user(user_id: str) -> None:
-    """Remove the Supabase auth user. Idempotent: an already-missing user is fine."""
+def _require_service_role_key() -> None:
+    """Deletion ends by removing the auth identity, which needs the service role
+    key. Checked before anything is deleted, so a missing key can't leave the
+    data gone but the sign-in still working."""
     if not SUPABASE_SERVICE_ROLE_KEY:
         logger.error("Account deletion requested but SUPABASE_SERVICE_ROLE_KEY is unset")
         raise HTTPException(status_code=503, detail="Account deletion isn't available right now. Try again later.")
+
+
+def _delete_auth_user(user_id: str) -> None:
+    """Remove the Supabase auth user. Idempotent: an already-missing user is fine."""
+    _require_service_role_key()
     resp = httpx.delete(
         f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
         headers={
@@ -190,6 +197,7 @@ def delete_me(
             status_code=409,
             detail="This account runs a venue, so it can't be deleted here. Email support@impulseapp.au and we'll close it with you.",
         )
+    _require_service_role_key()
 
     row = db.query(User).filter(User.id == uid).first()
 
