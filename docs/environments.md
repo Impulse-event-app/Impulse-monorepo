@@ -108,6 +108,42 @@ somewhere else.
    `cd mobile-sdk54 && npx eas-cli build -p ios --profile staging`
    After that CI builds it.
 
+### 5b. Google Play (Android)
+CI builds an Android app bundle on every merge to `dev` (Impulse Staging,
+`au.impulseapp.impulse.staging`) and `main` (Impulse, `au.impulseapp.impulse`).
+It doesn't submit them yet. One-time setup:
+1. **Play Console**: create the developer account (as an organisation, so
+   there's no 12-tester / 14-day closed test before production), then the
+   apps **Impulse** and **Impulse Staging** with the package ids above.
+2. **Firebase** (only for push delivery through FCM; Supabase is still the
+   backend): create a project, add Android apps for both package ids, and
+   download `google-services.json`. Upload it as an EAS **file** env var
+   `GOOGLE_SERVICES_JSON` in `production` and `preview`. Then create an FCM V1
+   service-account key (Firebase → Project settings → Service accounts) and
+   upload it with `npx eas-cli credentials -p android` → each profile → Push
+   Notifications (FCM V1). Without these, the build works but Android gets no push.
+3. **First upload by hand**: download the `.aab` from expo.dev and upload it
+   to Play Console → Testing → Internal testing.
+4. **App signing fingerprint**: Play Console → Test and release → App
+   integrity → copy the app signing key's SHA-256 into
+   `mobile-sdk54/public/.well-known/assetlinks.json` (replacing the
+   placeholder) and also add the upload key's SHA-256 from
+   `eas credentials -p android`. It deploys with the web app, and then
+   huddle and seat links open the app.
+5. **Google Maps**: Google Cloud → Maps SDK for Android key, restricted to
+   both package ids plus the SHA-1 of the upload and app signing keys. Set it
+   as `EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY` in EAS `production` and `preview`.
+6. **Auto-submit (optional)**: create a Play service account with release
+   access and save its key as `mobile-sdk54/google-play-service-account.json`
+   (gitignored). On CI, write it from a secret, then add
+   `--auto-submit-with-profile "$PROFILE"` to the Android build step. It
+   submits to the internal track as a draft (`eas.json` → `submit.*.android`).
+7. **Store listing and policy forms**: Data safety (location, contacts as
+   hashes, phone number, email, payments via Stripe, push token); the
+   account-deletion web URL; content rating (alcohol references); target
+   audience 18+; app access (the review demo account); ads: none; a 512×512
+   icon, a 1024×500 feature graphic, and phone screenshots.
+
 ### 6. EAS environment variables
 - `preview` (staging): the staging values: `EXPO_PUBLIC_API_URL` = staging
   Render URL, staging Supabase URL/anon key, Stripe test publishable key,

@@ -9,7 +9,8 @@
 # Each app is tested only when its folder changes, and each deploy waits for
 # its own tests:
 #   backend/       → pytest (incl. the DB suite on a throwaway Postgres) → Render
-#   mobile-sdk54/  → typecheck → EAS iOS build + TestFlight submit, EAS Hosting (web)
+#   mobile-sdk54/  → typecheck → EAS iOS build + TestFlight submit, EAS Android
+#                    build (app bundle, not submitted), EAS Hosting (web)
 #   venue-web/     → typecheck, lint, build (Vercel deploys it from its git integration)
 #
 # Database migrations run when the backend boots (Render start command:
@@ -182,6 +183,12 @@ jobs:
       # Nothing here submits to App Review; that stays a manual step.
       - name: iOS build → TestFlight
         run: eas build -p ios --profile "$PROFILE" --auto-submit-with-profile "$PROFILE" --non-interactive --no-wait
+      # Android: build an app bundle on EAS. No auto-submit yet: Google needs the
+      # first upload done by hand in Play Console, and submitting needs the Play
+      # service-account key. Download the .aab from expo.dev and upload it, or
+      # run `eas submit -p android --profile <profile>` once the key is set up.
+      - name: Android build
+        run: eas build -p android --profile "$PROFILE" --non-interactive --no-wait
       # Web: export with this environment's EXPO_PUBLIC_* vars inlined, then
       # publish to EAS Hosting (production → impulse.expo.app,
       # staging → impulse--staging.expo.app).

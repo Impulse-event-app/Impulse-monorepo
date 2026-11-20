@@ -11,6 +11,12 @@
 // 2. The Android Google Maps key, injected from the environment so it stays out
 //    of app.json. react-native-maps on Android reads
 //    android.config.googleMaps.apiKey; iOS uses Apple Maps (no key).
+//
+// 3. Android push (FCM). GOOGLE_SERVICES_JSON is an EAS *file* env var holding
+//    the Firebase google-services.json (one file lists both the production and
+//    staging package ids). Firebase is only the FCM transport Expo push needs on
+//    Android; nothing else uses it. Unset, the build still works, just without
+//    Android push.
 const IS_STAGING = process.env.APP_VARIANT === 'staging';
 
 const STAGING_ID = 'au.impulseapp.impulse.staging';
@@ -20,6 +26,7 @@ export default ({ config }) => {
     ...config,
     android: {
       ...config.android,
+      ...(process.env.GOOGLE_SERVICES_JSON && { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }),
       config: {
         ...config.android?.config,
         googleMaps: {

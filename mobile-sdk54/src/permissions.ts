@@ -29,6 +29,23 @@ export async function requestLocationAccess(): Promise<{ granted: boolean; subur
   }
 }
 
+/**
+ * Android only: create the "default" notification channel. Android 13+ won't
+ * show the permission prompt until a channel exists, and the backend's pushes
+ * carry no channelId, so Expo delivers them to "default". HIGH importance
+ * makes them heads-up banners (pay-before-deadline pushes need that).
+ * Idempotent: re-creating an existing channel just updates its name.
+ */
+async function ensureAndroidChannel(Notifications: typeof import('expo-notifications')): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  await Notifications.setNotificationChannelAsync('default', {
+    name: 'Bookings',
+    importance: Notifications.AndroidImportance.HIGH,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#C80815',
+  }).catch(() => {});
+}
+
 /** Ask for notification permission. Returns whether it was granted. */
 export async function requestNotificationAccess(): Promise<boolean> {
   try {
@@ -38,6 +55,7 @@ export async function requestNotificationAccess(): Promise<boolean> {
       return res === 'granted';
     }
     const Notifications = await import('expo-notifications');
+    await ensureAndroidChannel(Notifications);
     const { status } = await Notifications.requestPermissionsAsync();
     return status === 'granted';
   } catch {
@@ -56,6 +74,7 @@ export async function syncPushToken({ ask = false }: { ask?: boolean } = {}): Pr
   if (Platform.OS === 'web') return 'web: no push tokens';
   try {
     const Notifications = await import('expo-notifications');
+    await ensureAndroidChannel(Notifications);
     let { status } = await Notifications.getPermissionsAsync();
     // Never asked (skipped onboarding, or signed up before it asked): ask
     // now. iOS only ever shows this once, so it can't nag.

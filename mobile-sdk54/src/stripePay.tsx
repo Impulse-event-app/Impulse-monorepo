@@ -20,6 +20,8 @@ type SheetIntent =
   | { paymentIntentClientSecret: string; setupIntentClientSecret?: undefined }
   | { setupIntentClientSecret: string; paymentIntentClientSecret?: undefined };
 
+const STRIPE_TEST_MODE = (process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '').startsWith('pk_test_');
+
 export class SheetError extends Error {}
 
 export function useStripePay(): {
@@ -39,7 +41,9 @@ export function useStripePay(): {
       customerSessionClientSecret,
       ...intent,
       applePay: { merchantCountryCode: 'AU' },
-      googlePay: { merchantCountryCode: 'AU', testEnv: __DEV__ },
+      // Google Pay's test environment follows the Stripe key, not the build
+      // type: staging release builds use test keys and need it too.
+      googlePay: { merchantCountryCode: 'AU', testEnv: STRIPE_TEST_MODE },
       // The app's own scheme (impulse:// or impulse-staging://), so 3D Secure
       // returns to whichever variant started the payment.
       returnURL: Linking.createURL('stripe-redirect'),

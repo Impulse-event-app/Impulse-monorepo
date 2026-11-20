@@ -42,12 +42,22 @@
       "ios": {
         "ascAppId": "6811502068",
         "appleTeamId": "546PY362R7"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "track": "internal",
+        "releaseStatus": "draft"
       }
     },
     "staging": {
       "ios": {
         "ascAppId": "6836190156",
         "appleTeamId": "546PY362R7"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "track": "internal",
+        "releaseStatus": "draft"
       }
     }
   }
