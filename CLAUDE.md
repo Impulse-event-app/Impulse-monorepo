@@ -9,7 +9,7 @@ its own CLAUDE.md. Full environment setup: `docs/environments.md`.
 | Branch | Environment | Backend (Render) | Database | Stripe | iOS app | Venue portal |
 |---|---|---|---|---|---|---|
 | `dev` | staging | `impulse-staging` | staging Supabase (`pdcevxkvgtptjczzsmkh`) | test keys | **Impulse Staging** (TestFlight) | dev.venues.impulseapp.au |
-| `main` | production | `Impulse-monorepo` | production Supabase | live keys | **Impulse** (TestFlight → App Store) | venues.impulseapp.au |
+| `main` | production | `Impulse-production` (impulse-monorepo.onrender.com) | production Supabase | live keys | **Impulse** (TestFlight → App Store) | venues.impulseapp.au |
 
 Flow:
 1. Branch off `dev` (`git switch dev && git pull && git switch -c my-change`).

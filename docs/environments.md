@@ -4,7 +4,7 @@
 |---|---|---|---|
 | Database | Local Postgres or the staging DB | Supabase project (current one, `pdcevxkvgtptjczzsmkh`) | New Supabase project, real data only |
 | Stripe | Test keys | Test keys | Live keys |
-| Backend | `uv run uvicorn main:app --reload` | Render: `impulse-staging` | Render: `Impulse-monorepo` |
+| Backend | `uv run uvicorn main:app --reload` | Render: `impulse-staging` | Render: `Impulse-production` (URL still `impulse-monorepo.onrender.com`) |
 | venue-web | `npm run dev` | `dev.venues.impulseapp.au` (Vercel, `dev` branch) | `venues.impulseapp.au` (Vercel, `main`) |
 | iOS app | Simulator / dev build | **Impulse Staging** (`au.impulseapp.impulse.staging`) on TestFlight | **Impulse** (`au.impulseapp.impulse`): TestFlight, then App Store |
 | Web app | `npx expo start --web` | `impulse--staging.expo.app` | `impulse.expo.app` |
@@ -93,7 +93,7 @@ somewhere else.
    Supabase keys, Stripe **test** keys, `APNS_BUNDLE_ID` and `APPLE_CLIENT_ID` =
    `au.impulseapp.impulse.staging`.
    ✱ Settings → Deploy Hook → GitHub secret `RENDER_STAGING_DEPLOY_HOOK_URL`.
-2. **Production service `Impulse-monorepo`**: change the start command to the
+2. **Production service `Impulse-production`** (formerly `Impulse-monorepo`; URL unchanged): change the start command to the
    one above, set `APP_ENV=production`, and switch DB/Supabase/Stripe values to
    the new production project and Stripe live keys.
 
