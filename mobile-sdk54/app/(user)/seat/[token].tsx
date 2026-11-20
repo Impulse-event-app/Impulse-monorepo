@@ -61,7 +61,7 @@ export default function SeatLandingScreen() {
     <View style={{ flex: 1, backgroundColor: T.bg }}>
       <ScrollView
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingTop: insets.top + 60, paddingHorizontal: 16, paddingBottom: 40 }}
+        contentContainerStyle={{ paddingTop: insets.top + 60, paddingLeft: insets.left + 16, paddingRight: insets.right + 16, paddingBottom: 40 }}
       >
         {error ? (
           <EmptyState title="This link isn't working." body={error} />
@@ -118,7 +118,7 @@ export default function SeatLandingScreen() {
           </>
         )}
       </ScrollView>
-      <View style={{ position: 'absolute', top: insets.top + 4, left: 16, zIndex: 22 }}>
+      <View style={{ position: 'absolute', top: insets.top + 4, left: insets.left + 16, zIndex: 22 }}>
         <BackButton onPress={() => (router.canGoBack() ? router.back() : router.replace('/(user)/home'))} />
       </View>
     </View>

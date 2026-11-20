@@ -6,27 +6,29 @@
 // (or who's already onboarded) just in case.
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View, type ScrollViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ACCESSIBILITY_OPTIONS, CATEGORIES, SYDNEY_SUBURBS } from '../../src/data';
 import { fontMono, fontUI, useApp } from '../../src/theme';
 import { Btn, Chip, Group, Label, Row, TextBtn } from '../../src/components';
 import { Close, GlyphAccess, GlyphBell, GlyphCard, GlyphPin, Search } from '../../src/icons';
-import { isOnboarded, markOnboarded, syncUserProfile } from '../../src/auth';
+import { isOnboarded, markOnboarded, signOut, syncUserProfile } from '../../src/auth';
 import { requestLocationAccess, requestNotificationAccess, syncPushToken } from '../../src/permissions';
 import { supabase } from '../../src/supabase';
 import { GlyphPlate, Lede, PageDots, Panel, usePagerWidth } from '../../src/onboardingUI';
 import { useWallet, WalletPanel } from '../../src/wallet';
+import { hasVerifiedPhone, PhoneVerify, PHONE_REASON } from '../../src/PhoneVerify';
+import { syncContactIdentity } from '../../src/api';
 
 const SUBURBS = ['Sydney CBD', 'Surry Hills', 'Newtown', 'Bondi', 'Marrickville', 'Enmore', 'Darlinghurst', 'Redfern', 'Chippendale', 'Glebe', 'Paddington', 'Manly'];
 const ACTIVITIES = CATEGORIES.filter((c) => c !== 'All');
-const STEPS = 7; // location, notifications, age, suburb, accessibility, activities, card
+const STEPS = 8; // location, notifications, age, phone, suburb, accessibility, activities, card
 
 export default function Onboarding() {
   const { T, setProfile } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const [W, onPagerLayout] = usePagerWidth();
   const [page, setPage] = useState(0);
   const [suburb, setSuburb] = useState<string | null>(null);
@@ -40,6 +42,7 @@ export default function Onboarding() {
   // Gate rendering until the session guard resolves, so we never flash the
   // onboarding steps at someone who's about to be redirected away.
   const [ready, setReady] = useState(false);
+  const [verifiedPhone, setVerifiedPhone] = useState<string | null>(null);
   const wallet = useWallet();
   const hasSavedCard = !!wallet.cards?.length;
 
@@ -48,6 +51,11 @@ export default function Onboarding() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) { router.replace('/(user)/sign-in'); return; }
       if (isOnboarded(session)) { router.replace('/(user)/home'); return; }
+      if (hasVerifiedPhone(session)) {
+        // Signed in by SMS code: the number is already verified.
+        setVerifiedPhone(session.user.phone ?? null);
+        syncContactIdentity().catch(() => {});
+      }
       setReady(true);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -137,7 +145,7 @@ export default function Onboarding() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: T.bg }}>
+    <View style={{ flex: 1, backgroundColor: T.bg, paddingLeft: insets.left, paddingRight: insets.right }}>
       {/* Progress — read-only, so no step can be skipped from the header. */}
       <View style={{ position: 'absolute', top: insets.top + 14, left: 22, right: 22, zIndex: 20 }}>
         <PageDots count={STEPS} index={page} />
@@ -158,15 +166,16 @@ export default function Onboarding() {
           inactive={page !== 0}
           footer={
             <>
-              <Btn full onPress={allowLocation} disabled={permBusy}>{permBusy ? 'Asking…' : 'Allow location'}</Btn>
-              <TextBtn onPress={next}>Not now</TextBtn>
+              {/* One neutral button straight to the system prompt, which is
+                  where the user decides (App Review 5.1.1(iv)). */}
+              <Btn full onPress={allowLocation} disabled={permBusy}>Continue</Btn>
             </>
           }
         >
           {centred(
             <GlyphPin color={T.accent} />,
-            "What's on near you",
-            "We use your location while you're looking. Never in the background.",
+            'Find your home suburb',
+            "Next, iOS asks to share your location. We use it once to suggest your suburb, and never in the background.",
           )}
         </Panel>
 
@@ -176,15 +185,14 @@ export default function Onboarding() {
           inactive={page !== 1}
           footer={
             <>
-              <Btn full onPress={allowNotifications} disabled={permBusy}>{permBusy ? 'Asking…' : 'Turn on notifications'}</Btn>
-              <TextBtn onPress={next}>Not now</TextBtn>
+              <Btn full onPress={allowNotifications} disabled={permBusy}>Continue</Btn>
             </>
           }
         >
           {centred(
             <GlyphBell color={T.accent} />,
-            'One nudge, not a daily blast',
-            'A notification when something opens up nearby tonight.',
+            'Know when plans change',
+            'Next, iOS asks about notifications. We only send booking updates and invites from friends.',
           )}
         </Panel>
 
@@ -194,16 +202,16 @@ export default function Onboarding() {
           inactive={page !== 2}
           footer={
             <>
-              <Btn full onPress={() => { setAgeBracket(18); next(); }}>Yes, I'm 18 or over</Btn>
-              <TextBtn
-                onPress={() => {
-                  setAgeDeclined(true);
-                  setAgeBracket(null);
-                  setTimeout(next, 650);
-                }}
-              >
-                I'm under 18
-              </TextBtn>
+              {ageDeclined ? (
+                // Accounts are 18+ (Terms), and the app is rated 18+ because
+                // venues serve alcohol, so an under-18 answer ends here.
+                <Btn full onPress={() => { signOut().catch(() => {}).finally(() => router.replace('/(user)/sign-in')); }}>Sign out</Btn>
+              ) : (
+                <>
+                  <Btn full onPress={() => { setAgeBracket(18); next(); }}>Yes, I'm 18 or over</Btn>
+                  <TextBtn onPress={() => setAgeDeclined(true)}>I'm under 18</TextBtn>
+                </>
+              )}
             </>
           }
         >
@@ -223,17 +231,39 @@ export default function Onboarding() {
                 accessibilityLiveRegion="polite"
                 style={{ marginTop: 18, marginHorizontal: 22, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: T.surface, borderCurve: 'continuous', borderRadius: 16, borderWidth: 1, borderColor: T.line, maxWidth: 360 }}
               >
-                <Text style={{ ...fontUI(400), fontSize: 15, color: T.text }}>We'll hide venues that serve alcohol.</Text>
+                <Text style={{ ...fontUI(400), fontSize: 15, color: T.text }}>Sorry, Impulse is only for people aged 18 and over.</Text>
               </View>
             ) : undefined,
           )}
         </Panel>
 
-        {/* 3 — suburb */}
+        {/* 3 — mobile number (required; no skip). */}
         <Panel
           width={W}
           top={top + 18}
           inactive={page !== 3}
+          footer={verifiedPhone ? <Btn full onPress={next}>Continue</Btn> : undefined}
+        >
+          <Lede title="Your mobile number" body={PHONE_REASON} />
+          <View style={{ paddingHorizontal: 22, paddingTop: 24 }}>
+            {verifiedPhone ? (
+              <Text style={{ ...fontUI(500), fontSize: 17, color: T.text }}>{/^\d+$/.test(verifiedPhone) ? `+${verifiedPhone} is verified.` : 'Your number is verified.'}</Text>
+            ) : page === 3 ? (
+              <PhoneVerify
+                onVerified={() => {
+                  supabase.auth.getSession().then(({ data }) => setVerifiedPhone(data.session?.user?.phone || 'verified'));
+                  next();
+                }}
+              />
+            ) : null}
+          </View>
+        </Panel>
+
+        {/* 4 — suburb */}
+        <Panel
+          width={W}
+          top={top + 18}
+          inactive={page !== 4}
           footer={<Btn full onPress={next} disabled={!suburb}>{suburb ? `Set to ${suburb}` : 'Pick your suburb'}</Btn>}
         >
           <Lede title="Where do you start from?" body="We sort by what's closest. Change it any time." />
@@ -275,11 +305,11 @@ export default function Onboarding() {
           </View>
         </Panel>
 
-        {/* 4 — accessibility */}
+        {/* 5 — accessibility */}
         <Panel
           width={W}
           top={top + 18}
-          inactive={page !== 4}
+          inactive={page !== 5}
           footer={
             <>
               <Btn full onPress={next}>{access.length === 0 ? 'None of these' : `Continue · ${access.length} selected`}</Btn>
@@ -298,11 +328,11 @@ export default function Onboarding() {
           </View>
         </Panel>
 
-        {/* 5 — activities */}
+        {/* 6 — activities */}
         <Panel
           width={W}
           top={top + 18}
-          inactive={page !== 5}
+          inactive={page !== 6}
           footer={
             <>
               <Btn full onPress={next} disabled={acts.length === 0}>{acts.length === 0 ? 'Pick a few' : `Done · ${acts.length} picked`}</Btn>
@@ -318,13 +348,13 @@ export default function Onboarding() {
           </View>
         </Panel>
 
-        {/* 6 — card on file. Always skippable: a card wall at the end of
+        {/* 7 — card on file. Always skippable: a card wall at the end of
             onboarding is a good way to lose someone who hasn't booked yet.
             Skipping loses nothing — checkout still offers "save this card". */}
         <Panel
           width={W}
           top={top + 18}
-          inactive={page !== 6}
+          inactive={page !== 7}
           footer={
             <>
               {hasSavedCard && <Btn full onPress={complete}>Done</Btn>}

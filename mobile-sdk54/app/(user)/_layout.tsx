@@ -3,14 +3,17 @@ import { Stack, usePathname, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
 import { AppProvider, useTheme } from '../../src/theme';
+import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../../src/supabase';
+import { isOnboarded } from '../../src/auth';
+import { hasVerifiedPhone } from '../../src/PhoneVerify';
 import { NATIVE_SHEETS } from '../../src/components';
 import { usePushRouting } from '../../src/pushRouting';
 
 export const unstable_settings = {
   // Deep links (straight to an event, say) get the tabs underneath, so Back
   // lands on the feed rather than the sign-in hero.
-  initialRouteName: '(tabs)',
+  anchor: '(tabs)',
 };
 
 // Routes reachable without a session. The deal feed is public, so guests can
@@ -32,6 +35,13 @@ function isPublicPath(pathname: string): boolean {
   return p.startsWith('/event/') || p.startsWith('/legal/') || p.startsWith('/huddle/join/') || p.startsWith('/seat/');
 }
 
+// Screens a signed-in user without a phone can still use: the phone screen
+// itself, sign-in/onboarding, and the legal docs it links to.
+function isPhoneExempt(pathname: string): boolean {
+  const p = pathname.replace(/^\/\(user\)/, '');
+  return p === '/phone' || p === '/sign-in' || p === '/onboarding' || p.startsWith('/legal/');
+}
+
 // Gates every other route in this group behind a live session, so a direct
 // URL or deep link (e.g. straight to /claim/abc) can't skip sign-in. Re-checks
 // on every navigation (matters on web, where any path can be typed) and reacts
@@ -40,29 +50,38 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const T = useTheme();
   const pathname = usePathname();
   const router = useRouter();
-  const [hasSession, setHasSession] = useState<boolean | null>(null);
+  // undefined = not known yet, null = signed out.
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
+  const hasSession = session === undefined ? null : !!session;
 
   useEffect(() => {
     let active = true;
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (active) setHasSession(!!session);
+    supabase.auth.getSession().then(({ data }) => {
+      if (active) setSession(data.session);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (active) setHasSession(!!session);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      if (active) setSession(s);
     });
     return () => { active = false; subscription.unsubscribe(); };
   }, []);
 
+  // Every account needs a verified mobile number. Onboarding asks new users;
+  // anyone signed in and onboarded without one is sent to /phone, which also
+  // lets them sign out or delete the account.
+  const needsPhone = !!session && isOnboarded(session) && !hasVerifiedPhone(session) && !isPhoneExempt(pathname);
+
   useEffect(() => {
     if (hasSession === false && !isPublicPath(pathname)) {
       router.replace({ pathname: '/(user)/sign-in', params: { next: pathname } });
+    } else if (needsPhone) {
+      router.replace('/(user)/phone');
     }
-  }, [hasSession, pathname, router]);
+  }, [hasSession, needsPhone, pathname, router]);
 
   // Blank (never the route underneath) while the session is unknown, or once
   // we know there isn't one and this path needs it — so protected content
   // can't flash on screen a frame before the redirect above kicks in.
-  const blocked = hasSession === null || (hasSession === false && !isPublicPath(pathname));
+  const blocked = hasSession === null || (hasSession === false && !isPublicPath(pathname)) || needsPhone;
   if (blocked) {
     return <View style={{ flex: 1, backgroundColor: T.bg }} />;
   }
@@ -110,6 +129,7 @@ function UserStack() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="sign-in" />
         <Stack.Screen name="onboarding" />
+        <Stack.Screen name="phone" options={{ gestureEnabled: false }} />
         <Stack.Screen name="event/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="claim/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="huddle/new" options={sheet([0.6, 1])} />

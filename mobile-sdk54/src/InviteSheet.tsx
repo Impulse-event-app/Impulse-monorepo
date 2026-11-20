@@ -1,17 +1,23 @@
 // InviteSheet.tsx — pick who's taking a seat in a Huddle Pay booking.
-// Search Impulse by name (people you've booked with come first); picking
-// someone saves the seat for them and sends them a push. For friends who
-// aren't on Impulse yet, the seat's link can be shared instead.
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Platform, ScrollView, Text, View } from 'react-native';
+// Two ways to find someone on Impulse: people you've booked with before, and
+// (when you tap for it) people in your phone's contacts. There's no search of
+// everyone on Impulse. For friends who aren't on Impulse yet, the seat's link
+// can be shared instead. Picking someone saves the seat and sends them a push.
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Linking, Modal, Platform, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fontUI, useApp } from './theme';
-import { searchUsers, UserSearchResult } from './api';
-import { Field, Group, Label, Row, TextBtn } from './components';
+import { recentPeople, UserSearchResult } from './api';
+import { ContactFriend, findFriendsInContacts } from './contacts';
+import { Btn, Group, Label, Row, TextBtn } from './components';
 import { ShareGlyph } from './icons';
 
-const MIN_CHARS = 3;
-const DEBOUNCE_MS = 250;
+type ContactsState =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | { kind: 'done'; friends: ContactFriend[]; limited: boolean }
+  | { kind: 'denied' }
+  | { kind: 'error'; message: string };
 
 export function InviteSheet({
   visible, onPick, onShareLink, onClose,
@@ -23,27 +29,29 @@ export function InviteSheet({
 }) {
   const { T } = useApp();
   const insets = useSafeAreaInsets();
-  const [q, setQ] = useState('');
-  const [results, setResults] = useState<UserSearchResult[] | null>(null);
-  const seq = useRef(0);
-
-  useEffect(() => { if (!visible) { setQ(''); setResults(null); } }, [visible]);
+  const [recent, setRecent] = useState<UserSearchResult[] | null>(null);
+  const [contacts, setContacts] = useState<ContactsState>({ kind: 'idle' });
 
   useEffect(() => {
-    if (!visible) return;
-    const term = q.trim();
-    if (term.length > 0 && term.length < MIN_CHARS) { setResults(null); return; }
-    const mine = ++seq.current;
-    const t = setTimeout(() => {
-      searchUsers(term)
-        .then((r) => { if (mine === seq.current) setResults(r); })
-        .catch(() => { if (mine === seq.current) setResults([]); });
-    }, term ? DEBOUNCE_MS : 0);
-    return () => clearTimeout(t);
-  }, [q, visible]);
+    if (!visible) { setRecent(null); return; }
+    recentPeople().then(setRecent).catch(() => setRecent([]));
+  }, [visible]);
 
-  const term = q.trim();
-  const tooShort = term.length > 0 && term.length < MIN_CHARS;
+  // Only on a tap, with the reason on screen: the iOS contacts prompt must
+  // never appear out of context (App Review 5.1.1).
+  const loadContacts = async () => {
+    setContacts({ kind: 'loading' });
+    try {
+      const r = await findFriendsInContacts();
+      if (r.status === 'ok') setContacts({ kind: 'done', friends: r.friends, limited: r.limited });
+      else if (r.status === 'denied') setContacts({ kind: 'denied' });
+      else setContacts({ kind: 'error', message: 'Contacts are only available in the iPhone app.' });
+    } catch (e) {
+      setContacts({ kind: 'error', message: e instanceof Error ? e.message : 'Couldn’t read your contacts.' });
+    }
+  };
+
+  const recentIds = new Set((recent ?? []).map((u) => u.id));
 
   return (
     <Modal
@@ -59,45 +67,59 @@ export function InviteSheet({
           </Text>
           <TextBtn onPress={onClose}>Done</TextBtn>
         </View>
-        <View style={{ paddingHorizontal: 16, marginTop: 14 }}>
-          <Field
-            value={q}
-            onChangeText={setQ}
-            placeholder="Search by name"
-            autoFocus
-            autoCorrect={false}
-            autoCapitalize="words"
-            returnKeyType="search"
-            accessibilityLabel="Search people on Impulse"
-          />
-          <Label style={{ marginTop: 8, marginHorizontal: 4 }}>
-            They'll get an invite with their share, and the spot shows up in their Plans.
-          </Label>
-        </View>
+        <Label style={{ marginTop: 8, marginHorizontal: 20 }}>
+          They'll get an invite with their share, and the spot shows up in their Plans.
+        </Label>
 
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}>
-          {tooShort ? (
-            <Label style={{ marginTop: 24, textAlign: 'center' }}>Keep typing — at least 3 letters.</Label>
-          ) : results === null ? (
+          {recent === null ? (
             <ActivityIndicator color={T.accent} style={{ marginTop: 28 }} />
-          ) : results.length === 0 ? (
-            <Label style={{ marginTop: 24, textAlign: 'center', lineHeight: 18 }}>
-              {term ? `No one on Impulse matches “${term}”.` : 'Search for a friend by name.'}
-            </Label>
-          ) : (
-            <Group label={term ? 'On Impulse' : "People you've booked with"}>
-              {results.map((u) => (
-                <Row
-                  key={u.id}
-                  icon={<Initial name={u.display_name} />}
-                  label={u.display_name}
-                  sublabel={term && u.recent ? "You've booked together" : undefined}
-                  chevron={false}
-                  onPress={() => onPick(u)}
-                />
+          ) : recent.length > 0 ? (
+            <Group label="People you've booked with">
+              {recent.map((u) => (
+                <Row key={u.id} icon={<Initial name={u.display_name} />} label={u.display_name} chevron={false} onPress={() => onPick(u)} />
               ))}
             </Group>
-          )}
+          ) : null}
+
+          <Group label="From your contacts" style={{ marginTop: 28 }}>
+            {contacts.kind === 'idle' && (
+              <View style={{ padding: 16, gap: 12 }}>
+                <Label style={{ lineHeight: 19 }}>
+                  See which of your contacts are on Impulse. Numbers and emails are checked in a scrambled form and never stored.
+                </Label>
+                <Btn full variant="secondary" onPress={loadContacts}>Find friends in contacts</Btn>
+              </View>
+            )}
+            {contacts.kind === 'loading' && <ActivityIndicator color={T.accent} style={{ margin: 20 }} />}
+            {contacts.kind === 'denied' && (
+              <View style={{ padding: 16, gap: 12 }}>
+                <Label style={{ lineHeight: 19 }}>Impulse doesn't have access to your contacts. You can turn it on in Settings, or send a link instead.</Label>
+                <TextBtn onPress={() => Linking.openSettings()}>Open Settings</TextBtn>
+              </View>
+            )}
+            {contacts.kind === 'error' && <Label style={{ padding: 16, lineHeight: 19 }}>{contacts.message}</Label>}
+            {contacts.kind === 'done' && (
+              contacts.friends.filter((f) => !recentIds.has(f.id)).length === 0 ? (
+                <Label style={{ padding: 16, lineHeight: 19 }}>
+                  {contacts.limited
+                    ? 'None of the contacts you shared are on Impulse yet. You can share more in Settings, or send a link.'
+                    : 'None of your contacts are on Impulse yet. Send them a link instead.'}
+                </Label>
+              ) : (
+                contacts.friends.filter((f) => !recentIds.has(f.id)).map((f) => (
+                  <Row
+                    key={f.id}
+                    icon={<Initial name={f.name} />}
+                    label={f.name}
+                    sublabel={f.displayName !== f.name ? `On Impulse as ${f.displayName}` : undefined}
+                    chevron={false}
+                    onPress={() => onPick({ id: f.id, display_name: f.displayName, recent: false })}
+                  />
+                ))
+              )
+            )}
+          </Group>
 
           {onShareLink && (
             <Group label="Not on Impulse yet?" style={{ marginTop: 28 }}>

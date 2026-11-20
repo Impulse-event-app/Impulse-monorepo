@@ -46,7 +46,7 @@
     },
     "staging": {
       "ios": {
-        "ascAppId": "REPLACE_WITH_STAGING_ASC_APP_ID",
+        "ascAppId": "6836190156",
         "appleTeamId": "546PY362R7"
       }
     }

@@ -128,7 +128,8 @@ def env():
         current["email"] = f"{who}@example.test"
         return client
 
-    yield {"as": as_, "ids": ids, "deals": deals, "charges": charges, "engine": engine, "Session": Session}
+    yield {"as": as_, "ids": ids, "deals": deals, "charges": charges, "engine": engine, "Session": Session,
+           "claims": current}
 
     main.app.dependency_overrides.clear()
     for (mod, name), fn in saved.items():
@@ -424,15 +425,44 @@ def test_cancelling_a_held_booking_captures_the_deposit(env):
 
 # ── Search ───────────────────────────────────────────────────────────────────
 
-def test_user_search_is_name_only_and_needs_three_letters(env):
+def test_user_search_has_no_directory_only_people_you_have_booked_with(env):
     host = env["as"]("host")
-    hits = ok(host.get("/users/search", params={"q": "Samm"}))
-    assert [h["display_name"] for h in hits] == ["Sammy Tester"]
-    assert all(set(h) == {"id", "display_name", "recent"} for h in hits)
-    assert all(h["recent"] for h in ok(host.get("/users/search", params={"q": "Sa"})))
-    assert not any(h["id"] == env["ids"]["host"] for h in ok(host.get("/users/search", params={"q": "Rahul"})))
-    assert ok(host.get("/users/search", params={"q": "sam@example.test"}))[0]["id"] == env["ids"]["sam"]
-    assert ok(host.get("/users/search", params={"q": "sam@example"})) == []
+    # By the time this runs, host has booked with others; whatever comes back
+    # is only those people, and a name, email or phone query finds nobody new.
+    recent = ok(host.get("/users/search"))
+    assert all(h["recent"] for h in recent)
+    assert ok(host.get("/users/search", params={"q": "Venue Owner"})) == recent
+    assert ok(host.get("/users/search", params={"q": "owner@example.test"})) == recent
+
+
+def test_contacts_match_only_verified_identities(env):
+    import contact_match as cm
+    claims = env["claims"]
+
+    # Jo verifies a phone number; Alex signed up by email/password only.
+    env["as"]("jo")
+    claims.update(phone="61400111222", app_metadata={"providers": ["email", "phone"]})
+    assert ok(env["as"]("jo").post("/users/me/contact-identity")) == {"phone_findable": True, "email_findable": False}
+    claims.pop("phone"); claims.pop("app_metadata")
+    assert ok(env["as"]("alex").post("/users/me/contact-identity")) == {"phone_findable": False, "email_findable": False}
+
+    host = env["as"]("host")
+    jo_hash = cm.hash_identifier("61400111222")
+    alex_email_hash = cm.hash_identifier("alex@example.test")
+    hits = ok(host.post("/users/match-contacts", json={"hashes": [jo_hash, alex_email_hash, "junk"]}))
+    assert hits == [{"id": env["ids"]["jo"], "display_name": "Jo Tester", "hash": jo_hash}]
+
+    # Your own number never matches yourself.
+    assert ok(env["as"]("jo").post("/users/match-contacts", json={"hashes": [jo_hash]})) == []
+
+
+def test_contacts_match_is_rate_limited(env, monkeypatch):
+    import contact_match as cm
+    monkeypatch.setattr(cm, "budget", cm.HashBudget(limit=3))
+    host = env["as"]("host")
+    assert ok(host.post("/users/match-contacts", json={"hashes": [f"{i:064x}" for i in range(3)]})) == []
+    r = host.post("/users/match-contacts", json={"hashes": [f"{9:064x}"]})
+    assert r.status_code == 429
 
 
 # ── Live Activities ──────────────────────────────────────────────────────────

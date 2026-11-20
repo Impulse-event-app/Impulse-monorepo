@@ -28,8 +28,17 @@ function HeroVideo({ url, poster, playing, width, height }: { url: string; poste
   );
 }
 
-export function HeroMedia({ d, height }: { d: Drop; height: number }) {
-  const { width } = useWindowDimensions();
+export function HeroMedia({ d, height: preferredHeight }: { d: Drop; height: number }) {
+  // Size to our own container, not the window: in the split layout (open
+  // iPhone Duo, iPad) the hero sits in the detail pane, which is narrower than
+  // the window. The window width is only the first-frame guess. Re-measured on
+  // every layout, so a fold or unfold mid-session resizes the pages.
+  const window = useWindowDimensions();
+  const [measured, setMeasured] = useState(0);
+  const width = measured || window.width;
+  // Never more than ~45% of the window's height, so a short, wide window (an
+  // open Duo in landscape) still shows the deal below the hero.
+  const height = Math.min(preferredHeight, Math.round(window.height * 0.45));
   const reduceMotion = useReduceMotion();
   const [page, setPage] = useState(0);
 
@@ -39,7 +48,7 @@ export function HeroMedia({ d, height }: { d: Drop; height: number }) {
   ];
 
   if (pages.length === 0) {
-    return <Placeholder label={`${d.cat} · venue photo`} style={{ height }} />;
+    return <Placeholder label={d.cat} style={{ height }} />;
   }
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -48,7 +57,7 @@ export function HeroMedia({ d, height }: { d: Drop; height: number }) {
   };
 
   return (
-    <View style={{ height }}>
+    <View style={{ height }} onLayout={(e) => setMeasured(Math.round(e.nativeEvent.layout.width))}>
       <ScrollView
         horizontal
         pagingEnabled

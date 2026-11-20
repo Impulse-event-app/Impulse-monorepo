@@ -1,0 +1,77 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "version": "1.1.0",
+    "copyright": "2026 Impulse Labs Pty Ltd",
+    "categories": [
+      "LIFESTYLE",
+      "ENTERTAINMENT"
+    ],
+    "release": {
+      "automaticRelease": false
+    },
+    "info": {
+      "en-AU": {
+        "title": "Impulse - Entertainment Deals",
+        "subtitle": "Last-minute plans in Sydney",
+        "promoText": "Last-minute deals at Sydney venues, with the price already worked out. Book in a tap, bring your friends, show your code at the door.",
+        "description": "Impulse finds you something good to do tonight.\n\nSydney venues drop last-minute deals on their quiet hours: bars, restaurants, bowling, karaoke, mini golf, escape rooms, arcades and more. You see the real price up front, book in a tap, and show your door code when you arrive.\n\nFIND IT\n- Browse the drops that are live right now near your suburb.\n- Every deal shows the discounted price, the time and what's included.\n\nCLAIM IT\n- Book in seconds with Apple Pay or a saved card.\n- We hold your share on your card and only charge it when the venue checks you in.\n- Your door code appears in Plans straight away.\n\nBRING YOUR PEOPLE\n- Add friends to a booking and split the price, each on their own card.\n- Pick people you've booked with before, find friends from your contacts (only when you ask, and your contacts never leave your phone), or send a link to anyone.\n\nSHOW UP\n- Show your code at the door. That's it.\n\nImpulse is for people aged 18 and over. Some venues serve alcohol; please drink responsibly.\n\nAvailable in Sydney, Australia. Questions? support@impulseapp.au",
+        "keywords": [
+          "sydney",
+          "things to do",
+          "deals",
+          "tonight",
+          "bars",
+          "nightlife",
+          "happy hour",
+          "bowling",
+          "karaoke",
+          "events",
+          "friends",
+          "plans"
+        ],
+        "releaseNotes": "Impulse is here. Last-minute deals at Sydney venues, booked in a tap.",
+        "marketingUrl": "https://www.impulseapp.au",
+        "supportUrl": "https://www.impulseapp.au/support/",
+        "privacyPolicyUrl": "https://www.impulseapp.au/privacy/"
+      }
+    },
+    "review": {
+      "firstName": "Manojvradan",
+      "lastName": "Balaji Seshapriya",
+      "email": "support@impulseapp.au",
+      "phone": "REPLACE_WITH_REVIEW_CONTACT_PHONE",
+      "demoRequired": true,
+      "notes": "Impulse lets people in Sydney, Australia book last-minute deals that real venues post for their quiet hours, alone or split with friends.\n\nSIGN-IN\nUse the demo account in the Sign-In Information fields (email + password on the sign-in screen). It is fully set up: onboarding finished and mobile number already verified, and it has one confirmed booking so you can see Plans and a door code.\nEvery account needs a verified mobile number, because friends find and invite each other by the numbers saved in their contacts. Creating a new account therefore requires a real mobile number that can receive an SMS code. Guests can browse deals without signing in.\n\nPAYMENTS\nBookings are for real-world experiences at venues, so they are paid with Stripe (Apple Pay or card), not In-App Purchase (guideline 3.1.3(e)). Payments are live. You can review the full flow up to the Apple Pay / card sheet without paying. If you do book, only a hold is placed; cancelling releases it except for the 10% deposit.\n\nPERMISSIONS (all optional, each asked only when used)\n- Location: once during setup, to suggest a home suburb. Never in the background.\n- Notifications: booking updates.\n- Contacts: only when you tap \"Find friends in contacts\" in the invite sheet. Numbers and emails are hashed on the device; only hashes are sent and none are stored.\n\nACCOUNT DELETION\nYou tab > Delete account. It deletes the account immediately and revokes Sign in with Apple.\n\nAGE\nImpulse is 18+ (some venues serve alcohol). Onboarding asks users to confirm they are 18 or over and signs out anyone who says no.\n\nContact: support@impulseapp.au"
+    },
+    "advisory": {
+      "ageRatingOverride": "NONE",
+      "alcoholTobaccoOrDrugUseOrReferences": "FREQUENT_OR_INTENSE",
+      "contests": "NONE",
+      "gambling": false,
+      "gamblingSimulated": "NONE",
+      "horrorOrFearThemes": "NONE",
+      "kidsAgeBand": null,
+      "koreaAgeRatingOverride": "NONE",
+      "lootBox": false,
+      "matureOrSuggestiveThemes": "NONE",
+      "medicalOrTreatmentInformation": "NONE",
+      "profanityOrCrudeHumor": "NONE",
+      "sexualContentGraphicAndNudity": "NONE",
+      "sexualContentOrNudity": "NONE",
+      "unrestrictedWebAccess": false,
+      "violenceCartoonOrFantasy": "NONE",
+      "violenceRealistic": "NONE",
+      "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+      "advertising": false,
+      "ageAssurance": false,
+      "ageRatingOverrideV2": "NONE",
+      "developerAgeRatingInfoUrl": null,
+      "gunsOrOtherWeapons": "NONE",
+      "healthOrWellnessTopics": false,
+      "messagingAndChat": false,
+      "parentalControls": false,
+      "userGeneratedContent": false
+    }
+  }
+}

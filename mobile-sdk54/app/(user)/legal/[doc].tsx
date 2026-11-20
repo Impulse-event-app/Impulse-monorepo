@@ -26,7 +26,7 @@ const DOCS: Record<string, Doc> = {
         'If you cancel, or nobody from your booking shows up, the 10% deposit is kept and the rest of the hold is released. If the venue cancels, the whole hold is released. Released holds can take a few days to disappear from your bank statement.',
       ] },
       { h: 'Managing your bookings', body: [
-        'Every booking lives under the Plans tab, with its status, time, and code. Tap one to view or cancel it.',
+        'Every booking lives under the Plans tab, with its status, time, and code. Tap one to view it, or to cancel a booking you made. Huddles are cancelled from the huddle screen.',
       ] },
       { h: 'Contact us', body: [
         'Email support@impulseapp.au with your account email and the venue name, and we\'ll sort it. For anything urgent at a venue, speak to their staff first.',
@@ -35,11 +35,11 @@ const DOCS: Record<string, Doc> = {
   },
   terms: {
     title: 'Terms of service',
-    updated: 'Last updated 6 November 2026',
-    intro: 'These terms govern your use of Impulse. By creating an account or booking a deal, you agree to them. Please read them carefully.',
+    updated: 'Last updated 18 November 2026',
+    intro: 'These terms are an agreement between you and Impulse Labs Pty Ltd (ABN 31 704 068 931), which runs Impulse. They govern your use of Impulse. By creating an account or booking a deal, you agree to them. Please read them carefully.',
     sections: [
       { h: '1. Your account', body: [
-        'You must be 18 or over to hold an account and to book deals at venues that serve alcohol. You are responsible for activity on your account and for keeping your login secure.',
+        'You must be 18 or over to hold an account and to book deals at venues that serve alcohol. Each account needs a mobile number verified by a text message code. You are responsible for activity on your account and for keeping your login secure.',
       ] },
       { h: '2. Bookings & payments', body: [
         'Impulse is a marketplace connecting you with venues; the venue provides the experience. When you book a deal, you enter an agreement with that venue, and we process payment on their behalf at the price shown.',
@@ -64,23 +64,40 @@ const DOCS: Record<string, Doc> = {
   },
   privacy: {
     title: 'Privacy policy',
-    updated: 'Last updated 6 November 2026',
+    updated: 'Last updated 18 November 2026',
     intro: 'This policy explains what we collect, why, and the choices you have. We aim to collect only what we need to run Impulse.',
     sections: [
+      { h: 'Who we are', body: [
+        'Impulse is run by Impulse Labs Pty Ltd (ABN 31 704 068 931) ("Impulse", "we", "us"), which operates the Impulse app and venue portal from Sydney, Australia. We handle personal information under the Australian Privacy Principles in the Privacy Act 1988 (Cth). Questions or requests: privacy@impulseapp.au.',
+      ] },
       { h: 'What we collect', body: [
-        'Account details (name, email or phone), your preferences (home suburb, favourite activities, party size), and booking history. Payment card details are handled and stored by our payment processor; we never see or store your full card number.',
+        'Account details: your name, your mobile number (required, and verified by a text message code), your email address if you sign in with one, and which sign-in method you use (Apple, Google, email or SMS code).',
+        'What you tell us during setup: that you are 18 or over, your home suburb, favourite activities, usual party size and any access needs you choose to share. Access needs can be health-related, so we only use them to point out venues that support them, and you can leave them blank.',
+        'Bookings: the deals you book, times, party size, who you split a booking with, door codes and payment status.',
+        'Payments: your card is entered into, and stored by, our payment processor Stripe. We keep only a reference to your card (such as brand and last four digits) and never see or store the full number.',
+        'Activity in the app: which venues you open, used to put more relevant deals first.',
+        'Device: a push notification token if you allow notifications.',
+        'Contacts, only if you choose "Find friends in contacts" and allow access: the phone numbers and email addresses in your contacts are scrambled (hashed) on your phone, and only those scrambled values are sent to check which of your contacts are on Impulse. We do not store them, and your contacts\' names never leave your phone.',
+        'We do not use advertising or analytics trackers, and we do not track you across other companies\' apps or websites.',
       ] },
       { h: 'How we use it', body: [
-        'To show you relevant deals, process and confirm bookings, prevent fraud, and provide support. We do not sell your personal information.',
+        'To run your account, show you relevant deals, process and confirm bookings and split payments, send booking updates and invites, prevent fraud, and provide support. We do not sell your personal information.',
       ] },
       { h: 'Location', body: [
-        'If you allow location access, we use it only while you are using the app to surface nearby drops. We never track your location in the background.',
+        'If you allow location access, the app uses it once, on your phone, to suggest your home suburb. Your precise location is not sent to or stored by Impulse, and it is never used in the background. Only the suburb you choose is saved.',
       ] },
-      { h: 'Sharing', body: [
-        'We share the minimum necessary with the venue you book (such as your name and door code) and with service providers who help us operate, under confidentiality obligations.',
+      { h: 'Who can see your information', body: [
+        'Venues you book with see your name, party size, booking time and door code.',
+        'People in a split booking or huddle with you see your display name and your share. Someone who has your mobile number (or your Google or Apple email) saved in their contacts can find you to invite you to a booking; they see your display name, never your number. There is no public search of Impulse users.',
+        'Service providers that help us run Impulse: Stripe (payments), Supabase (accounts and database), Render (servers), Vercel (websites), Expo and Apple (push notifications), Apple and Google (sign-in) and our SMS provider (sign-in and verification codes). Some of them store data outside Australia, including in the United States, under their own security and privacy commitments.',
+        'We may disclose information where the law requires it.',
+      ] },
+      { h: 'How long we keep it', body: [
+        'We keep your account information until you delete your account. Booking and payment records are kept without your name or contact details for up to 7 years, as required for tax and accounting.',
       ] },
       { h: 'Your rights', body: [
-        'You can delete your account at any time in the app: open You, then Delete account. That removes your profile, preferences, saved cards and sign-in straight away. Booking records are kept without your name or contact details, and only as long as needed for legal and accounting purposes. To access or correct your data, email privacy@impulseapp.au.',
+        'You can delete your account at any time in the app: open You, then Delete account. That removes your profile, preferences, activity, saved cards and sign-in straight away, and revokes Sign in with Apple. If you can\'t get into the app, email privacy@impulseapp.au and we\'ll delete it for you. To access or correct your data, email privacy@impulseapp.au.',
+        'If you are unhappy with how we have handled your information, email us first. You can also complain to the Office of the Australian Information Commissioner (oaic.gov.au).',
       ] },
     ],
   },
