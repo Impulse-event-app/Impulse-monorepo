@@ -173,7 +173,9 @@ export type BookingCreate = {
  *  intent_type "payment" = hold the card now; "setup" = the booking is more
  *  than six days out, so the card is saved now and held closer to the slot. */
 export type HoldIntent = {
-  intent_type: 'payment' | 'setup';
+  /** 'demo': an App Review demo venue. No payment is taken: skip PaymentSheet
+   *  and confirm straight away with intent_id (secrets and customer are empty). */
+  intent_type: 'payment' | 'setup' | 'demo';
   intent_id: string;
   client_secret: string;
   amount_cents: number;

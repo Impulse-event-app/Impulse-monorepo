@@ -1,9 +1,11 @@
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Optional
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session, joinedload
 
+from auth import get_optional_user
 from database import get_db
+from demo_mode import hide_demo_venues
 from models import Deal, Venue, VenueReel
 from schemas import ReelResponse
 
@@ -38,14 +40,17 @@ def newest_live_deal_by_reel(deals: Iterable[Deal]) -> Dict[str, Deal]:
 
 
 @router.get("", response_model=List[ReelResponse])
-def list_reels(db: Session = Depends(get_db)):
+def list_reels(db: Session = Depends(get_db), user: Optional[dict] = Depends(get_optional_user)):
     """Public: the Discover feed — active reels of active venues, each with
     its venue's live deal when there is one."""
-    reels = (
+    q = (
         db.query(VenueReel)
         .options(joinedload(VenueReel.venue))
         .join(Venue, VenueReel.venue_id == Venue.id)
         .filter(VenueReel.is_active == True, Venue.is_active == True)
+    )
+    reels = (
+        hide_demo_venues(q, db, user)
         .order_by(VenueReel.sort_order, VenueReel.created_at.desc())
         .all()
     )

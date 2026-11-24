@@ -151,7 +151,21 @@ def create_setup(*, customer_id: str, metadata: dict, idempotency_key: str) -> d
     }, idempotency_key)
 
 
+# ── App Review demo bookings ────────────────────────────────────────────────
+# A seat on a demo venue (Venue.is_demo) gets a "demo_…" placeholder instead of
+# a Stripe intent (booking_flow.start_hold). Every function below that takes an
+# intent id treats a placeholder as a hold that is there, captures and releases
+# cleanly, and never calls Stripe, so no demo booking can move money.
+DEMO_PREFIX = "demo_"
+
+
+def is_demo_id(intent_id: Optional[str]) -> bool:
+    return bool(intent_id) and intent_id.startswith(DEMO_PREFIX)
+
+
 def retrieve_hold(intent_id: str) -> dict:
+    if is_demo_id(intent_id):
+        return {"id": intent_id, "status": "requires_capture"}
     return _wrap(stripe_client.retrieve_payment_intent, intent_id)
 
 
@@ -184,6 +198,8 @@ def capture(*, intent_id: str, amount_cents: int, application_fee_cents: int,
             idempotency_key: str) -> dict:
     """Capture `amount_cents` of a hold (less releases the rest). Raises
     PaymentNotApproved when the hold has lapsed or was cancelled."""
+    if is_demo_id(intent_id):
+        return {"id": intent_id, "status": "succeeded", "amount_received": amount_cents}
     pi = _wrap(stripe_client.capture_payment_intent, intent_id, {
         "amount_to_capture": amount_cents,
         "application_fee_amount": application_fee_cents,
@@ -195,6 +211,8 @@ def capture(*, intent_id: str, amount_cents: int, application_fee_cents: int,
 
 def cancel_hold(*, intent_id: str, idempotency_key: str) -> None:
     """Release a hold. One that is already cancelled or lapsed counts as released."""
+    if is_demo_id(intent_id):
+        return
     try:
         stripe_client.cancel_payment_intent(intent_id, idempotency_key)
     except stripe_client.StripeError as e:
@@ -208,6 +226,8 @@ def refund_captured(*, intent_id: str, reason: str, idempotency_key: str) -> dic
     """Refund a captured seat in full, pulling the money back from the venue
     and returning Impulse's fee. Not used by the normal flow — captured money
     is the venue's — but kept for support and disputes."""
+    if is_demo_id(intent_id):
+        return {"id": intent_id, "status": "succeeded"}
     return _wrap(stripe_client.create_refund, {
         "payment_intent": intent_id,
         "reverse_transfer": True,

@@ -28,6 +28,8 @@ class User(Base):
     avatar_url = Column(Text, nullable=True)
     home_suburb = Column(Text, nullable=True)
     preferred_acts = Column(ARRAY(Text()), nullable=False, server_default="{}")
+    # App Review demo account: sees demo venues (Venue.is_demo) in the feed.
+    is_demo = Column(Boolean, nullable=False, default=False, server_default="false")
     accessibility_needs = Column(ARRAY(Text()), nullable=False, server_default="{}")
     party_size = Column(Integer, nullable=False, server_default="2")
     age_bracket = Column(Integer, nullable=True)               # 18 | 25 | 35 | 45
@@ -98,6 +100,9 @@ class Venue(Base):
     email = Column(Text, nullable=True)
     website = Column(Text, nullable=True)
     opening_hours = Column(Text, nullable=True)
+    # App Review demo venue: only demo accounts see it, and its bookings never
+    # touch Stripe (booking_flow.is_demo, payments.DEMO_PREFIX).
+    is_demo = Column(Boolean, nullable=False, default=False, server_default="false")
     image_url = Column(Text, nullable=True)                    # cover photo (= image_urls[0]), kept for builds that know one photo
     image_urls = Column(ARRAY(Text()), nullable=False, server_default="{}")  # photo gallery, cover first, in the venue-photos bucket
     google_place_id = Column(Text, nullable=True)              # Google Maps place the venue linked in the portal

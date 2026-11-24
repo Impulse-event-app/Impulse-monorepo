@@ -144,7 +144,10 @@ def sync_account(db: Session, venue: Venue) -> dict:
 
 def can_publish_deals(venue: Venue) -> bool:
     """A published deal takes holds on guests' cards, which only work once the
-    venue's account can receive transfers."""
+    venue's account can receive transfers. An App Review demo venue takes no
+    money at all (booking_flow.is_demo), so it can publish without Stripe."""
+    if venue.is_demo:
+        return True
     return bool(venue.stripe_account_id) and venue.stripe_transfers_status == "active"
 
 

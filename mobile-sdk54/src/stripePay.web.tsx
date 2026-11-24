@@ -83,12 +83,20 @@ export function useStripePay(): {
 
   const holdShare = async (bookingId: string, shareCents: number) => {
     const intent = await startHold(bookingId, shareCents);
+    if (intent.intent_type === 'demo') {
+      // App Review demo venue: no payment is taken.
+      const ok = typeof window === 'undefined' || window.confirm(
+        'Demo booking: this is a demo venue for App Review. No payment is taken.');
+      return ok ? confirmHold(bookingId, intent.intent_id) : null;
+    }
     const done = await present(intent.client_secret, intent.customer_session_client_secret, intent.intent_type);
     return done ? confirmHold(bookingId, intent.intent_id) : null;
   };
 
   const updateCard = async (bookingId: string) => {
     const intent = await startCardUpdate(bookingId);
+    // A demo seat never needs a new card, so a card update is always a real intent.
+    if (intent.intent_type === 'demo') return null;
     const done = await present(intent.client_secret, intent.customer_session_client_secret, intent.intent_type);
     return done ? confirmCardUpdate(bookingId, intent.intent_id) : null;
   };
