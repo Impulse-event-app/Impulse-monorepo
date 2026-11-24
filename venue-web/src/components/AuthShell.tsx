@@ -36,11 +36,10 @@ export function AuthShell({ children }: { children: ReactNode }) {
           style={{
             position: "relative", display: "flex", flexDirection: "column", justifyContent: "space-between",
             padding: "56px 60px",
-            background: "radial-gradient(120% 90% at 15% 10%, color-mix(in oklab, var(--accent) 16%, var(--sunken)) 0%, var(--sunken) 55%)",
+            background: "var(--sunken)",
             overflow: "hidden",
           }}
         >
-          <div style={{ position: "absolute", inset: 0, opacity: 0.5, background: "radial-gradient(50% 45% at 78% 82%, var(--accent-soft), transparent 70%)" }} />
 
           <div style={{ position: "relative" }}>
             <Wordmark size={44} textSize={24} animated />

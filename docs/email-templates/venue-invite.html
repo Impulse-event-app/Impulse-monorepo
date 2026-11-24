@@ -1,0 +1,66 @@
+<!--
+  Supabase → Authentication → Emails → "Invite user" template, for venue accounts.
+  Subject: Your Impulse venue account
+
+  The button links to Supabase's verify endpoint with redirect_to fixed to the
+  portal's set-password page, so an invited venue always lands on a "choose a
+  password" screen (the default {{ .ConfirmationURL }} goes to the Site URL).
+  Paste the matching project URL for each environment:
+    production  https://brpjunovgkncafbopndh.supabase.co   portal https://venues.impulseapp.au
+    staging     https://pdcevxkvgtptjczzsmkh.supabase.co   portal https://dev.venues.impulseapp.au
+  The portal's /reset-password must be in Authentication → URL Configuration → Redirect URLs.
+
+  Brand v2.0: system type, ink on paper, one red (the button), no gradients, no shadows.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Your Impulse venue account</title>
+</head>
+<body style="margin:0;padding:0;background:#FAFAFA;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">Set a password to open your venue portal.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FAFAFA;">
+  <tr>
+    <td align="center" style="padding:48px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif;color:#0A0A0A;">
+
+        <tr>
+          <td style="padding:0 4px 32px;font-size:22px;font-weight:600;letter-spacing:-0.033em;color:#0A0A0A;">Impulse</td>
+        </tr>
+
+        <tr>
+          <td style="background:#FFFFFF;border:1px solid #E8E8E8;border-radius:14px;padding:40px 36px;">
+            <h1 style="margin:0 0 16px;font-size:26px;line-height:1.2;font-weight:600;letter-spacing:-0.022em;color:#0A0A0A;">Your venue portal is ready.</h1>
+            <p style="margin:0 0 16px;font-size:16px;line-height:1.55;color:#0A0A0A;">Impulse has set up a venue account for <strong style="font-weight:600;">{{ .Email }}</strong>.</p>
+            <p style="margin:0 0 32px;font-size:16px;line-height:1.55;color:#6E6E73;">Set a password to sign in. From the portal you post deals for your quiet hours, see who has booked, and check groups in when they arrive.</p>
+
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="border-radius:22px;background:#C80815;">
+                  <a href="https://brpjunovgkncafbopndh.supabase.co/auth/v1/verify?token={{ .TokenHash }}&type=invite&redirect_to=https://venues.impulseapp.au/reset-password"
+                     style="display:inline-block;padding:13px 26px;font-size:16px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:22px;">Set your password</a>
+                </td>
+              </tr>
+            </table>
+
+            <p style="margin:32px 0 0;font-size:13px;line-height:1.55;color:#6E6E73;">The link works once. If it has expired, go to <a href="https://venues.impulseapp.au/forgot-password" style="color:#C80815;text-decoration:none;">venues.impulseapp.au/forgot-password</a> and enter this email address.</p>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:24px 4px 0;font-size:13px;line-height:1.55;color:#A1A1A6;">
+            Questions about your account: <a href="mailto:support@impulseapp.au" style="color:#6E6E73;text-decoration:none;">support@impulseapp.au</a><br>
+            You received this because a venue account was created for this address. If you weren't expecting it, you can ignore this email.<br><br>
+            Impulse · Sydney, Australia
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

@@ -218,6 +218,7 @@ export interface UserProfile {
 
 export const userApi = {
   me: () => request<UserProfile>("GET", "/users/me"),
+  update: (body: { full_name: string }) => request<UserProfile>("PATCH", "/users/me", body),
 };
 
 export const venueApi = {
