@@ -454,8 +454,10 @@ class BookingHoldStart(BaseModel):
 class HoldIntentResponse(BaseModel):
     """Everything PaymentSheet needs. intent_type "payment" = hold the card now
     (initPaymentSheet paymentIntentClientSecret); "setup" = save it now, held
-    closer to the slot (setupIntentClientSecret)."""
-    intent_type: Literal["payment", "setup"]
+    closer to the slot (setupIntentClientSecret); "demo" = an App Review demo
+    venue, no payment: skip PaymentSheet and confirm with intent_id (the
+    secrets and customer are empty)."""
+    intent_type: Literal["payment", "setup", "demo"]
     intent_id: str
     client_secret: str
     amount_cents: int

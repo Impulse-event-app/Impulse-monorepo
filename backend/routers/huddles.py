@@ -12,7 +12,8 @@ import push
 from auth import get_current_user
 from booking_logic import deal_cutoff, resolve_borda
 from database import get_db
-from models import Booking, BookingParticipant, Deal
+from demo_mode import hide_demo_venues
+from models import Booking, BookingParticipant, Deal, Venue
 from routers.bookings import ensure_user_row, profile_name
 from schemas import BallotSubmit, BookingView, DealWithVenueResponse, HuddleCreate, HuddleJoin
 
@@ -184,9 +185,9 @@ def huddle_candidates(
     """The ballot: live deals the whole group can attend."""
     b = _load(db, huddle_id)
     flow.member_of(b, user)
+    q = db.query(Deal).options(joinedload(Deal.venue)).join(Venue, Deal.venue_id == Venue.id)
     deals = (
-        db.query(Deal)
-        .options(joinedload(Deal.venue))
+        hide_demo_venues(q, db, user)
         .filter(
             Deal.is_active == True,
             Deal.spots_remaining >= b.num_people,
