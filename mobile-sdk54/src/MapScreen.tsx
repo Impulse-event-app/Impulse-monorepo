@@ -12,7 +12,6 @@ import { fontUI, useApp } from './theme';
 import { DropCardCompact, FadeIn, Glass, Pin, TextBtn, Touchable, ViewSwitch } from './components';
 import { Filter } from './icons';
 import { hapticSelection } from './haptics';
-import { setSelectedDeal, useLayoutMode, useSelectedDeal } from './layout';
 
 // The selected-drop card stays card-sized on iPad instead of spanning the map.
 const SELECTED_CARD_MAX_WIDTH = 460;
@@ -60,7 +59,7 @@ export function MapTopBar({ activeCount, onFilters, onShowList }: { activeCount:
   const { T } = useApp();
   const insets = useSafeAreaInsets();
   return (
-    <View style={{ position: 'absolute', top: insets.top + 4, right: insets.right + 16, flexDirection: 'row', alignItems: 'center', gap: 8, zIndex: 8 }}>
+    <View style={{ position: 'absolute', top: insets.top + 4, right: 16, flexDirection: 'row', alignItems: 'center', gap: 8, zIndex: 8 }}>
       {onShowList && <ViewSwitch to="list" onPress={onShowList} height={44} />}
       <Touchable onPress={onFilters} scale={0.96} accessibilityLabel={activeCount ? `Filters, ${activeCount} on` : 'Filters'}>
         {activeCount ? (
@@ -82,15 +81,7 @@ export default function MapScreen({ onShowList }: { onShowList?: () => void }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
-  const [cardSel, setCardSel] = useState<string | null>(null);
-  // Split layout (open iPhone Duo, iPad): the map fills the list pane, and a
-  // tapped pin opens its drop in the detail pane beside it, as a list card
-  // does, so there's no card over the map. The highlighted pin follows the
-  // pane's drop, including one picked from the list before switching to the map.
-  const split = useLayoutMode() === 'split';
-  const paneSel = useSelectedDeal();
-  const sel = split ? paneSel : cardSel;
-  const setSel = (id: string | null) => (split ? setSelectedDeal(id) : setCardSel(id));
+  const [sel, setSel] = useState<string | null>(null);
 
   // Resolve a coordinate for every deal — exact venue location when the backend
   // has it, otherwise the deal's suburb centre. Only mappable deals get a pin.
@@ -111,7 +102,7 @@ export default function MapScreen({ onShowList }: { onShowList?: () => void }) {
   const firstFilters = useRef(true);
   useEffect(() => {
     if (firstFilters.current) { firstFilters.current = false; return; }
-    if (!split && sel && !matchIds.has(sel)) setSel(null);
+    if (sel && !matchIds.has(sel)) setSel(null);
     const coords = shown.map((x) => x.coord);
     if (coords.length === 1) {
       mapRef.current?.animateToRegion({ ...coords[0], latitudeDelta: 0.02, longitudeDelta: 0.02 }, 400);
@@ -155,8 +146,7 @@ export default function MapScreen({ onShowList }: { onShowList?: () => void }) {
         showsMyLocationButton={false}
         toolbarEnabled={false}
         onPress={() => {
-          // In the split layout an empty-map tap leaves the pane's drop open.
-          if (!split && Date.now() - lastMarkerPress.current > 400) setSel(null);
+          if (Date.now() - lastMarkerPress.current > 400) setSel(null);
         }}
         mapPadding={{ top: insets.top + 56, right: 0, bottom: barTop, left: 0 }}
       >
@@ -177,7 +167,7 @@ export default function MapScreen({ onShowList }: { onShowList?: () => void }) {
       <MapTopBar activeCount={activeCount} onFilters={() => router.push('/(user)/filters')} onShowList={onShowList} />
 
       {located.length > 0 && shown.length === 0 && (
-        <View style={{ position: 'absolute', top: insets.top + 60, left: insets.left + 16, right: insets.right + 16, alignItems: 'center' }}>
+        <View style={{ position: 'absolute', top: insets.top + 60, left: 16, right: 16, alignItems: 'center' }}>
           <Glass radius={12} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: 14, paddingRight: 10, paddingVertical: 8 }}>
             <Text style={{ ...fontUI(400, 14), fontSize: 14, color: T.text }}>No deals match your filters</Text>
             <TextBtn onPress={() => setFilters(DEFAULT_FILTERS)} color={T.accent} size={15} weight={500}>Clear</TextBtn>
@@ -185,9 +175,9 @@ export default function MapScreen({ onShowList }: { onShowList?: () => void }) {
         </View>
       )}
 
-      {/* selected mini card (compact layout only; the split shows the drop in its pane) */}
-      {!split && selDrop && (
-        <FadeIn key={selDrop.id} style={{ position: 'absolute', left: insets.left + 16, right: insets.right + 16, bottom: barTop + 12, alignItems: 'center' }}>
+      {/* selected mini card */}
+      {selDrop && (
+        <FadeIn key={selDrop.id} style={{ position: 'absolute', left: 16, right: 16, bottom: barTop + 12, alignItems: 'center' }}>
           <View style={{ width: '100%', maxWidth: SELECTED_CARD_MAX_WIDTH }}>
             <DropCardCompact d={selDrop} onPress={() => router.push(`/(user)/event/${selDrop.id}`)} />
           </View>

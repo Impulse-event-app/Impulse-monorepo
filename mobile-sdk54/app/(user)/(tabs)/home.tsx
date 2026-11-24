@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useIsFocused, useRouter } from 'expo-router';
-import { ActivityIndicator, Alert, Platform, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, View } from 'react-native';
 import {
   categoryOptions,
   DEFAULT_FILTERS,
@@ -38,10 +38,7 @@ import { ChevronRight, Filter } from '../../../src/icons';
 import MapScreen from '../../../src/MapScreen';
 import { useRequireAuth } from '../../../src/auth';
 import { hapticError, hapticSelection, hapticSuccess } from '../../../src/haptics';
-import { setSelectedDeal, useLayoutModeChange, useSelectedDeal, useTabBarClearance } from '../../../src/layout';
-import { SplitPane } from '../../../src/SplitPane';
-import { DealDetail } from '../../../src/DealDetail';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FLOATING_TAB_CLEARANCE } from './_layout';
 
 // One-line status for the home huddle card, derived from the live huddle.
 // `live` marks the states that are waiting on this user.
@@ -163,18 +160,6 @@ function HuddleCard({ title, sub, live, onPress }: { title: string; sub: string;
 }
 
 export default function HomeScreen() {
-  const tabClearance = useTabBarClearance();
-  const insets = useSafeAreaInsets();
-  // Split layout (open iPhone Duo, iPad): the list here, the picked drop in a
-  // detail pane beside it. Folding back to compact with a drop picked opens it
-  // full screen, so the user keeps their place.
-  const selected = useSelectedDeal();
-  const focused = useIsFocused();
-  const layoutMode = useLayoutModeChange((mode) => {
-    // Only the tab on screen: both tab screens stay mounted, and each would
-    // otherwise push the drop.
-    if (mode === 'compact' && selected && focused) router.push(`/(user)/event/${selected}`);
-  });
   const {
     T, filters, setFilters, drops, dealsLoaded, dealsFailed, refreshDeals, retryDeals, profile, signedIn,
     voteSession, voteRanking, toggleVotePick, clearVoting,
@@ -281,8 +266,7 @@ export default function HomeScreen() {
   const later = boosted.filter((d) => d.status === 'later');
   const activeCount = activeFilterCount(filters);
 
-  const openDrop = (id: string) =>
-    layoutMode === 'split' ? setSelectedDeal(id) : router.push(`/(user)/event/${id}`);
+  const openDrop = (id: string) => router.push(`/(user)/event/${id}`);
 
   // In voting mode a tap toggles the pick (candidates only); otherwise it opens
   // the deal. A rank badge overlays each card.
@@ -315,7 +299,7 @@ export default function HomeScreen() {
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
               // Bottom-right of the photo (inset 8, 162pt tall): the top right is the discount badge's.
-              style={{ position: 'absolute', top: 130, right: insets.right + 18 }}
+              style={{ position: 'absolute', top: 130, right: 18 }}
             >
               {rank >= 0 ? (
                 <View style={{ width: 30, height: 30, borderCurve: 'continuous', borderRadius: 10, backgroundColor: T.accent, alignItems: 'center', justifyContent: 'center' }}>
@@ -360,14 +344,14 @@ export default function HomeScreen() {
   // A huddle ballot is the list, so voting always shows it.
   const shown = voting ? 'list' : view;
 
-  const screen = (
+  return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
       <View style={{ flex: 1, display: shown === 'list' ? 'flex' : 'none' }}>
         <ScrollView
           showsVerticalScrollIndicator={false}
           onScroll={onScroll}
           scrollEventThrottle={16}
-          contentContainerStyle={{ paddingTop: navTop, paddingBottom: (voting ? 90 : 20) + tabClearance }}
+          contentContainerStyle={{ paddingTop: navTop, paddingBottom: (voting ? 90 : 20) + FLOATING_TAB_CLEARANCE }}
           refreshControl={
             <RefreshControl refreshing={pulling} onRefresh={onPull} tintColor={T.accent} progressViewOffset={navTop} />
           }
@@ -518,7 +502,7 @@ export default function HomeScreen() {
 
       {/* Voting submit — floats clear above the tab bar */}
       {voting && (
-        <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: tabClearance + (Platform.OS === 'ios' ? 8 : -4), paddingHorizontal: 16 }}>
+        <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: FLOATING_TAB_CLEARANCE - 4, paddingHorizontal: 16 }}>
           <ReadableColumn>
             {submitting ? (
               <View style={{ height: 52, alignItems: 'center', justifyContent: 'center' }}>
@@ -546,19 +530,5 @@ export default function HomeScreen() {
         </View>
       )}
     </View>
-  );
-
-  if (layoutMode === 'compact') return screen;
-  return (
-    <SplitPane
-      list={screen}
-      detail={selected ? (
-        <DealDetail id={selected} embedded />
-      ) : (
-        <View style={{ flex: 1, justifyContent: 'center', backgroundColor: T.bg }}>
-          <EmptyState title="Pick a drop" body="Its details and booking show up here." />
-        </View>
-      )}
-    />
   );
 }

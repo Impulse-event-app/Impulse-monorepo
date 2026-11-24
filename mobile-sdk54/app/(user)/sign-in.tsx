@@ -220,7 +220,7 @@ export default function SignIn() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: T.bg, paddingLeft: insets.left, paddingRight: insets.right }}>
+    <View style={{ flex: 1, backgroundColor: T.bg }}>
       <ScrollView
         ref={scrollRef}
         horizontal

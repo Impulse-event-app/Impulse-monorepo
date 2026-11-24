@@ -24,7 +24,7 @@ import { useWallet } from '../../../src/wallet';
 import { describeCard, sendTestPush } from '../../../src/api';
 import { requestNotificationAccess, syncPushToken } from '../../../src/permissions';
 import { confirmDestructive } from '../../../src/confirm';
-import { useTabBarClearance } from '../../../src/layout';
+import { FLOATING_TAB_CLEARANCE } from './_layout';
 
 const APPEARANCE_LABEL: Record<Appearance, string> = { system: 'System', light: 'Light', dark: 'Dark' };
 const VERSION = Constants.expoConfig?.version ?? '';
@@ -46,7 +46,6 @@ function StatTile({ big, label }: { big: string | number; label: string }) {
 }
 
 export default function ProfileScreen() {
-  const tabClearance = useTabBarClearance();
   const { T, appearance, plans, profile, setProfile, refreshProfile, reset, signedIn } = useApp();
   const router = useRouter();
   const navTop = useNavTop();
@@ -171,7 +170,7 @@ export default function ProfileScreen() {
         onScroll={onScroll}
         scrollEventThrottle={16}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingTop: navTop, paddingHorizontal: 16, paddingBottom: 24 + tabClearance }}
+        contentContainerStyle={{ paddingTop: navTop, paddingHorizontal: 16, paddingBottom: 24 + FLOATING_TAB_CLEARANCE }}
       >
         <ReadableColumn>
           <LargeTitle>You</LargeTitle>

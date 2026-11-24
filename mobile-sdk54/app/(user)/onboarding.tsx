@@ -145,7 +145,7 @@ export default function Onboarding() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: T.bg, paddingLeft: insets.left, paddingRight: insets.right }}>
+    <View style={{ flex: 1, backgroundColor: T.bg }}>
       {/* Progress — read-only, so no step can be skipped from the header. */}
       <View style={{ position: 'absolute', top: insets.top + 14, left: 22, right: 22, zIndex: 20 }}>
         <PageDots count={STEPS} index={page} />

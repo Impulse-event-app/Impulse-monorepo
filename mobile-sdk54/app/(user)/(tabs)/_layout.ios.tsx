@@ -7,9 +7,7 @@
 // portrait. A custom JS bar can't go into that rail. On iOS 26+ the native bar
 // is liquid glass, so it keeps the look of the custom one.
 //
-// Screens clear the bar with useTabBarClearance() (src/layout.ts), which reads
-// insets.bottom here: native tabs include the bar in it only while it sits at
-// the bottom, so content never pads for a bar that has moved into the rail.
+// Screens keep their own bottom padding for the bar, as with the JS bar.
 import { NativeTabs } from 'expo-router/native-tabs';
 import { useTheme } from '../../../src/theme';
 

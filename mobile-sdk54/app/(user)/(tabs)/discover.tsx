@@ -2,16 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { AppState, FlatList, Image, Pressable, Text, useWindowDimensions, View, type ListViewToken } from 'react-native';
+import { AppState, FlatList, Image, Pressable, Text, View, type ListViewToken } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DarkScope, fontMono, fontUI, useApp } from '../../../src/theme';
 import { Btn, DiscountChip, EmptyState, Scrim, Skeleton, unitLabel, useReduceMotion } from '../../../src/components';
 import { Play } from '../../../src/icons';
 import { canonicalCat, money } from '../../../src/data';
 import { listReels, type ApiReel } from '../../../src/api';
-import { setSelectedDeal, useLayoutMode, useSelectedDeal, useSideInsets, useTabBarClearance } from '../../../src/layout';
-import { SplitPane } from '../../../src/SplitPane';
-import { DealDetail } from '../../../src/DealDetail';
+import { FLOATING_TAB_CLEARANCE } from './_layout';
 
 const FILL = { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 } as const;
 
@@ -59,16 +57,8 @@ function ReelItem({ r, height, width, near, playing, paused, onTogglePause }: {
   paused: boolean;        // the viewer paused it (or Reduce Motion and not yet started)
   onTogglePause: () => void;
 }) {
-  const tabClearance = useTabBarClearance();
-  // Pad for the window's safe areas only when the reel reaches the window's
-  // edges. On a wide window (landscape) the 9:16 reel sits in the middle,
-  // clear of the Dynamic Island or rail, and the insets would squash its text.
-  const windowWidth = useWindowDimensions().width;
-  const edgeInsets = useSideInsets(16);
-  const sideInsets = width >= windowWidth - 1 ? edgeInsets : { paddingLeft: 16, paddingRight: 16 };
   const { T, apiDeals } = useApp();
   const router = useRouter();
-  const layoutMode = useLayoutMode();
   const poster = r.poster_url ?? r.venue_image_url;
   // Book only when the feed still has this deal — the event page reads from the same list.
   const bookable = !!r.deal_id && !!apiDeals[r.deal_id];
@@ -96,7 +86,7 @@ function ReelItem({ r, height, width, near, playing, paused, onTogglePause }: {
 
       <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}>
         <Scrim stops={[[0, 0], [0.35, 0.55], [1, 0.92]]} style={{ top: -80 }} />
-        <View pointerEvents="box-none" style={{ ...sideInsets, paddingBottom: tabClearance + 8, gap: 10 }}>
+        <View pointerEvents="box-none" style={{ paddingHorizontal: 16, paddingBottom: FLOATING_TAB_CLEARANCE + 8, gap: 10 }}>
           <View>
             <Text numberOfLines={2} style={{ ...fontUI(600), fontSize: 26, letterSpacing: -0.5, color: T.text }}>{r.venue_name}</Text>
             <Text numberOfLines={1} style={{ ...fontUI(500), fontSize: 14, color: T.muted, marginTop: 2 }}>
@@ -116,13 +106,9 @@ function ReelItem({ r, height, width, near, playing, paused, onTogglePause }: {
                   {r.original_price ? <DiscountChip now={r.deal_price ?? 0} usual={r.original_price} /> : null}
                 </View>
               </View>
-              {/* Open Duo / split layout: no Book here, the drop's own Book now
-                  is in the detail pane beside the reel. */}
-              {layoutMode === 'split' ? null : (
-                <Btn small onPress={() => router.push(`/(user)/event/${r.deal_id}`)} accessibilityHint="Opens the drop to book.">
-                  Book
-                </Btn>
-              )}
+              <Btn small onPress={() => router.push(`/(user)/event/${r.deal_id}`)} accessibilityHint="Opens the drop to book.">
+                Book
+              </Btn>
             </View>
           ) : (
             <Text style={{ ...fontUI(500), fontSize: 14, color: T.muted, marginTop: 4 }}>No drop live right now</Text>
@@ -133,15 +119,8 @@ function ReelItem({ r, height, width, near, playing, paused, onTogglePause }: {
   );
 }
 
-/**
- * `fill`: reels span the full width even on a wide window (the split layout's
- * list pane). Portrait-shaped windows always fill.
- * `onActiveDeal`: called with the playing reel's live drop (or null), so the
- * split layout's detail pane can follow the reel on screen.
- */
-function DiscoverFeed({ fill = false, onActiveDeal }: { fill?: boolean; onActiveDeal?: (dealId: string | null) => void }) {
-  const tabClearance = useTabBarClearance();
-  const { T, apiDeals } = useApp();
+function DiscoverFeed() {
+  const { T } = useApp();
   const insets = useSafeAreaInsets();
   const onScreen = useOnScreen();
   const reduceMotion = useReduceMotion();
@@ -149,10 +128,7 @@ function DiscoverFeed({ fill = false, onActiveDeal }: { fill?: boolean; onActive
   const [failed, setFailed] = useState(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const height = size.height;
-  // Fill the width on any portrait-shaped window: a folded iPhone Duo's outer
-  // screen (about 466×678pt) is squatter than 9:16 and got black bars. Only a
-  // wide window (a desktop browser) keeps the centred 9:16 column.
-  const reelWidth = fill || size.width <= size.height ? size.width : Math.min(size.width, Math.round(size.height * 9 / 16));
+  const reelWidth = Math.min(size.width, Math.round(size.height * 9 / 16));
   const [activeIndex, setActiveIndex] = useState(0);
   // Reels the viewer has paused — or, under Reduce Motion, not yet started.
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
@@ -167,13 +143,6 @@ function DiscoverFeed({ fill = false, onActiveDeal }: { fill?: boolean; onActive
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  // The playing reel's drop, if it has one live right now.
-  const activeReel = reels?.[activeIndex];
-  const activeDeal = activeReel?.deal_id && apiDeals[activeReel.deal_id] ? activeReel.deal_id : null;
-  useEffect(() => {
-    onActiveDeal?.(activeDeal);
-  }, [activeDeal, onActiveDeal]);
-
   const onViewable = useRef(({ viewableItems }: { viewableItems: ListViewToken[] }) => {
     const first = viewableItems[0];
     if (first?.index != null) setActiveIndex(first.index);
@@ -182,7 +151,7 @@ function DiscoverFeed({ fill = false, onActiveDeal }: { fill?: boolean; onActive
   const header = (
     <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + 64 }}>
       <Scrim stops={[[0, 0.7], [1, 0]]} />
-      <Text style={{ ...fontUI(700), fontSize: 22, letterSpacing: -0.4, color: T.text, position: 'absolute', top: insets.top + 8, left: insets.left + 16 }}>
+      <Text style={{ ...fontUI(700), fontSize: 22, letterSpacing: -0.4, color: T.text, position: 'absolute', top: insets.top + 8, left: 16 }}>
         Discover
       </Text>
     </View>
@@ -191,7 +160,7 @@ function DiscoverFeed({ fill = false, onActiveDeal }: { fill?: boolean; onActive
   let body: React.ReactNode;
   if (reels === null && !failed) {
     body = (
-      <View accessible accessibilityLabel="Loading" style={{ flex: 1, width: reelWidth || '100%', alignSelf: 'center', justifyContent: 'flex-end', padding: 16, paddingBottom: tabClearance + 8, gap: 10 }}>
+      <View accessible accessibilityLabel="Loading" style={{ flex: 1, width: reelWidth || '100%', alignSelf: 'center', justifyContent: 'flex-end', padding: 16, paddingBottom: FLOATING_TAB_CLEARANCE + 8, gap: 10 }}>
         <Skeleton width="55%" height={26} />
         <Skeleton width="35%" height={14} />
         <Skeleton width="80%" height={16} />
@@ -254,32 +223,9 @@ function DiscoverFeed({ fill = false, onActiveDeal }: { fill?: boolean; onActive
 }
 
 export default function DiscoverScreen() {
-  const { T } = useApp();
-  // Split layout (open iPhone Duo, iPad): reels fill the list pane, and the
-  // detail pane shows the drop of the reel that's playing.
-  const selected = useSelectedDeal('discover');
-  const followReel = useCallback((id: string | null) => setSelectedDeal(id, 'discover'), []);
-  // Unlike Home, folding doesn't open the drop full screen: the pane follows
-  // whatever reel is playing, so the viewer never chose it. Folded, the reels
-  // just carry on.
-  const layoutMode = useLayoutMode();
-
-  const feed = (
-    <DarkScope>
-      <DiscoverFeed fill={layoutMode === 'split'} onActiveDeal={followReel} />
-    </DarkScope>
-  );
-  if (layoutMode === 'compact') return feed;
   return (
-    <SplitPane
-      list={feed}
-      detail={selected ? (
-        <DealDetail id={selected} embedded />
-      ) : (
-        <View style={{ flex: 1, justifyContent: 'center', backgroundColor: T.bg }}>
-          <EmptyState title="No drop live for this clip" body="Swipe to a clip with a live drop to see it here." />
-        </View>
-      )}
-    />
+    <DarkScope>
+      <DiscoverFeed />
+    </DarkScope>
   );
 }

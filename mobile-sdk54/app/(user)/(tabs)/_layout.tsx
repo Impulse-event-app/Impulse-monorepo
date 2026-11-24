@@ -8,8 +8,9 @@ import { FooterScrim, Glass, useReduceMotion, useReduceTransparency } from '../.
 import { TabTonight, TabDiscover, TabPlans, TabYou } from '../../../src/icons';
 import { hapticSelection } from '../../../src/haptics';
 
-// Web and Android tab bar. iOS uses native tabs instead (_layout.ios.tsx).
-// Screens clear this bar via useTabBarClearance() in src/layout.ts (100pt).
+// Height the floating bar occupies from the bottom of the screen. Scroll
+// screens add this much bottom padding so content never hides behind it.
+export const FLOATING_TAB_CLEARANCE = 100;
 
 // On iPad (and wide Split View panes) the bar stays phone-sized and centred
 // rather than stretching edge to edge.

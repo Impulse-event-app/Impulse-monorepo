@@ -64,7 +64,7 @@ export default function ClaimScreen() {
   if (!d || !apiDeal) {
     return (
       <View style={{ flex: 1, backgroundColor: T.bg, justifyContent: 'center' }}>
-        <View style={{ position: 'absolute', top: insets.top + 4, left: insets.left + 16 }}>
+        <View style={{ position: 'absolute', top: insets.top + 4, left: 16 }}>
           <BackButton onPress={() => router.back()} />
         </View>
         <EmptyState title="This drop has gone." body="It may have sold out or ended." />
@@ -229,7 +229,7 @@ export default function ClaimScreen() {
         </ReadableColumn>
       </ScrollView>
 
-      <View style={{ position: 'absolute', top: insets.top + 4, left: insets.left + 16, zIndex: 22 }}>
+      <View style={{ position: 'absolute', top: insets.top + 4, left: 16, zIndex: 22 }}>
         <BackButton onPress={() => (pendingBooking ? setPendingBooking(null) : router.back())} />
       </View>
 
