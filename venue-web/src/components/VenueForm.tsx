@@ -4,15 +4,13 @@ import React, { useState } from "react";
 import { venueApi, type PlaceLookup, type Venue, type VenueCreate } from "@/lib/api";
 import { PHOTO_BUCKET, extOf, uploadPublic } from "@/lib/storage";
 import { FONT_DISPLAY, numeric, card, fieldLabel, fieldInput, btnPrimary, btnGhost, requiredMark, switchTrack, switchKnob } from "@/lib/ui";
+import { CATEGORIES } from "@/lib/categories";
+import { CategorySelect } from "@/components/CategorySelect";
 import { DAYS, parseHours, serializeHours, type Day, type DayHours, type WeekHours } from "@/lib/hours";
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
 const MAX_PHOTOS = 8;                    // mirrors MAX_PHOTOS in backend/routers/venues.py
 
-const CATEGORIES = [
-  "Bar", "Restaurant", "Cafe", "Bowling", "Mini Golf",
-  "Escape Room", "Arcade", "Pool / Billiards", "Karaoke", "Other",
-];
 
 // Shared accessibility taxonomy — mirrors the user-side "access needs" list in
 // the mobile app so venue features can later be matched against user needs.
@@ -47,7 +45,9 @@ function toForm(v?: Venue): VenueCreate {
 }
 
 interface FieldErrors {
+  firstName?: string;
   name?: string;
+  category?: string;
   address?: string;
   suburb?: string;
   phone?: string;
@@ -57,6 +57,7 @@ interface FieldErrors {
 function validateFields(form: VenueCreate): FieldErrors {
   const errs: FieldErrors = {};
   if (!form.name?.trim()) errs.name = "Venue name is required";
+  if (!form.category?.trim()) errs.category = "Type what kind of venue you are";
   if (form.address) {
     if (!/^\d+\s+\S/.test(form.address.trim())) errs.address = "Include a street number, e.g. 123 Main St";
   } else {
@@ -80,10 +81,14 @@ interface VenueFormProps {
   savingLabel: string;
   /** Throw to show the error above the form. */
   onSubmit: (payload: VenueCreate) => Promise<void>;
+  /** The account holder's first name, used to greet them. Shown only when a handler is passed. */
+  firstName?: string;
+  onFirstNameChange?: (value: string) => void;
 }
 
 /** The venue details form — used to create a venue at onboarding and to edit it afterwards. */
-export function VenueForm({ initial, submitLabel, savingLabel, onSubmit }: VenueFormProps) {
+export function VenueForm({ initial, submitLabel, savingLabel, onSubmit, firstName, onFirstNameChange }: VenueFormProps) {
+  const asksName = !!onFirstNameChange;
   const [form, setForm] = useState<VenueCreate>(() => toForm(initial));
   const [parsedHours] = useState(() => parseHours(initial?.opening_hours));
   const [week, setWeek] = useState<WeekHours>(parsedHours.week);
@@ -97,10 +102,6 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit }: Venue
     | { state: "found" | "applied"; place: PlaceLookup }
   >({ state: "idle" });
   const photos = form.image_urls ?? [];
-
-  // Keep a category that predates the current list selectable rather than
-  // silently showing (and saving) the first option instead.
-  const categories = CATEGORIES.includes(form.category) ? CATEGORIES : [form.category, ...CATEGORIES];
 
   function setField<K extends keyof VenueCreate>(key: K, value: VenueCreate[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -189,6 +190,7 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit }: Venue
     setError(null);
 
     const errs = validateFields(form);
+    if (asksName && !firstName?.trim()) errs.firstName = "Enter your first name";
     if (Object.keys(errs).length > 0) { setFieldErrors(errs); return; }
 
     setSaving(true);
@@ -234,7 +236,7 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit }: Venue
             </div>
           ))}
           {photos.length < MAX_PHOTOS && (
-            <label style={{ aspectRatio: photos.length ? "4 / 3" : undefined, height: photos.length ? undefined : 220, gridColumn: photos.length ? undefined : "1 / -1", borderRadius: 14, border: "1.5px dashed var(--line2)", background: "repeating-linear-gradient(135deg, var(--surface), var(--surface) 12px, var(--surface2) 12px, var(--surface2) 24px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, cursor: uploading ? "wait" : "pointer", textAlign: "center", padding: 12 }}>
+            <label style={{ aspectRatio: photos.length ? "4 / 3" : undefined, height: photos.length ? undefined : 220, gridColumn: photos.length ? undefined : "1 / -1", borderRadius: 14, border: "1.5px dashed var(--line2)", background: "var(--surface2)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, cursor: uploading ? "wait" : "pointer", textAlign: "center", padding: 12 }}>
               <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--accent-soft)", display: "grid", placeItems: "center", color: "var(--accent)", fontSize: 20 }}>↑</div>
               <div style={{ fontWeight: 600, fontSize: 14 }}>{uploading ? "Uploading…" : photos.length ? "Add photos" : "Drop photos or click to upload"}</div>
               <div style={{ ...numeric, fontSize: 11, color: "var(--faint)" }}>JPG / PNG · max 5MB each</div>
@@ -248,6 +250,20 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit }: Venue
       <div style={{ ...card, padding: 28, marginBottom: 24 }}>
         <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 17, marginBottom: 22 }}>The basics</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+          {asksName && (
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={fieldLabel}>Your first name<span style={requiredMark}>*</span></label>
+              <input
+                value={firstName ?? ""}
+                onChange={(e) => { onFirstNameChange?.(e.target.value); setFieldErrors((fe) => ({ ...fe, firstName: undefined })); }}
+                placeholder="e.g. Sam"
+                autoComplete="given-name"
+                maxLength={40}
+                style={{ ...fieldInput, borderColor: fieldErrors.firstName ? "var(--accent)" : "var(--line2)" }}
+              />
+              {fieldErrors.firstName && <p style={errStyle}>{fieldErrors.firstName}</p>}
+            </div>
+          )}
           <div style={{ gridColumn: "1 / -1" }}>
             <label style={fieldLabel}>Venue name<span style={requiredMark}>*</span></label>
             <input value={form.name} onChange={(e) => setField("name", e.target.value)} placeholder="e.g. The Lantern Room" style={{ ...fieldInput, borderColor: fieldErrors.name ? "var(--accent)" : "var(--line2)" }} />
@@ -255,9 +271,13 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit }: Venue
           </div>
           <div>
             <label style={fieldLabel}>Category<span style={requiredMark}>*</span></label>
-            <select value={form.category} onChange={(e) => setField("category", e.target.value)} style={fieldInput}>
-              {categories.map((c) => <option key={c}>{c}</option>)}
-            </select>
+            <CategorySelect
+              value={form.category}
+              onChange={(v) => setField("category", v)}
+              selectStyle={fieldInput}
+              inputStyle={{ ...fieldInput, borderColor: fieldErrors.category ? "var(--accent)" : "var(--line2)" }}
+            />
+            {fieldErrors.category && <p style={errStyle}>{fieldErrors.category}</p>}
           </div>
           <div>
             <label style={fieldLabel}>Phone <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>

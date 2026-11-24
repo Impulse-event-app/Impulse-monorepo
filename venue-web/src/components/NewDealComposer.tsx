@@ -27,11 +27,8 @@ import { DAYS, parseHours, type WeekHours } from "@/lib/hours";
 import { autoDealTitle, formatCurrency } from "@/lib/utils";
 import { DealVideoPicker, type DealVideo } from "@/components/DealVideoPicker";
 import { numeric, switchKnob, switchTrack } from "@/lib/ui";
+import { CATEGORIES } from "@/lib/categories";
 
-const CATEGORIES = [
-  "Bar", "Restaurant", "Cafe", "Bowling", "Mini Golf",
-  "Escape Room", "Arcade", "Pool / Billiards", "Karaoke", "Other",
-];
 
 const DISCOUNTS = [20, 30, 40, 50];
 
@@ -76,6 +73,10 @@ const INSET = 7;
 // ── Time helpers ─────────────────────────────────────────────────────────────
 
 /** Minutes since midnight → "9:00 PM", the slot shape bookings parse. */
+// Custom session lengths, in minutes.
+const MIN_SESSION = 15;
+const MAX_SESSION = 8 * 60;
+
 function slotString(m: number): string {
   const h = Math.floor(m / 60);
   return `${h % 12 || 12}:${String(m % 60).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
@@ -215,7 +216,15 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
 
   const [repeat, setRepeat] = useState(false);
 
-  const [spacing, setSpacing] = useState<30 | 60>(30);
+  // Longest a group can stay. With a limit, sessions run back to back, each that
+  // long. With none, groups arrive at any half hour in the window and stay as
+  // long as they like; only the number of spots limits the deal.
+  const [lengthChoice, setLengthChoice] = useState<"0" | "30" | "60" | "120" | "custom">("0");
+  const [customLength, setCustomLength] = useState("90"); // minutes, as typed
+  const customMinutes = Math.round(Number(customLength));
+  const customValid = Number.isFinite(customMinutes) && customMinutes >= MIN_SESSION && customMinutes <= MAX_SESSION;
+  // An unfinished custom value falls back to no limit until it's valid.
+  const sessionLength = lengthChoice === "custom" ? (customValid ? customMinutes : 0) : Number(lengthChoice);
   const [win, setWin] = useState<{ start: number; end: number } | null>(null);
   // The window mid-drag, in unsnapped minutes, so the pill tracks the pointer.
   const [ghost, setGhost] = useState<{ start: number; end: number } | null>(null);
@@ -345,7 +354,12 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
   const dragging = ghost !== null;
 
   const slots: number[] = [];
-  for (let t = span.start; t < span.end; t += spacing) slots.push(t);
+  if (sessionLength) {
+    for (let t = span.start; t + sessionLength <= span.end; t += sessionLength) slots.push(t);
+    if (slots.length === 0) slots.push(span.start); // window shorter than one session
+  } else {
+    for (let t = span.start; t < span.end; t += 30) slots.push(t);
+  }
 
   // What else is on that day: dated deals plus weekly schedules not yet turned into one.
   const liveDeals = (() => {
@@ -613,7 +627,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
   // The guest's card: in the preview, and again on the success screen with a status badge.
   const guestCard = (badge?: "live" | "draft") => (
       <div style={{ ...cardStyle, borderRadius: 20, overflow: "hidden", padding: 0 }}>
-        <div style={{ position: "relative", height: video ? 300 : 196, background: coverPhoto || video ? "#000" : "repeating-linear-gradient(135deg, var(--surface2), var(--surface2) 22px, var(--surface3) 22px, var(--surface3) 44px)" }}>
+        <div style={{ position: "relative", height: video ? 300 : 196, background: coverPhoto || video ? "#000" : "var(--surface2)" }}>
           {video ? (
             <video key={video.reel.id} src={video.reel.video_url} poster={video.reel.poster_url ?? undefined} autoPlay muted loop playsInline style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
           ) : coverPhoto && (
@@ -981,7 +995,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
                     <span key={h} aria-hidden style={{ position: "absolute", left: `${pct(h)}%`, top: 10, bottom: 10, width: 1, background: "var(--line)", pointerEvents: "none" }} />
                   ))}
                   {minStart > range.start && (
-                    <div title="Already passed" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct(minStart)}%`, borderRadius: "999px 0 0 999px", background: "repeating-linear-gradient(135deg, transparent, transparent 6px, var(--line) 6px, var(--line) 7px)", pointerEvents: "none" }} />
+                    <div title="Already passed" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct(minStart)}%`, borderRadius: "999px 0 0 999px", background: "color-mix(in oklab, var(--line) 60%, transparent)", pointerEvents: "none" }} />
                   )}
 
                   <div
@@ -1021,13 +1035,33 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: 14, paddingTop: 16, borderTop: "1px solid var(--line)", fontSize: 14, color: "var(--muted)", flexWrap: "wrap" }}>
-                <span>Start times every</span>
+                <span>Max session length</span>
                 <Segmented
-                  label="Interval"
-                  value={String(spacing)}
-                  onChange={(v) => setSpacing(Number(v) as 30 | 60)}
-                  options={[{ value: "30", label: "30 min" }, { value: "60", label: "60 min" }]}
+                  label="Max session length"
+                  value={lengthChoice}
+                  onChange={(v) => setLengthChoice(v as typeof lengthChoice)}
+                  options={[
+                    { value: "0", label: "No limit" },
+                    { value: "30", label: "30 min" },
+                    { value: "60", label: "1 hr" },
+                    { value: "120", label: "2 hr" },
+                    { value: "custom", label: "Custom" },
+                  ]}
                 />
+                {lengthChoice === "custom" && (
+                  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      value={customLength}
+                      inputMode="numeric"
+                      aria-label="Session length in minutes"
+                      aria-invalid={!customValid}
+                      onChange={(e) => setCustomLength(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                      style={{ width: 64, height: 32, boxSizing: "border-box", padding: "0 10px", borderRadius: 8, border: `1px solid ${customValid ? "var(--line2)" : "var(--accent)"}`, background: "var(--sunken)", color: "var(--text)", fontSize: 14, ...numeric }}
+                    />
+                    <span>min</span>
+                    {!customValid && <span style={{ color: "var(--accent-text)", fontSize: 13 }}>{MIN_SESSION} to {MAX_SESSION} min</span>}
+                  </label>
+                )}
                 {quietest && (
                   isQuietest ? (
                     <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, color: "var(--accent-text)", fontWeight: 500 }}>
@@ -1446,10 +1480,8 @@ const glassPill: React.CSSProperties = {
 // The neutral glass chip that slides behind the selected tab or option.
 const glassChip: React.CSSProperties = {
   borderRadius: 999,
-  background: "linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.02)), var(--surface3)",
-  backdropFilter: "blur(10px) saturate(160%)", WebkitBackdropFilter: "blur(10px) saturate(160%)",
+  background: "var(--surface3)",
   border: "1px solid var(--line2)",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,.12), 0 4px 12px rgba(0,0,0,.18)",
 };
 
 const pillText: React.CSSProperties = {
@@ -1467,9 +1499,8 @@ const gripBar: React.CSSProperties = {
   boxShadow: "0 1px 2px rgba(0,0,0,.25)", transition: "height .2s ease",
 };
 
-// Projected guests: the accent, striped, so it reads as "not yet real".
-const projectedFill =
-  "repeating-linear-gradient(135deg, color-mix(in oklab, var(--accent) 60%, transparent) 0 3px, color-mix(in oklab, var(--accent) 22%, transparent) 3px 6px)";
+// Projected guests: a paler accent, so it reads as "not yet real".
+const projectedFill = "color-mix(in oklab, var(--accent) 35%, transparent)";
 
 const rowLabel: React.CSSProperties = { fontSize: 14, color: "var(--muted)" };
 
