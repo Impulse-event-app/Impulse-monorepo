@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from auth import get_current_user, get_optional_user
 from database import get_db
+from environment import can_manage_venue
 from demo_mode import hide_demo_venues, viewer_is_demo
 from deal_schedules import SYDNEY, auto_title, date_label, deal_price_for, expires_for
 from models import Deal, Venue, VenueReel
@@ -25,7 +26,7 @@ def _get_deal_or_404(deal_id: str, db: Session) -> Deal:
 
 def _assert_deal_owner(deal: Deal, user: dict, db: Session) -> None:
     venue = db.query(Venue).filter(Venue.id == deal.venue_id).first()
-    if not venue or venue.owner_id != user["sub"]:
+    if not venue or not can_manage_venue(venue.owner_id, user):
         raise HTTPException(status_code=403, detail="Not authorized for this deal")
 
 
@@ -103,7 +104,7 @@ def create_deal(
     )
     if not venue:
         raise HTTPException(status_code=404, detail="Venue not found")
-    if venue.owner_id != user["sub"]:
+    if not can_manage_venue(venue.owner_id, user):
         raise HTTPException(status_code=403, detail="Not authorized for this venue")
     fields = body.model_dump()
     # DealCreate defaults is_active to True, so refusing here would stop a

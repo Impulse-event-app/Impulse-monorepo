@@ -42,6 +42,11 @@ back into `dev` so the two don't drift apart.
   `seed_history.py` and `scripts/sandbox_e2e` exit if `APP_ENV=production` or
   if `DATABASE_URL`/`SUPABASE_URL` points at the production project
   (`PRODUCTION_SUPABASE_REFS` in `backend/environment.py`).
+- **Venue admins (staging only).** `VENUE_ADMIN_USER_IDS` on the staging Render
+  service is a comma-separated list of Supabase user ids that can manage every
+  venue, including ones created later, as if they owned it: portal venue
+  switcher, deals, schedules, bookings, Stripe setup. Staging has
+  `owner@test.com` there. Production ignores the variable.
 
 ## One-time setup
 
