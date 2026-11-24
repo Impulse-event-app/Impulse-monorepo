@@ -33,3 +33,24 @@ def refuse_production(what: str) -> None:
     if APP_ENV == "production" or any(is_production_database(u) for u in urls):
         sys.exit(f"Refusing to {what}: this is the production database. "
                  "Demo and test data belong in local or staging only.")
+
+
+# Venue admins: Supabase user ids that can manage every venue, including ones
+# created later, as if they owned it (portal, deals, schedules, bookings,
+# Stripe setup). A comma-separated list in VENUE_ADMIN_USER_IDS, for test
+# accounts on staging. Always empty in production, whatever the variable says.
+VENUE_ADMIN_USER_IDS = frozenset() if APP_ENV == "production" else frozenset(
+    uid.strip()
+    for uid in os.environ.get("VENUE_ADMIN_USER_IDS", "").split(",")
+    if uid.strip()
+)
+
+
+def is_venue_admin(user: dict) -> bool:
+    return user.get("sub") in VENUE_ADMIN_USER_IDS
+
+
+def can_manage_venue(owner_id, user: dict) -> bool:
+    """True if `user` (decoded JWT) owns the venue or is a venue admin."""
+    uid = user.get("sub")
+    return bool(uid) and (str(owner_id) == uid or is_venue_admin(user))

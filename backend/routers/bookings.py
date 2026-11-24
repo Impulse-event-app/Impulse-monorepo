@@ -11,6 +11,7 @@ import payouts
 from auth import get_current_user
 from booking_logic import SplitError
 from database import get_db
+from environment import can_manage_venue
 from models import Booking, BookingParticipant, Deal, User, Venue
 from schemas import (
     BookingCreate,
@@ -107,7 +108,7 @@ def list_bookings_for_deal(
         raise HTTPException(status_code=404, detail="Deal not found")
 
     venue = db.query(Venue).filter(Venue.id == deal.venue_id).first()
-    if not venue or venue.owner_id != user["sub"]:
+    if not venue or not can_manage_venue(venue.owner_id, user):
         raise HTTPException(status_code=403, detail="Not authorized")
 
     bookings = (
@@ -563,7 +564,7 @@ def _load_by_code(db: Session, code: str, user: dict) -> Booking:
     if not b:
         raise HTTPException(status_code=404, detail="Code not found")
     venue = b.deal.venue if b.deal else None
-    if not venue or venue.owner_id != user["sub"]:
+    if not venue or not can_manage_venue(venue.owner_id, user):
         raise HTTPException(status_code=403, detail="Not authorized for this venue")
     return b
 
@@ -645,7 +646,7 @@ def get_booking(
     """Accessible by: a participant OR the venue admin."""
     b = flow.load(db, booking_id)
     if any(p.user_id == user["sub"] for p in b.participants) or (
-        b.deal and b.deal.venue and b.deal.venue.owner_id == user["sub"]
+        b.deal and b.deal.venue and can_manage_venue(b.deal.venue.owner_id, user)
     ):
         return BookingResponse.model_validate(b).model_copy(update=BookingResponse.seat_fields(b, user["sub"]))
     raise HTTPException(status_code=403, detail="Not authorized")

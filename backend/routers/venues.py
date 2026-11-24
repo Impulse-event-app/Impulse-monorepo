@@ -13,6 +13,7 @@ import google_places
 import stripe_client
 from auth import SUPABASE_URL, get_current_user
 from database import SessionLocal, get_db
+from environment import can_manage_venue, is_venue_admin
 from booking_logic import VENUE_TZ, pack_nights, slot_at
 from deal_schedules import deal_price_for
 from mailer import MailNotConfigured, MailSendFailed, send_email
@@ -51,7 +52,7 @@ def _get_venue_or_404(venue_id: str, db: Session) -> Venue:
 
 
 def _assert_owner(venue: Venue, user: dict) -> None:
-    if venue.owner_id != user["sub"]:
+    if not can_manage_venue(venue.owner_id, user):
         raise HTTPException(status_code=403, detail="Not authorized for this venue")
 
 
@@ -118,10 +119,11 @@ def create_venue(
 def _my_venues_query(db: Session, user: dict):
     """Every active venue this user owns. Ordered so the choice of "first" is
     stable — without it Postgres is free to reorder rows after any UPDATE."""
+    q = db.query(Venue).filter(Venue.is_active == True)
+    if not is_venue_admin(user):
+        q = q.filter(Venue.owner_id == user["sub"])
     return (
-        db.query(Venue)
-        .filter(Venue.owner_id == user["sub"], Venue.is_active == True)
-        .order_by(Venue.created_at.asc(), Venue.name.asc(), Venue.id.asc())
+        q.order_by(Venue.created_at.asc(), Venue.name.asc(), Venue.id.asc())
     )
 
 
