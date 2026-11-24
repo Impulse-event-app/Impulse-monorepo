@@ -4,12 +4,21 @@ import { StatusBar } from 'expo-status-bar';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { AppState, FlatList, Image, Pressable, Text, View, type ListViewToken } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
 import { DarkScope, fontMono, fontUI, useApp } from '../../../src/theme';
 import { Btn, DiscountChip, EmptyState, Scrim, Skeleton, unitLabel, useReduceMotion } from '../../../src/components';
 import { Play } from '../../../src/icons';
 import { canonicalCat, money } from '../../../src/data';
 import { listReels, type ApiReel } from '../../../src/api';
 import { FLOATING_TAB_CLEARANCE } from './_layout';
+
+/** Space under a reel's text so it sits above the tab bar. On iOS the native
+ *  tab bar is part of the bottom safe-area inset, so use that when it's bigger
+ *  than the old fixed clearance. */
+function useReelClearance() {
+  const insets = useSafeAreaInsets();
+  return Math.max(FLOATING_TAB_CLEARANCE, insets.bottom + 16);
+}
 
 const FILL = { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 } as const;
 
@@ -62,6 +71,7 @@ function ReelItem({ r, height, width, near, playing, paused, onTogglePause }: {
   const poster = r.poster_url ?? r.venue_image_url;
   // Book only when the feed still has this deal — the event page reads from the same list.
   const bookable = !!r.deal_id && !!apiDeals[r.deal_id];
+  const clearance = useReelClearance();
 
   return (
     <View style={{ height, width, alignSelf: 'center', overflow: 'hidden', backgroundColor: '#000' }}>
@@ -86,7 +96,14 @@ function ReelItem({ r, height, width, near, playing, paused, onTogglePause }: {
 
       <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}>
         <Scrim stops={[[0, 0], [0.35, 0.55], [1, 0.92]]} style={{ top: -80 }} />
-        <View pointerEvents="box-none" style={{ paddingHorizontal: 16, paddingBottom: FLOATING_TAB_CLEARANCE + 8, gap: 10 }}>
+        {/* Blur the strip the tab bar floats over; the text sits above it. */}
+        <BlurView
+          pointerEvents="none"
+          intensity={28}
+          tint="dark"
+          style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: clearance }}
+        />
+        <View pointerEvents="box-none" style={{ paddingHorizontal: 16, paddingBottom: clearance + 8, gap: 10 }}>
           <View>
             <Text numberOfLines={2} style={{ ...fontUI(600), fontSize: 26, letterSpacing: -0.5, color: T.text }}>{r.venue_name}</Text>
             <Text numberOfLines={1} style={{ ...fontUI(500), fontSize: 14, color: T.muted, marginTop: 2 }}>
@@ -122,6 +139,7 @@ function ReelItem({ r, height, width, near, playing, paused, onTogglePause }: {
 function DiscoverFeed() {
   const { T } = useApp();
   const insets = useSafeAreaInsets();
+  const clearance = useReelClearance();
   const onScreen = useOnScreen();
   const reduceMotion = useReduceMotion();
   const [reels, setReels] = useState<ApiReel[] | null>(null);
@@ -160,7 +178,7 @@ function DiscoverFeed() {
   let body: React.ReactNode;
   if (reels === null && !failed) {
     body = (
-      <View accessible accessibilityLabel="Loading" style={{ flex: 1, width: reelWidth || '100%', alignSelf: 'center', justifyContent: 'flex-end', padding: 16, paddingBottom: FLOATING_TAB_CLEARANCE + 8, gap: 10 }}>
+      <View accessible accessibilityLabel="Loading" style={{ flex: 1, width: reelWidth || '100%', alignSelf: 'center', justifyContent: 'flex-end', padding: 16, paddingBottom: clearance + 8, gap: 10 }}>
         <Skeleton width="55%" height={26} />
         <Skeleton width="35%" height={14} />
         <Skeleton width="80%" height={16} />
@@ -199,6 +217,10 @@ function DiscoverFeed() {
         extraData={[activeIndex, onScreen, toggled, reduceMotion]}
         getItemLayout={(_, index) => ({ length: height, offset: height * index, index })}
         pagingEnabled
+        // Under the native tab bar iOS would add its own bottom inset, which
+        // pushes each full-screen reel down so its text slides under the bar.
+        automaticallyAdjustContentInsets={false}
+        contentInsetAdjustmentBehavior="never"
         snapToAlignment="start"
         decelerationRate="fast"
         showsVerticalScrollIndicator={false}
