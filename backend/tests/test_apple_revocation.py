@@ -4,7 +4,7 @@ sends Apple and how it reacts to each outcome, not Apple itself."""
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from jose import jwt
 
@@ -189,8 +189,20 @@ def test_empty_code_is_rejected(apple_env, monkeypatch):
 def deleted(monkeypatch):
     """Stub the Supabase identity removal; records which users it was called for."""
     removed = []
+    monkeypatch.setattr(users, "SUPABASE_SERVICE_ROLE_KEY", "srk")
     monkeypatch.setattr(users, "_delete_auth_user", removed.append)
     return removed
+
+
+def test_missing_service_role_key_deletes_nothing(apple_env, monkeypatch, deleted):
+    """Without the key the auth identity can't be removed, so nothing else may go first."""
+    monkeypatch.setattr(users, "SUPABASE_SERVICE_ROLE_KEY", None)
+    calls = _stub_post(monkeypatch, _Resp(200))
+    session = FakeSession(User(id=UID, apple_refresh_token="r.abc"))
+    with pytest.raises(HTTPException) as exc:
+        users.delete_me(db=session, user={"sub": UID})
+    assert exc.value.status_code == 503
+    assert calls == [] and session.commits == 0 and deleted == []
 
 
 def test_delete_revokes_stored_apple_token(apple_env, monkeypatch, deleted):

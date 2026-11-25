@@ -454,8 +454,10 @@ class BookingHoldStart(BaseModel):
 class HoldIntentResponse(BaseModel):
     """Everything PaymentSheet needs. intent_type "payment" = hold the card now
     (initPaymentSheet paymentIntentClientSecret); "setup" = save it now, held
-    closer to the slot (setupIntentClientSecret)."""
-    intent_type: Literal["payment", "setup"]
+    closer to the slot (setupIntentClientSecret); "demo" = an App Review demo
+    venue, no payment: skip PaymentSheet and confirm with intent_id (the
+    secrets and customer are empty)."""
+    intent_type: Literal["payment", "setup", "demo"]
     intent_id: str
     client_secret: str
     amount_cents: int
@@ -761,6 +763,26 @@ class PushTokenRegister(BaseModel):
 
 class AppleTokenRegister(BaseModel):
     authorization_code: str = Field(min_length=1, max_length=2048)
+
+
+class ContactMatchRequest(BaseModel):
+    """SHA-256 hex hashes of normalised phone numbers and emails from the
+    user's address book. Never the contacts themselves."""
+    hashes: List[str] = Field(max_length=2000)
+
+
+class ContactMatch(BaseModel):
+    """A friend found in your contacts. `hash` says which contact matched, so
+    the app can show them under the name saved in your phone."""
+    id: str
+    display_name: str
+    hash: str
+
+
+class ContactIdentityResponse(BaseModel):
+    """Whether friends can currently find you from their contacts."""
+    phone_findable: bool
+    email_findable: bool
 
 
 class UserSearchResult(BaseModel):

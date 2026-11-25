@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from auth import get_current_user
 from database import get_db
+from environment import can_manage_venue
 from deal_schedules import deal_price_for, generate_scheduled_deals
 from models import DealSchedule, Venue
 from routers.deals import check_reel, title_fields
@@ -25,7 +26,7 @@ def _owned_venue(venue_id: str, user: dict, db: Session) -> Venue:
     venue = db.query(Venue).filter(Venue.id == venue_id, Venue.is_active == True).first()
     if not venue:
         raise HTTPException(status_code=404, detail="Venue not found")
-    if venue.owner_id != user["sub"]:
+    if not can_manage_venue(venue.owner_id, user):
         raise HTTPException(status_code=403, detail="Not authorized for this venue")
     return venue
 

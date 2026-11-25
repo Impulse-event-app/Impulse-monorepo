@@ -173,7 +173,9 @@ export type BookingCreate = {
  *  intent_type "payment" = hold the card now; "setup" = the booking is more
  *  than six days out, so the card is saved now and held closer to the slot. */
 export type HoldIntent = {
-  intent_type: 'payment' | 'setup';
+  /** 'demo': an App Review demo venue. No payment is taken: skip PaymentSheet
+   *  and confirm straight away with intent_id (secrets and customer are empty). */
+  intent_type: 'payment' | 'setup' | 'demo';
   intent_id: string;
   client_secret: string;
   amount_cents: number;
@@ -538,11 +540,21 @@ export async function claimSeat(seatToken: string): Promise<SeatLanding> {
 /** Someone on Impulse to invite — a name only, never their contact details. */
 export type UserSearchResult = { id: string; display_name: string; recent: boolean };
 
-/** Find a friend by name (3+ letters), or exact email/phone. Empty query →
- *  people you've booked with before. */
-export async function searchUsers(q: string): Promise<UserSearchResult[]> {
-  const qs = q.trim() ? `?q=${encodeURIComponent(q.trim())}` : '';
-  return request<UserSearchResult[]>(`/users/search${qs}`);
+/** People you've booked with before, most recent first. There is no
+ *  directory search: new friends come from your contacts (matchContacts). */
+export async function recentPeople(): Promise<UserSearchResult[]> {
+  return request<UserSearchResult[]>('/users/search');
+}
+
+/** Which of these contact hashes are people on Impulse (see src/contacts.ts). */
+export async function matchContacts(hashes: string[]): Promise<{ id: string; display_name: string; hash: string }[]> {
+  return request('/users/match-contacts', { method: 'POST', body: JSON.stringify({ hashes }) });
+}
+
+/** Store the hashes of my verified phone / Google-or-Apple email so friends
+ *  can find me from their contacts. Call after sign-in and after a phone check. */
+export async function syncContactIdentity(): Promise<{ phone_findable: boolean; email_findable: boolean }> {
+  return request('/users/me/contact-identity', { method: 'POST' });
 }
 
 /** Initiator: save a seat for a friend on Impulse — they get a push and it

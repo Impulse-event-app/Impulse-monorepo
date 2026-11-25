@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useColorScheme } from 'react-native';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { DEFAULT_FILTERS, Drop, Filters, Plan, apiBookingToPlan, apiDealToDrop } from './data';
+import { DEFAULT_FILTERS, Drop, Filters, Plan, SUBURB_COORDS, apiBookingToPlan, apiDealToDrop } from './data';
 import { ApiDeal, listDeals, getMyBookings } from './api';
 import { supabase } from './supabase';
 import { fetchUserProfile, syncUserProfile } from './auth';
@@ -95,6 +95,14 @@ export type Theme = {
 };
 
 // Impulse Red. The mark's ground is always this exact red (never recoloured).
+/** The part of an email before the @, used as a fallback display name.
+ *  Empty for Sign in with Apple relay addresses (Hide My Email), whose local
+ *  part is a random string that should never be shown as someone's name. */
+export function emailName(email?: string | null): string {
+  if (!email || /@privaterelay\.appleid\.com$/i.test(email)) return '';
+  return email.split('@')[0];
+}
+
 export const IMPULSE_RED = '#C80815';
 
 export function tokens(dark: boolean): Theme {
@@ -265,7 +273,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const T = useMemo(() => tokens(dark), [dark]);
 
   // Convert raw API deals → Drop array whenever deals change
-  const drops: Drop[] = useMemo(() => rawDeals.map((d) => apiDealToDrop(d)), [rawDeals]);
+  // Distances are measured from the centre of the user's home suburb. The
+  // device's precise location is never stored (see the privacy policy).
+  const origin = SUBURB_COORDS[(profile.suburb || '').trim().toLowerCase()];
+  const drops: Drop[] = useMemo(
+    () => rawDeals.map((d) => apiDealToDrop(d, origin?.latitude, origin?.longitude)),
+    [rawDeals, origin?.latitude, origin?.longitude],
+  );
 
   // O(1) lookup map for detail screens
   const apiDeals: Record<string, ApiDeal> = useMemo(
@@ -354,7 +368,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const sessionEmail = user.email ?? '';
         setProfile((p) => ({
           ...p,
-          name: p.name || providerName || (sessionEmail ? sessionEmail.split('@')[0] : ''),
+          name: p.name || providerName || emailName(sessionEmail),
           email: p.email || sessionEmail,
           phone: p.phone || user.phone || '',
         }));
@@ -362,7 +376,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       const email = up?.email ?? user.email ?? '';
       const backendName = up?.full_name?.trim() ?? '';
-      const name = (backendName || providerName || (email ? email.split('@')[0] : '')) || 'You';
+      const name = (backendName || providerName || emailName(email)) || 'You';
       setProfile({
         name,
         email,
@@ -404,10 +418,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         refreshDeals();
         refreshBookings();
         refreshProfile();
-        // Refresh the push token (huddle + invite pushes). Someone who was
-        // never asked — skipped onboarding — gets the one iOS prompt now,
-        // or invites would never reach them.
-        import('./permissions').then((p) => p.syncPushToken({ ask: true }).catch(() => {}));
+        // Refresh the push token (huddle + invite pushes) for users who have
+        // already granted permission. Never prompt here: an iOS permission
+        // alert with no context is an App Review 5.1.1 problem. Onboarding
+        // and the notifications toggle in Profile are where we ask.
+        import('./permissions').then((p) => p.syncPushToken().catch(() => {}));
+        // Keep "friends can find me from their contacts" current (verified
+        // phone, Google/Apple email). Cheap and idempotent.
+        if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+          import('./api').then((a) => a.syncContactIdentity().catch(() => {}));
+        }
         if (!bookingsChannel) {
           bookingsChannel = supabase
             .channel('bookings-live')

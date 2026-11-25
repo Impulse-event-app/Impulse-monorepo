@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { venueApi, type VenueCreate } from "@/lib/api";
+import { userApi, venueApi, type VenueCreate } from "@/lib/api";
+import { useAuth } from "@/providers/AuthProvider";
 import { VenueForm } from "@/components/VenueForm";
 import { useVenue } from "@/providers/VenueProvider";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -12,6 +14,9 @@ export default function VenueOnboardingPage() {
   const { venue, loading, error: venueLoadError, refetch, setVenue } = useVenue();
   const router = useRouter();
   const { theme, toggle } = useTheme();
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const [firstName, setFirstName] = useState("");
 
   useEffect(() => {
     if (!loading && venue) router.replace("/dashboard");
@@ -42,6 +47,9 @@ export default function VenueOnboardingPage() {
   }
 
   async function handleSubmit(payload: VenueCreate) {
+    // Saved first, so a failure here leaves nothing half-created.
+    const profile = await userApi.update({ full_name: firstName.trim() });
+    qc.setQueryData(["me", user?.id], profile);
     const created = await venueApi.create(payload);
     setVenue(created);
     // Straight into Stripe verification rather than the dashboard. It reads as
@@ -70,7 +78,7 @@ export default function VenueOnboardingPage() {
         <div style={{ ...numeric, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--accent)", marginBottom: 12 }}>Step 1 of 2 · Set up your venue</div>
         <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 38, letterSpacing: "-.02em", margin: "0 0 8px" }}>Tell us about your venue</h1>
         <p style={{ color: "var(--muted)", fontSize: 15, margin: "0 0 10px", maxWidth: 560 }}>This is what guests see when your deals surface. You can edit any of it later from Venue details. Next you&rsquo;ll set up payments so your takings reach your own account.</p>
-        <VenueForm submitLabel="Create venue →" savingLabel="Creating venue…" onSubmit={handleSubmit} />
+        <VenueForm submitLabel="Create venue →" savingLabel="Creating venue…" onSubmit={handleSubmit} firstName={firstName} onFirstNameChange={setFirstName} />
       </div>
     </>
   );

@@ -34,7 +34,7 @@ export default function DashboardPage() {
     return <div style={{ display: "grid", placeItems: "center", height: "60vh", color: "var(--faint)", fontSize: 14 }}>Loading…</div>;
   }
 
-  return <DashboardContent venueId={venue.id} venueName={venue.name} />;
+  return <DashboardContent venueId={venue.id} />;
 }
 
 function VenueLoadError({ error, onRetry }: { error: ApiError; onRetry: () => void }) {
@@ -186,19 +186,18 @@ function PaymentsSetupBanner({
 }
 
 
-function DashboardContent({ venueId, venueName }: { venueId: string; venueName: string }) {
+function DashboardContent({ venueId }: { venueId: string }) {
   const router = useRouter();
   const { user } = useAuth();
 
-  // The name on the account, else a guess from the email address.
+  // The first name the owner gave at onboarding (or in Venue details). With none
+  // saved, the greeting goes without a name rather than guessing from the email.
   const { data: profile } = useQuery({
     queryKey: ["me", user?.id],
     queryFn: userApi.me,
     enabled: !!user,
   });
-  const firstName =
-    profile?.full_name?.trim().split(/\s+/)[0] ||
-    (user?.email?.split("@")[0]?.split(/[.\-_]/)[0]?.replace(/^\w/, (c) => c.toUpperCase()) ?? venueName);
+  const firstName = profile?.full_name?.trim().split(/\s+/)[0] || null;
 
   const { data: stats, isLoading } = useQuery<StatsResponse>({
     queryKey: ["stats", venueId],
@@ -245,7 +244,7 @@ function DashboardContent({ venueId, venueName }: { venueId: string; venueName: 
             {todayLabel()}
           </div>
           <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 34, letterSpacing: "-.02em", margin: 0 }}>
-            {greeting()}, {firstName}
+            {firstName ? `${greeting()}, ${firstName}` : greeting()}
           </h1>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
@@ -302,7 +301,7 @@ function DashboardContent({ venueId, venueName }: { venueId: string; venueName: 
           )}
         </div>
 
-        <div style={{ borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", border: "1px solid var(--line2)", background: "linear-gradient(160deg, color-mix(in oklab, var(--accent) 14%, var(--surface)), var(--surface))" }}>
+        <div style={{ borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", border: "1px solid var(--line2)", background: "var(--surface)" }}>
           <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 17, marginBottom: 6 }}>Quick actions</div>
           <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 20 }}>Publish a deal or check in a guest.</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>

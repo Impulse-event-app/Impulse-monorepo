@@ -5,20 +5,9 @@ import { useRouter } from "next/navigation";
 import { autoDealTitle, formatCurrency } from "@/lib/utils";
 import { useVenue } from "@/providers/VenueProvider";
 import type { DealCreate, DealUpdate, Deal, DealSchedule, DealScheduleInput } from "@/lib/api";
+import { CATEGORIES } from "@/lib/categories";
+import { CategorySelect } from "@/components/CategorySelect";
 import { FONT_DISPLAY, card, fieldLabel, fieldInput, btnPrimary, btnGhost, numeric, switchTrack, switchKnob } from "@/lib/ui";
-
-const CATEGORIES = [
-  "Bar",
-  "Restaurant",
-  "Cafe",
-  "Bowling",
-  "Mini Golf",
-  "Escape Room",
-  "Arcade",
-  "Pool / Billiards",
-  "Karaoke",
-  "Other",
-];
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]; // index = backend weekday (0 = Monday)
 
@@ -111,6 +100,10 @@ export function DealForm({ venueId, initial: initialDeal, initialSchedule, onSub
     setError(null);
     // A slot still sitting in the box counts: people forget to press Enter.
     const allSlots = slotInput.trim() && !slots.includes(slotInput.trim()) ? [...slots, slotInput.trim()] : slots;
+    if (!category.trim()) {
+      setError("Type what kind of venue this deal is for");
+      return;
+    }
     if (allSlots.length === 0) {
       setError("Add at least one time slot");
       return;
@@ -174,9 +167,7 @@ export function DealForm({ venueId, initial: initialDeal, initialSchedule, onSub
           </div>
           <div>
             <label style={fieldLabel}>Category</label>
-            <select value={category} onChange={(e) => setCategory(e.target.value)} style={fieldInput}>
-              {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-            </select>
+            <CategorySelect value={category} onChange={setCategory} selectStyle={fieldInput} inputStyle={fieldInput} />
           </div>
           <div style={{ gridColumn: "1 / -1" }}>
             <label style={fieldLabel}>Description</label>

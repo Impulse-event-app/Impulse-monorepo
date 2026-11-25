@@ -4,7 +4,7 @@
 |---|---|---|---|
 | Database | Local Postgres or the staging DB | Supabase project (current one, `pdcevxkvgtptjczzsmkh`) | New Supabase project, real data only |
 | Stripe | Test keys | Test keys | Live keys |
-| Backend | `uv run uvicorn main:app --reload` | Render: `impulse-staging` | Render: `Impulse-monorepo` |
+| Backend | `uv run uvicorn main:app --reload` | Render: `impulse-staging` | Render: `Impulse-production` (URL still `impulse-monorepo.onrender.com`) |
 | venue-web | `npm run dev` | `dev.venues.impulseapp.au` (Vercel, `dev` branch) | `venues.impulseapp.au` (Vercel, `main`) |
 | iOS app | Simulator / dev build | **Impulse Staging** (`au.impulseapp.impulse.staging`) on TestFlight | **Impulse** (`au.impulseapp.impulse`): TestFlight, then App Store |
 | Web app | `npx expo start --web` | `impulse--staging.expo.app` | `impulse.expo.app` |
@@ -42,6 +42,11 @@ back into `dev` so the two don't drift apart.
   `seed_history.py` and `scripts/sandbox_e2e` exit if `APP_ENV=production` or
   if `DATABASE_URL`/`SUPABASE_URL` points at the production project
   (`PRODUCTION_SUPABASE_REFS` in `backend/environment.py`).
+- **Venue admins (staging only).** `VENUE_ADMIN_USER_IDS` on the staging Render
+  service is a comma-separated list of Supabase user ids that can manage every
+  venue, including ones created later, as if they owned it: portal venue
+  switcher, deals, schedules, bookings, Stripe setup. Staging has
+  `owner@test.com` there. Production ignores the variable.
 
 ## One-time setup
 
@@ -58,6 +63,18 @@ somewhere else.
    Google Cloud), Apple (client id `au.impulseapp.impulse`).
 4. Authentication → URL Configuration: add `impulse://**`,
    `https://impulse.expo.app/**` and `https://venues.impulseapp.au/**`.
+5. Authentication → Email Templates → **Reset Password**: the app resets
+   passwords with a 6-digit code typed in the app, not a link. Make the body
+   show the code, e.g. `<p>Your Impulse password reset code is
+   <strong>{{ .Token }}</strong>. It expires in 1 hour.</p>`. Do the same on
+   staging. Check Authentication → Providers → Email → "Email OTP Length" is 6.
+6. Phone numbers are required on every account and verified by SMS
+   (`updateUser({ phone })` → `verifyOtp({ type: 'phone_change' })`), so the
+   Phone provider and its SMS sender must be on in **both** projects. Every
+   new account costs at least one SMS.
+7. Set up custom SMTP (Authentication → Emails) so reset and confirmation
+   emails aren't held to Supabase's built-in sender rate limit. Or turn
+   "Confirm email" off.
 
 ### 2. Staging Supabase project (the current one)
 1. Apple provider: add `au.impulseapp.impulse.staging` to the client ids.
@@ -81,7 +98,7 @@ somewhere else.
    Supabase keys, Stripe **test** keys, `APNS_BUNDLE_ID` and `APPLE_CLIENT_ID` =
    `au.impulseapp.impulse.staging`.
    ✱ Settings → Deploy Hook → GitHub secret `RENDER_STAGING_DEPLOY_HOOK_URL`.
-2. **Production service `Impulse-monorepo`**: change the start command to the
+2. **Production service `Impulse-production`** (formerly `Impulse-monorepo`; URL unchanged): change the start command to the
    one above, set `APP_ENV=production`, and switch DB/Supabase/Stripe values to
    the new production project and Stripe live keys.
 

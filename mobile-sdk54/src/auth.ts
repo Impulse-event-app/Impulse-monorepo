@@ -39,6 +39,15 @@ export async function signInWithApple() {
     token: credential.identityToken,
   });
   if (error) throw error;
+  // Apple shares the user's name only on the very first authorization and
+  // never puts it in the identity token, so save it now or it's gone (and
+  // a Hide My Email user would otherwise show up as a random relay address).
+  const fullName = [credential.fullName?.givenName, credential.fullName?.familyName]
+    .filter(Boolean).join(' ').trim();
+  if (fullName) {
+    supabase.auth.updateUser({ data: { full_name: fullName } }).catch(() => {/* best effort */});
+    syncUserProfile({ full_name: fullName }).catch((e) => console.warn('Saving Apple name failed', e));
+  }
   // Let the backend swap the one-time code for Apple's refresh token, so
   // deleting the account can revoke the Apple grant. Best-effort and not
   // awaited: a failure here must never block sign-in.
@@ -122,9 +131,41 @@ export async function signInWithEmail(email: string, password: string) {
   return data.user;
 }
 
-export async function signUpWithEmail(email: string, password: string) {
-  const { data, error } = await supabase.auth.signUp({ email, password });
+/**
+ * Create an email account. `session` is null when the Supabase project
+ * requires email confirmation: the user must tap the link in their inbox and
+ * then sign in, so callers must not route on as if they were signed in.
+ * The name is stored on the auth user too, so it survives that round trip.
+ */
+export async function signUpWithEmail(email: string, password: string, fullName?: string) {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: fullName ? { data: { full_name: fullName } } : undefined,
+  });
   if (error) throw error;
+  return { user: data.user, session: data.session };
+}
+
+// ── Password reset with a 6-digit code ───────────────────────
+// The code is typed into the app, not opened as a link, so it works whichever
+// device or browser the email is read on (a PKCE reset link only completes in
+// the client that requested it).
+// Supabase prerequisite (staging AND production): Auth > Email Templates >
+// Reset Password must include {{ .Token }} — see docs/environments.md.
+// Supabase sends nothing for an unknown address and doesn't say so, which
+// avoids revealing who has an account.
+export async function sendPasswordResetCode(email: string) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+  if (error) throw error;
+}
+
+/** Check the emailed code (this signs the user in), then set the new password. */
+export async function resetPasswordWithCode(email: string, code: string, newPassword: string) {
+  const { data, error } = await supabase.auth.verifyOtp({ email: email.trim(), token: code, type: 'recovery' });
+  if (error) throw error;
+  const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+  if (updateError) throw updateError;
   return data.user;
 }
 

@@ -33,7 +33,7 @@ def _seat(sid, share, status="unpaid", **kw):
 
 def _venue(pilot_ends_at=FUTURE):
     return SimpleNamespace(id="v-1", name="Cityheroes", stripe_account_id="acct_venue",
-                           stripe_transfers_status="active", pilot_ends_at=pilot_ends_at)
+                           stripe_transfers_status="active", pilot_ends_at=pilot_ends_at, is_demo=False)
 
 
 def _deal(price="25.00", unit="pp", date="Tuesday 29 September 2026"):
@@ -602,3 +602,71 @@ def test_edit_split_rejects_changing_a_paid_share():
     assert [p.share_amount_cents for p in b.participants] == [2500, 2500]
 
 
+
+
+# ── App Review demo venue ────────────────────────────────────────────────────
+
+@pytest.fixture
+def no_stripe(monkeypatch):
+    """Any Stripe call at all fails the test: a demo booking must never make one."""
+    def boom(*a, **kw):
+        raise AssertionError("a demo booking called Stripe")
+    for name in ("retrieve_payment_intent", "capture_payment_intent", "cancel_payment_intent",
+                 "create_refund", "create_payment_intent", "create_setup_intent"):
+        monkeypatch.setattr(stripe_client, name, boom, raising=False)
+    for name in ("create_hold", "create_setup", "place_offsession_hold"):
+        monkeypatch.setattr(payments, name, boom)
+    monkeypatch.setattr(flow.wallet, "sheet_params", boom)
+
+
+def _demo(b):
+    b.deal.venue.is_demo = True
+    b.deal.venue.stripe_account_id = None
+    b.deal.venue.stripe_transfers_status = None
+    return b
+
+
+def test_demo_start_hold_skips_stripe_and_says_demo(monkeypatch, no_stripe):
+    b, sam = _claimable(monkeypatch)
+    _demo(b)
+    out = flow.start_hold(StubDB(), b, sam, {"sub": "u-sam"}, 3100)
+    assert out["intent_type"] == "demo" and out["client_secret"] == ""
+    assert out["intent_id"].startswith(payments.DEMO_PREFIX) and out["amount_cents"] == 3100
+    assert sam.deposit_payment_id == out["intent_id"] and sam.deposit_status == "unpaid"
+
+
+def test_demo_confirm_marks_the_seat_in_without_stripe(monkeypatch, no_stripe):
+    b, sam = _claimable(monkeypatch)
+    _demo(b)
+    monkeypatch.setattr(flow, "maybe_confirm", lambda db, b: None)
+    out = flow.start_hold(StubDB(), b, sam, {"sub": "u-sam"}, 3100)
+    flow.confirm_hold(StubDB(), b, sam, {"sub": "u-sam"}, out["intent_id"])
+    assert sam.deposit_status == "paid" and sam.hold_status == "held"
+    assert sam.stripe_payment_method_id is None and sam.hold_expires_at is None
+
+
+def test_a_demo_placeholder_cannot_pay_for_a_real_venue(monkeypatch):
+    b, sam = _claimable(monkeypatch)
+    sam.deposit_payment_id = payments.DEMO_PREFIX + "forged"
+    with pytest.raises(HTTPException) as e:
+        flow.confirm_hold(StubDB(), b, sam, {"sub": "u-sam"}, sam.deposit_payment_id)
+    assert e.value.status_code == 409 and sam.deposit_status == "unpaid"
+
+
+def test_demo_cancellation_and_redemption_never_reach_stripe(monkeypatch, no_stripe):
+    monkeypatch.setattr(payouts, "pay_out_booking", lambda db, b: None)
+    seat = _seat("ini", 5000, "paid", intent=payments.DEMO_PREFIX + "x", hold="held")
+    b = _demo(_booking([seat], status="confirmed"))
+    assert flow.settle_cancellation(StubDB(), b) == 500     # the 10% "kept", but nothing charged
+    seat2 = _seat("ini", 5000, "paid", intent=payments.DEMO_PREFIX + "y", hold="held")
+    b2 = _demo(_booking([seat2], status="confirmed"))
+    flow.redeem(StubDB(), b2)
+    assert seat2.hold_status == "captured" and seat2.balance_payment_id.startswith(payments.DEMO_PREFIX)
+
+
+def test_demo_guarantor_covers_unpaid_seats_without_a_card(monkeypatch, no_stripe):
+    monkeypatch.setattr(flow, "_customer_of", lambda db, p: None)     # demo accounts have no card
+    b = _demo(_guaranteed_booking())
+    assert flow.charge_guarantor(StubDB(), b) == 2
+    assert [p.deposit_status for p in b.participants] == ["paid", "guaranteed", "guaranteed", "settled"]
+    assert all(payments.is_demo_id(p.deposit_payment_id) for p in b.participants[1:3])

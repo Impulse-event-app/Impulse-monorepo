@@ -28,6 +28,8 @@ class User(Base):
     avatar_url = Column(Text, nullable=True)
     home_suburb = Column(Text, nullable=True)
     preferred_acts = Column(ARRAY(Text()), nullable=False, server_default="{}")
+    # App Review demo account: sees demo venues (Venue.is_demo) in the feed.
+    is_demo = Column(Boolean, nullable=False, default=False, server_default="false")
     accessibility_needs = Column(ARRAY(Text()), nullable=False, server_default="{}")
     party_size = Column(Integer, nullable=False, server_default="2")
     age_bracket = Column(Integer, nullable=True)               # 18 | 25 | 35 | 45
@@ -42,6 +44,10 @@ class User(Base):
     # Sign in with Apple refresh token, kept only so account deletion can revoke
     # the Apple grant (App Store 5.1.1(v)). Null for non-Apple users.
     apple_refresh_token = Column(Text, nullable=True)
+    # SHA-256 of the verified phone (E.164 digits) and Google/Apple-verified
+    # email, so friends can find this user from their contacts. See contact_match.py.
+    phone_hash = Column(Text, nullable=True, index=True)
+    email_hash = Column(Text, nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -94,6 +100,9 @@ class Venue(Base):
     email = Column(Text, nullable=True)
     website = Column(Text, nullable=True)
     opening_hours = Column(Text, nullable=True)
+    # App Review demo venue: only demo accounts see it, and its bookings never
+    # touch Stripe (booking_flow.is_demo, payments.DEMO_PREFIX).
+    is_demo = Column(Boolean, nullable=False, default=False, server_default="false")
     image_url = Column(Text, nullable=True)                    # cover photo (= image_urls[0]), kept for builds that know one photo
     image_urls = Column(ARRAY(Text()), nullable=False, server_default="{}")  # photo gallery, cover first, in the venue-photos bucket
     google_place_id = Column(Text, nullable=True)              # Google Maps place the venue linked in the portal

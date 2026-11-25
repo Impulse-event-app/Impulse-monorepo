@@ -11,6 +11,7 @@
 //   overlay — always null here (the native sheet presents itself); the web
 //     version renders its form through it, so callers render it either way.
 import { useStripe } from '@stripe/stripe-react-native';
+import { Alert } from 'react-native';
 import * as Linking from 'expo-linking';
 import type { ReactNode } from 'react';
 import { ApiBooking, confirmCardUpdate, confirmHold, startCardSetup, startCardUpdate, startHold } from './api';
@@ -66,6 +67,9 @@ export function useStripePay(): {
 
   const holdShare = async (bookingId: string, shareCents: number) => {
     const intent = await startHold(bookingId, shareCents);
+    if (intent.intent_type === 'demo') {
+      return (await confirmDemo()) ? confirmHold(bookingId, intent.intent_id) : null;
+    }
     const done = await present(
       intent.customer_id,
       intent.customer_session_client_secret,
@@ -78,6 +82,8 @@ export function useStripePay(): {
 
   const updateCard = async (bookingId: string) => {
     const intent = await startCardUpdate(bookingId);
+    // A demo seat never needs a new card, so a card update is always a real intent.
+    if (intent.intent_type === 'demo') return null;
     const done = await present(
       intent.customer_id,
       intent.customer_session_client_secret,
@@ -96,4 +102,19 @@ export function useStripePay(): {
   };
 
   return { holdShare, updateCard, addCard, overlay: null };
+}
+
+/** App Review demo venue: say plainly that nothing is charged, then book. */
+function confirmDemo(): Promise<boolean> {
+  return new Promise((resolve) => {
+    Alert.alert(
+      'Demo booking',
+      'This is a demo venue for App Review. No payment is taken, and no card is needed.',
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Book (no charge)', onPress: () => resolve(true) },
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) },
+    );
+  });
 }

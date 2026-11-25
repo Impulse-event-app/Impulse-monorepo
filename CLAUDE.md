@@ -9,7 +9,7 @@ its own CLAUDE.md. Full environment setup: `docs/environments.md`.
 | Branch | Environment | Backend (Render) | Database | Stripe | iOS app | Venue portal |
 |---|---|---|---|---|---|---|
 | `dev` | staging | `impulse-staging` | staging Supabase (`pdcevxkvgtptjczzsmkh`) | test keys | **Impulse Staging** (TestFlight) | dev.venues.impulseapp.au |
-| `main` | production | `Impulse-monorepo` | production Supabase | live keys | **Impulse** (TestFlight → App Store) | venues.impulseapp.au |
+| `main` | production | `Impulse-production` (impulse-monorepo.onrender.com) | production Supabase | live keys | **Impulse** (TestFlight → App Store) | venues.impulseapp.au |
 
 Flow:
 1. Branch off `dev` (`git switch dev && git pull && git switch -c my-change`).
@@ -37,7 +37,10 @@ Never push straight to `dev` or `main`.
 - A brand-new empty database is set up once with `uv run python scripts/bootstrap_db.py`
   (baseline schema + Alembic stamp), never with `alembic upgrade head` alone.
 - Seed/demo/test data never goes to production. The seed scripts refuse to run there
-  (`backend/environment.py`).
+  (`backend/environment.py`). One exception, the App Review demo venue: a venue
+  flagged `is_demo`, seen only by accounts flagged `is_demo`, whose bookings never
+  touch Stripe. Set it up only with `backend/scripts/demo_mode.py` (needs
+  `--production` there); never add unflagged demo venues.
 
 ## Secrets
 

@@ -5,8 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
-from auth import get_current_user
+from auth import get_current_user, get_optional_user
 from database import get_db
+from environment import can_manage_venue
+from demo_mode import hide_demo_venues, viewer_is_demo
 from deal_schedules import SYDNEY, auto_title, date_label, deal_price_for, expires_for
 from models import Deal, Venue, VenueReel
 from routers.merchants import can_publish_deals
@@ -24,7 +26,7 @@ def _get_deal_or_404(deal_id: str, db: Session) -> Deal:
 
 def _assert_deal_owner(deal: Deal, user: dict, db: Session) -> None:
     venue = db.query(Venue).filter(Venue.id == deal.venue_id).first()
-    if not venue or venue.owner_id != user["sub"]:
+    if not venue or not can_manage_venue(venue.owner_id, user):
         raise HTTPException(status_code=403, detail="Not authorized for this deal")
 
 
@@ -66,9 +68,12 @@ def list_deals(
     date: Optional[str] = Query(None),
     active_only: bool = Query(True),
     db: Session = Depends(get_db),
+    user: Optional[dict] = Depends(get_optional_user),
 ):
-    """Public: browse active deals with venue info included."""
+    """Public: browse active deals with venue info included. Demo venues only
+    show for demo accounts (demo_mode)."""
     q = db.query(Deal).options(joinedload(Deal.venue), joinedload(Deal.reel)).join(Venue, Deal.venue_id == Venue.id)
+    q = hide_demo_venues(q, db, user)
     if active_only:
         # A deal is gone once its last slot has passed (expires_at), even if
         # nobody switched it off.
@@ -99,7 +104,7 @@ def create_deal(
     )
     if not venue:
         raise HTTPException(status_code=404, detail="Venue not found")
-    if venue.owner_id != user["sub"]:
+    if not can_manage_venue(venue.owner_id, user):
         raise HTTPException(status_code=403, detail="Not authorized for this venue")
     fields = body.model_dump()
     # DealCreate defaults is_active to True, so refusing here would stop a
@@ -129,14 +134,18 @@ def create_deal(
 
 
 @router.get("/{deal_id}", response_model=DealWithVenueResponse)
-def get_deal(deal_id: str, db: Session = Depends(get_db)):
+def get_deal(
+    deal_id: str,
+    db: Session = Depends(get_db),
+    user: Optional[dict] = Depends(get_optional_user),
+):
     deal = (
         db.query(Deal)
         .options(joinedload(Deal.venue), joinedload(Deal.reel))
         .filter(Deal.id == deal_id)
         .first()
     )
-    if not deal:
+    if not deal or (deal.venue.is_demo and not viewer_is_demo(db, user)):
         raise HTTPException(status_code=404, detail="Deal not found")
     return DealWithVenueResponse.from_deal(deal)
 

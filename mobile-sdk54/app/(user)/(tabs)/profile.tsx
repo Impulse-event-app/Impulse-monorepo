@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Alert, Linking, ScrollView, Text, TextInput, View } from 'react-native';
 import Constants from 'expo-constants';
-import { fontMono, fontUI, useApp, type Appearance } from '../../../src/theme';
+import { fontMono, fontUI, useApp, emailName, type Appearance } from '../../../src/theme';
 import {
   Btn,
   EmptyState,
@@ -24,7 +24,7 @@ import { useWallet } from '../../../src/wallet';
 import { describeCard, sendTestPush } from '../../../src/api';
 import { requestNotificationAccess, syncPushToken } from '../../../src/permissions';
 import { confirmDestructive } from '../../../src/confirm';
-import { FLOATING_TAB_CLEARANCE } from './_layout';
+import { useTabBarClearance } from '../../../src/layout';
 
 const APPEARANCE_LABEL: Record<Appearance, string> = { system: 'System', light: 'Light', dark: 'Dark' };
 const VERSION = Constants.expoConfig?.version ?? '';
@@ -46,6 +46,7 @@ function StatTile({ big, label }: { big: string | number; label: string }) {
 }
 
 export default function ProfileScreen() {
+  const tabClearance = useTabBarClearance();
   const { T, appearance, plans, profile, setProfile, refreshProfile, reset, signedIn } = useApp();
   const router = useRouter();
   const navTop = useNavTop();
@@ -73,7 +74,7 @@ export default function ProfileScreen() {
   const acts = profile.acts || [];
   const actLabel = acts.length === 0 ? 'Everything' : acts.length === 1 ? acts[0] : `${acts[0]} +${acts.length - 1}`;
   const plansCount = plans.length;
-  const displayName = profile.name || (profile.email ? profile.email.split('@')[0] : '') || 'You';
+  const displayName = profile.name || emailName(profile.email) || 'You';
   const initials = displayName.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase() || 'U';
   const I = (k: keyof typeof RowIcons) => RowIcons[k](T.muted);
 
@@ -170,7 +171,7 @@ export default function ProfileScreen() {
         onScroll={onScroll}
         scrollEventThrottle={16}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingTop: navTop, paddingHorizontal: 16, paddingBottom: 24 + FLOATING_TAB_CLEARANCE }}
+        contentContainerStyle={{ paddingTop: navTop, paddingHorizontal: 16, paddingBottom: 24 + tabClearance }}
       >
         <ReadableColumn>
           <LargeTitle>You</LargeTitle>
@@ -219,16 +220,16 @@ export default function ProfileScreen() {
                 <Row icon={I('people')} label="Usual party size" value={`${profile.party}`} onPress={() => openEditor('party')} />
               </Group>
 
-              <Group label="Notifications" footer="One nudge when something opens up nearby tonight. Never a daily blast.">
+              <Group label="Notifications" footer="Booking updates, payment reminders and invites from friends. No marketing.">
                 <Row
                   icon={I('bell')}
-                  label="Drops near me"
+                  label="Booking updates"
                   trailing={
                     <Switch
                       on={profile.notifications}
                       onChange={setNotifications}
                       disabled={notifBusy}
-                      accessibilityLabel="Drops near me"
+                      accessibilityLabel="Booking updates"
                     />
                   }
                 />
@@ -260,7 +261,10 @@ export default function ProfileScreen() {
           </Group>
 
           {signedIn && (
-            <Group label="Account">
+            <Group label="Account" footer="Friends who have your number saved can find and invite you. It's never shown to anyone.">
+              {profile.phone ? (
+                <Row icon={<View />} label="Mobile" value={profile.phone.startsWith('+') ? profile.phone : `+${profile.phone}`} chevron={false} />
+              ) : null}
               <Row icon={I('signout')} label="Sign out" chevron={false} onPress={signOut} />
               <Row
                 icon={<View />}

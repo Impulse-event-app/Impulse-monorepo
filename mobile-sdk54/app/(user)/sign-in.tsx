@@ -10,7 +10,7 @@
 // drops them right where they left off.
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View, type ScrollViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { fontUI, useApp } from '../../src/theme';
@@ -18,11 +18,12 @@ import { BackButton, Btn, CodeInput, ErrorText, Field, Radar, TextBtn, Wordmark 
 import { GoogleLogo, MailGlyph, PhoneGlyph } from '../../src/icons';
 import {
   fetchUserProfile, isOnboarded, markIntroSeen, markOnboarded, sendPhoneOtp, signInWithApple, signInWithGoogle,
-  signInWithEmail, signUpWithEmail, syncUserProfile, verifyPhoneOtp,
+  resetPasswordWithCode, sendPasswordResetCode, signInWithEmail, signUpWithEmail, syncUserProfile, verifyPhoneOtp,
 } from '../../src/auth';
 import { supabase } from '../../src/supabase';
 import { Lede, Panel, usePagerWidth } from '../../src/onboardingUI';
 import { HeroMotion, HeroWord } from '../../src/HeroMotion';
+import { auPhoneE164, PHONE_PREFIX, stripAuPrefix } from '../../src/PhoneVerify';
 
 function GoogleBtn({ onPress, loading }: { onPress: () => void; loading?: boolean }) {
   const { T } = useApp();
@@ -52,14 +53,14 @@ export default function SignIn() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { next, back } = useLocalSearchParams<{ next?: string; back?: string }>();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const [W, onPagerLayout] = usePagerWidth();
   // Which panel we're on, so a viewport change can put us back on it. Arriving
   // with a destination means the user asked for something that needs an
   // account — skip the brand hero and go straight to the options.
   const [panel, setPanel] = useState(next ? AUTH_PANEL : 0);
 
-  const [phoneView, setPhoneView] = useState<'buttons' | 'phone' | 'otp' | 'email'>('buttons');
+  const [phoneView, setPhoneView] = useState<'buttons' | 'phone' | 'otp' | 'email' | 'reset'>('buttons');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [email, setEmail] = useState('');
@@ -69,6 +70,7 @@ export default function SignIn() {
   const [emailMode, setEmailMode] = useState<'signin' | 'signup'>('signin');
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
 
   // Signed in: return to where the user came from, or the feed.
   const leave = () => {
@@ -147,14 +149,31 @@ export default function SignIn() {
 
   const handleSendOtp = () =>
     withAuth(async () => {
-      await sendPhoneOtp(phoneNumber);
+      const e164 = auPhoneE164(phoneNumber);
+      if (!e164) throw new Error('Enter your mobile number, e.g. 412 345 678.');
+      await sendPhoneOtp(e164);
       setOtpCode('');
       setPhoneView('otp');
     }).catch((e) => setAuthError(e.message ?? 'Could not send code. Check the number.'));
 
+  const handleSendReset = () =>
+    withAuth(async () => {
+      await sendPasswordResetCode(email);
+      setAuthNotice(null);
+      setOtpCode('');
+      setPassword('');
+      setPhoneView('reset');
+    }).catch((e) => setAuthError(e.message ?? 'Could not send a code. Check the email address.'));
+
+  const handleResetPassword = () =>
+    withAuth(async () => {
+      const user = await resetPasswordWithCode(email, otpCode, password);
+      if (user) { setOtpCode(''); setPassword(''); await afterAuth(); }
+    }).catch((e) => setAuthError(e.message ?? 'That code didn’t work. Try again.'));
+
   const handleVerifyOtp = () =>
     withAuth(async () => {
-      const user = await verifyPhoneOtp(phoneNumber, otpCode);
+      const user = await verifyPhoneOtp(auPhoneE164(phoneNumber) ?? '', otpCode);
       if (user) { setPhoneNumber(''); setOtpCode(''); await afterAuth(); }
     }).catch((e) => setAuthError(e.message ?? 'That code didn’t work. Try again.'));
 
@@ -168,10 +187,18 @@ export default function SignIn() {
         return;
       }
       // Sign-up → create the account, save their name, then onboard.
-      const user = await signUpWithEmail(email, password);
+      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+      const { user, session } = await signUpWithEmail(email, password, fullName || undefined);
       if (!user) return;
       markIntroSeen();
-      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+      if (!session) {
+        // Email confirmation is on: there's no session until they confirm.
+        // Onboarding would bounce them straight back here, so say what to do.
+        setPassword('');
+        setEmailMode('signin');
+        setAuthNotice(`We've sent a confirmation link to ${email}. Tap it, then sign in here.`);
+        return;
+      }
       if (fullName) {
         setProfile((p) => ({ ...p, name: fullName }));
         await syncUserProfile({ full_name: fullName }).catch(() => {/* best effort */});
@@ -193,7 +220,7 @@ export default function SignIn() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: T.bg }}>
+    <View style={{ flex: 1, backgroundColor: T.bg, paddingLeft: insets.left, paddingRight: insets.right }}>
       <ScrollView
         ref={scrollRef}
         horizontal
@@ -303,18 +330,18 @@ export default function SignIn() {
               <Lede title="What's your number?" body="We text a six-digit code to check it's you." />
               <View style={{ paddingHorizontal: 22, paddingTop: 30, gap: 14 }}>
                 <Field
-                  prefix="+"
+                  prefix={PHONE_PREFIX}
                   value={phoneNumber}
-                  onChangeText={setPhoneNumber}
-                  placeholder="61 412 345 678"
-                  accessibilityLabel="Phone number, with country code"
+                  onChangeText={(t) => setPhoneNumber(stripAuPrefix(t))}
+                  placeholder="412 345 678"
+                  accessibilityLabel="Australian mobile number"
                   keyboardType="phone-pad"
                   textContentType="telephoneNumber"
                   autoComplete="tel"
                   autoFocus
                 />
                 {authError ? <ErrorText>{authError}</ErrorText> : null}
-                <Btn full onPress={handleSendOtp} disabled={phoneNumber.length < 8 || authLoading}>
+                <Btn full onPress={handleSendOtp} disabled={!auPhoneE164(phoneNumber) || authLoading}>
                   {authLoading ? 'Sending…' : 'Send code'}
                 </Btn>
               </View>
@@ -324,7 +351,7 @@ export default function SignIn() {
           {phoneView === 'otp' && (
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
               {backTo('phone', true)}
-              <Lede title="Enter the code." body={`Sent to +${phoneNumber}. It can take a moment to arrive.`} />
+              <Lede title="Enter the code." body={`Sent to ${auPhoneE164(phoneNumber)}. It can take a moment to arrive.`} />
               <View style={{ paddingHorizontal: 22, paddingTop: 30, gap: 16 }}>
                 <CodeInput value={otpCode} onChange={setOtpCode} autoFocus />
                 {authError ? <ErrorText center>{authError}</ErrorText> : null}
@@ -394,12 +421,54 @@ export default function SignIn() {
                   autoComplete={emailMode === 'signin' ? 'current-password' : 'new-password'}
                 />
                 {authError ? <ErrorText>{authError}</ErrorText> : null}
+                {authNotice && !authError ? (
+                  <Text accessibilityLiveRegion="polite" style={{ ...fontUI(400), fontSize: 15, lineHeight: 21, color: T.text }}>{authNotice}</Text>
+                ) : null}
                 <Btn full onPress={handleEmailAuth} disabled={!email || password.length < 6 || (emailMode === 'signup' && (!firstName.trim() || !lastName.trim())) || authLoading}>
                   {authLoading ? 'Please wait…' : emailMode === 'signin' ? 'Sign in' : 'Create account'}
                 </Btn>
-                <TextBtn size={15} onPress={() => { setEmailMode(emailMode === 'signin' ? 'signup' : 'signin'); setAuthError(null); }}>
+                <TextBtn size={15} onPress={() => { setEmailMode(emailMode === 'signin' ? 'signup' : 'signin'); setAuthError(null); setAuthNotice(null); }}>
                   {emailMode === 'signin' ? 'No account? Sign up' : 'Have an account? Sign in'}
                 </TextBtn>
+                {emailMode === 'signin' && (
+                  <TextBtn
+                    size={15}
+                    disabled={authLoading}
+                    onPress={() => {
+                      if (!email.includes('@')) { setAuthError('Enter your email above, then tap Forgot password.'); return; }
+                      handleSendReset();
+                    }}
+                  >
+                    Forgot password?
+                  </TextBtn>
+                )}
+              </View>
+            </KeyboardAvoidingView>
+          )}
+
+          {phoneView === 'reset' && (
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+              <View style={{ paddingHorizontal: 16, marginBottom: 30 }}>
+                <BackButton onPress={() => { setPhoneView('email'); setAuthError(null); setOtpCode(''); setPassword(''); }} />
+              </View>
+              <Lede title="Reset your password." body={`If ${email.trim()} has an account, we've emailed it a six-digit code.`} />
+              <View style={{ paddingHorizontal: 22, paddingTop: 30, gap: 16 }}>
+                <CodeInput value={otpCode} onChange={setOtpCode} autoFocus />
+                <Field
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="New password (6+ characters)"
+                  accessibilityLabel="New password"
+                  secureTextEntry
+                  textContentType="newPassword"
+                  autoCapitalize="none"
+                  autoComplete="new-password"
+                />
+                {authError ? <ErrorText center>{authError}</ErrorText> : null}
+                <Btn full onPress={handleResetPassword} disabled={otpCode.length < 6 || password.length < 6 || authLoading}>
+                  {authLoading ? 'Saving…' : 'Set new password'}
+                </Btn>
+                <TextBtn size={15} onPress={handleSendReset} disabled={authLoading}>Send a new code</TextBtn>
               </View>
             </KeyboardAvoidingView>
           )}

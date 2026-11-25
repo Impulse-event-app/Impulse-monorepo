@@ -68,7 +68,7 @@ export default function LoginPage() {
         </button>
 
         <div style={authFooter}>
-          Need a venue account? <a href="#">Talk to our team</a>
+          Need a venue account? <a href="mailto:support@impulseapp.au">Talk to our team</a>
         </div>
       </form>
     </AuthShell>

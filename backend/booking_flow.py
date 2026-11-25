@@ -372,6 +372,17 @@ def slot_start(b: Booking) -> Optional[datetime]:
     return slot_at(b.deal.date, b.slot_time)
 
 
+def is_demo(b: Booking) -> bool:
+    """A booking on an App Review demo venue: no Stripe calls, no money moves
+    (payments.DEMO_PREFIX)."""
+    venue = b.deal.venue if b.deal else None
+    return bool(venue and venue.is_demo)
+
+
+def demo_intent_id(key: str) -> str:
+    return f"{payments.DEMO_PREFIX}{key}"
+
+
 def venue_account(b: Booking) -> str:
     """The venue's connected account, or a 409 when it can't take money yet.
     Destination charges to an account whose transfers aren't active fail, so
@@ -417,6 +428,19 @@ def start_hold(db: Session, b: Booking, p: BookingParticipant, user: dict, expec
     The idempotency key is the seat's nonce, so asking twice returns the same
     intent; a changed share moves the nonce on and gets a fresh one."""
     _check_payable(b, p, expected_share_cents)
+    if is_demo(b):
+        # Demo venue: nothing to hold. The app skips PaymentSheet on "demo"
+        # and confirms straight away with this placeholder.
+        p.deposit_payment_id = demo_intent_id(deposit_nonce(b, p))
+        db.commit()
+        return {
+            "intent_type": "demo",
+            "intent_id": p.deposit_payment_id,
+            "client_secret": "",
+            "amount_cents": p.share_amount_cents,
+            "customer_id": "",
+            "customer_session_client_secret": "",
+        }
     destination = venue_account(b)
     row = _ensure_user(db, user)
     sheet = wallet.sheet_params(row)
@@ -470,7 +494,13 @@ def confirm_hold(db: Session, b: Booking, p: BookingParticipant, user: Optional[
     _check_payable(b, p, p.share_amount_cents)
 
     try:
-        if intent_id.startswith("seti_"):
+        if payments.is_demo_id(intent_id):
+            if not is_demo(b):
+                raise HTTPException(status_code=409, detail="That payment isn't for this share")
+            intent = {"id": intent_id}
+            p.hold_status = "held"
+            p.hold_expires_at = None
+        elif intent_id.startswith("seti_"):
             intent = payments.retrieve_setup(intent_id)
             if intent.get("status") != "succeeded":
                 raise HTTPException(status_code=402, detail="Your card wasn't saved. Try again.")
@@ -667,6 +697,15 @@ def charge_guarantor(db: Session, b: Booking) -> int:
     for p in share_order(b):
         if p.deposit_status != "unpaid" or not p.share_amount_cents:
             continue
+        if is_demo(b):
+            p.deposit_payment_id = demo_intent_id(f"guarantor-{b.id}-{p.id}")
+            p.hold_status = "held"
+            p.hold_expires_at = None
+            p.deposit_status = "guaranteed"
+            guaranteed += 1
+            touch(b)
+            db.commit()
+            continue
         try:
             if not (customer_id and ini.stripe_payment_method_id):
                 raise PaymentNotApproved(0, "no card on file for the initiator")
@@ -707,7 +746,8 @@ def _capture_seat(db: Session, b: Booking, p: BookingParticipant, amount_cents: 
     A seat whose hold lapsed (or was only ever saved) is charged off-session on
     the same card instead. Raises PaymentError when neither works."""
     venue = b.deal.venue
-    intent_id = p.deposit_payment_id if (p.deposit_payment_id or "").startswith("pi_") else None
+    pid = p.deposit_payment_id or ""
+    intent_id = pid if (pid.startswith("pi_") or payments.is_demo_id(pid)) else None
     intent = payments.retrieve_hold(intent_id) if intent_id else None
 
     if not intent or intent.get("status") != "requires_capture":

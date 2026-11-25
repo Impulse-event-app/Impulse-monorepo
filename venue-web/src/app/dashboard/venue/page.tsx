@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { VenueForm } from "@/components/VenueForm";
-import { venueApi, type Venue, type VenueCreate, type VenueUpdate } from "@/lib/api";
+import { userApi, venueApi, type Venue, type VenueCreate, type VenueUpdate } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useVenue } from "@/providers/VenueProvider";
 import { FONT_DISPLAY } from "@/lib/ui";
@@ -17,6 +17,10 @@ export default function VenueDetailsPage() {
   const { venue } = useVenue();
   const qc = useQueryClient();
   const [saved, setSaved] = useState(false);
+  const { data: profile } = useQuery({ queryKey: ["me", user?.id], queryFn: userApi.me, enabled: !!user });
+  // Untouched, the box shows the saved name; once typed in, it shows the edit.
+  const [editedName, setFirstName] = useState<string | null>(null);
+  const firstName = editedName ?? profile?.full_name ?? "";
 
   if (!venue) {
     return <div style={{ display: "grid", placeItems: "center", height: "60vh", color: "var(--faint)", fontSize: 14 }}>Loading…</div>;
@@ -27,6 +31,10 @@ export default function VenueDetailsPage() {
     const body: VenueUpdate = { ...payload };
     for (const key of CLEARABLE) {
       if (!payload[key]?.trim()) body[key] = null;
+    }
+    if (firstName.trim() !== (profile?.full_name ?? "").trim()) {
+      const me = await userApi.update({ full_name: firstName.trim() });
+      qc.setQueryData(["me", user?.id], me);
     }
     const updated = await venueApi.update(venue.id, body);
     // Swap the saved venue into the cached list so the sidebar chip and every
@@ -47,7 +55,7 @@ export default function VenueDetailsPage() {
         </p>
       )}
       {/* Keyed so switching venue in the sidebar reloads the form. */}
-      <VenueForm key={venue.id} initial={venue} submitLabel="Save changes" savingLabel="Saving…" onSubmit={handleSubmit} />
+      <VenueForm key={venue.id} initial={venue} submitLabel="Save changes" savingLabel="Saving…" onSubmit={handleSubmit} firstName={firstName} onFirstNameChange={setFirstName} />
     </div>
   );
 }
