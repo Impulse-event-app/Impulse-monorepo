@@ -518,11 +518,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
   function openPreview() {
     const p = problem();
     setError(p);
-    if (p) {
-      document.querySelector(".app-scroll")?.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
-    setPreviewOpen(true);
+    if (!p) setPreviewOpen(true);
   }
 
   // The deal is already saved by now, so a failed request must not read as a
@@ -797,19 +793,10 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
             <h1 style={{ margin: "2px 0 0", fontSize: 22, fontWeight: 600, letterSpacing: "-0.015em" }}>New deal</h1>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button type="button" onClick={() => router.push("/dashboard/deals")} style={headerGhost}>Cancel</button>
-          <button type="button" onClick={openPreview} style={headerPrimary}>
-            <Eye size={16} strokeWidth={2} aria-hidden />
-            Preview
-          </button>
-        </div>
       </header>
 
       <div style={{ width: "100%", maxWidth: 1040, margin: "0 auto", padding: "30px 40px 60px", boxSizing: "border-box" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 22, minWidth: 0 }}>
-          {error && <p role="alert" style={alertStyle("var(--accent-soft)", "var(--accent-text)")}>{error}</p>}
-
           <section style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
             {/* What's the offer: first, so the rest of the card is about this deal */}
             <div style={{ padding: "24px 24px 26px", borderBottom: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 22 }}>
@@ -1156,6 +1143,17 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
               </span>
             </label>}
           </section>
+
+          {/* The last step of the form: see the guest's card, then publish from there. */}
+          {error && !previewOpen && <p role="alert" style={alertStyle("var(--accent-soft)", "var(--accent-text)")}>{error}</p>}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+            <button type="button" onClick={() => router.push("/dashboard/deals")} style={headerGhost}>Cancel</button>
+            <button type="button" onClick={openPreview} style={headerPrimary}>
+              <Eye size={16} strokeWidth={2} aria-hidden />
+              Preview &amp; publish
+              <ArrowRight size={16} strokeWidth={2} aria-hidden />
+            </button>
+          </div>
         </div>
 
       </div>
