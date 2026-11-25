@@ -37,9 +37,11 @@ def refuse_production(what: str) -> None:
 
 # Venue admins: Supabase user ids that can manage every venue, including ones
 # created later, as if they owned it (portal, deals, schedules, bookings,
-# Stripe setup). A comma-separated list in VENUE_ADMIN_USER_IDS, for test
-# accounts on staging. Always empty in production, whatever the variable says.
-VENUE_ADMIN_USER_IDS = frozenset() if APP_ENV == "production" else frozenset(
+# Stripe setup). A comma-separated list in VENUE_ADMIN_USER_IDS, set per
+# backend on Render: staging lists test accounts, production lists only the
+# founders' own accounts. User ids are per database, so a staging id never
+# matches anyone in production.
+VENUE_ADMIN_USER_IDS = frozenset(
     uid.strip()
     for uid in os.environ.get("VENUE_ADMIN_USER_IDS", "").split(",")
     if uid.strip()

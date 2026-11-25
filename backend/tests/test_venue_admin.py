@@ -1,4 +1,4 @@
-"""Venue admins (VENUE_ADMIN_USER_IDS, staging only) manage every venue."""
+"""Venue admins (VENUE_ADMIN_USER_IDS, set per environment) manage every venue."""
 import importlib
 
 import pytest
@@ -50,13 +50,12 @@ def test_admin_lists_every_active_venue(admins):
     assert any("owner_id" in f for f in owner)
 
 
-def test_ignored_in_production(monkeypatch):
-    monkeypatch.setenv("VENUE_ADMIN_USER_IDS", "admin")
-    monkeypatch.setenv("APP_ENV", "production")
+def test_read_in_every_environment(monkeypatch):
+    monkeypatch.setenv("VENUE_ADMIN_USER_IDS", " founder-1, founder-2 ,")
     try:
-        assert importlib.reload(environment).VENUE_ADMIN_USER_IDS == frozenset()
-        monkeypatch.setenv("APP_ENV", "staging")
-        assert importlib.reload(environment).VENUE_ADMIN_USER_IDS == {"admin"}
+        for env in ("production", "staging"):
+            monkeypatch.setenv("APP_ENV", env)
+            assert importlib.reload(environment).VENUE_ADMIN_USER_IDS == {"founder-1", "founder-2"}
     finally:
         monkeypatch.undo()
         importlib.reload(environment)
