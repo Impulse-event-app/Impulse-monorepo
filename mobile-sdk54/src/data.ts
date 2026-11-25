@@ -406,7 +406,10 @@ export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): D
     window,
     hotMin,
     rating: d.venue_avg_rating,
-    blurb: d.description ?? d.title,
+    // The intro is the venue's description, or nothing: falling back to the
+    // title repeated it under "What you get". An unnamed deal already shows its
+    // description there, so its intro stays empty too.
+    blurb: d.auto_title ? '' : d.description ?? '',
     // An unnamed deal's title just repeats the venue and price shown above it.
     gets: d.auto_title ? d.description || `${Math.round(d.discount_pct)}% off` : d.title,
     addr: d.venue_address ?? '',

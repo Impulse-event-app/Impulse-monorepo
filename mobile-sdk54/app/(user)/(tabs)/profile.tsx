@@ -50,7 +50,7 @@ export default function ProfileScreen() {
   const { T, appearance, plans, profile, setProfile, refreshProfile, reset, signedIn } = useApp();
   const router = useRouter();
   const navTop = useNavTop();
-  const [scrolled, onScroll] = useScrolled();
+  const [scrolled, onScroll] = useScrolled(44, { tabBar: true });
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(profile.name);
   const [notifBusy, setNotifBusy] = useState(false);
@@ -165,8 +165,9 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: T.bg }}>
+    <View style={{ flex: 1 }}>
       <ScrollView
+        style={{ backgroundColor: T.bg }}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={16}

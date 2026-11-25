@@ -150,7 +150,7 @@ export default function HuddlePayScreen() {
               </View>
               <ScreenTitle style={{ marginTop: 10 }}>{v.deal?.venue_name ?? 'Your booking'}</ScreenTitle>
               <Text style={{ ...fontUI(400), fontSize: 17, color: T.muted, marginTop: 7 }}>
-                {[v.deal?.title, when(v), `${v.group_size} people`].filter(Boolean).join(' · ')}
+                {[v.deal?.title, when(v)].filter(Boolean).join(' · ')}
               </Text>
             </>
           )}
@@ -165,8 +165,8 @@ export default function HuddlePayScreen() {
           {/* ── The person booking: who's coming, the split, lock it in ── */}
           {canEdit && !editing && (
             <>
-              <Group label="Who's coming" footer={v.locked_in ? undefined : 'Invite people now — they can see the plan and pay once you’ve locked it in.'}>
-                <Row label="You" value={fmtCents(myShare?.share_cents ?? 0)} sublabel={v.locked_in ? 'In' : 'Paying below'} />
+              <Group label="Who's coming">
+                <Row label="You" value={fmtCents(myShare?.share_cents ?? 0)} sublabel={v.locked_in ? 'In' : undefined} />
                 {others.map((p) => {
                   const settledSeat = p.state !== 'waiting' && p.state !== 'covered';
                   return p.claimed ? (
@@ -198,7 +198,7 @@ export default function HuddlePayScreen() {
               </View>
               {unpaidOthers.length > 0 && v.locked_in && (
                 <Label style={{ marginTop: 16, lineHeight: 18 }}>
-                  Anything still open an hour before you go is added to your card, so the booking's safe either way.
+                  Unpaid spots go on your card an hour before.
                 </Label>
               )}
             </>
@@ -246,12 +246,11 @@ export default function HuddlePayScreen() {
                 <Text style={{ ...fontUI(500), fontSize: 17, color: T.text }}>Your share</Text>
                 <Text style={{ ...fontMono(600), fontSize: 24, color: T.text, ...NUM }}>{fmtCents(myShare.share_cents)}</Text>
               </View>
-              <Label style={{ marginTop: 6, lineHeight: 18 }}>{shareTerms(myShare)}</Label>
               <View style={{ marginTop: 16 }}>
                 <SharePay
                   bookingId={v.id}
                   share={myShare}
-                  label="Hold my share and lock it in"
+                  label="Lock it in"
                   onPaid={() => { hapticSuccess(); refresh(); }}
                   onShareChanged={refresh}
                 />
@@ -278,7 +277,7 @@ export default function HuddlePayScreen() {
                   </>
                 ) : (
                   <Label style={{ marginTop: 10, lineHeight: 18 }}>
-                    {v.initiator_name} is locking it in — you can confirm your spot as soon as they have.
+                    You can pay once {v.initiator_name} locks it in.
                   </Label>
                 )
               )}

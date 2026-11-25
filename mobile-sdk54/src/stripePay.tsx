@@ -10,7 +10,7 @@
 //   addCard() — save a card to the wallet. Resolves true once saved.
 //   overlay — always null here (the native sheet presents itself); the web
 //     version renders its form through it, so callers render it either way.
-import { useStripe } from '@stripe/stripe-react-native';
+import { LinkDisplay, NavigationBarStyle, useStripe } from '@stripe/stripe-react-native';
 import { Alert } from 'react-native';
 import * as Linking from 'expo-linking';
 import type { ReactNode } from 'react';
@@ -49,7 +49,13 @@ export function useStripePay(): {
         email: profile.email || undefined,
         address: { country: 'AU' },
       },
+      // No Link: just Apple Pay and cards.
+      link: { display: LinkDisplay.NEVER },
       appearance: {
+        // iOS 26: Stripe's Liquid Glass look (rounded fields, capsule buttons,
+        // glass header) to match the system. Ignored on older iOS and Android.
+        applyLiquidGlass: true,
+        navigationBarStyle: NavigationBarStyle.Glass,
         colors: {
           primary: T.accent, background: T.bg, componentBackground: T.surface,
           primaryText: T.text, secondaryText: T.muted, componentText: T.text,

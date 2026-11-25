@@ -62,5 +62,5 @@ export function SharePay({
 
 /** "$18.50 held on your card now, charged when you check in." */
 export function shareTerms(share: MyShare): string {
-  return `${fmtCents(share.share_cents)} held on your card now, charged when you check in.`;
+  return "Charged when you check in.";
 }
