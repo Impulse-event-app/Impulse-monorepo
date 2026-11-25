@@ -122,6 +122,7 @@ export function fmtCountdown(ms: number) {
 // ── dataset: Sydney drops ────────────────────────────────────
 export type Drop = {
   id: string;
+  venueId: string;
   venue: string;
   cat: string;
   suburb: string;
@@ -143,6 +144,8 @@ export type Drop = {
   image: string | null;   // real venue photo URL, or null → category placeholder
   images: string[];       // every venue photo, cover first, for the detail slideshow
   video: { url: string; poster: string | null } | null;  // the deal's Discover video
+  /** Set by onePerVenue: how many other live deals this venue has. */
+  moreAtVenue?: number;
 };
 
 // max party each venue fits (drives the party-size filter)
@@ -155,7 +158,7 @@ const CAPS: Record<string, number> = {
 // on the most time-critical drops). window → human label for the rest.
 const T0 = Date.now();
 
-type RawDrop = Omit<Drop, 'target' | 'cap' | 'latitude' | 'longitude' | 'image' | 'images' | 'video'>;
+type RawDrop = Omit<Drop, 'venueId' | 'target' | 'cap' | 'latitude' | 'longitude' | 'image' | 'images' | 'video'>;
 
 const RAW: RawDrop[] = [
   {
@@ -239,6 +242,7 @@ export const LATLNG: Record<string, LatLng> = {
 
 export const DROPS: Drop[] = RAW.map((d) => ({
   ...d,
+  venueId: d.id,
   target: d.hotMin ? T0 + d.hotMin * 60000 : null,
   cap: CAPS[d.id],
   latitude: LATLNG[d.id]?.latitude ?? null,
@@ -247,6 +251,32 @@ export const DROPS: Drop[] = RAW.map((d) => ({
   images: [],
   video: null,
 }));
+
+/**
+ * Listings are per venue, not per deal: a venue with 20 deals still gets one
+ * card. Keeps each venue's best deal (live before later, then the biggest
+ * discount, then the one ending soonest), in the position of the venue's
+ * first deal in `drops`, and notes how many more it has in moreAtVenue.
+ */
+export function onePerVenue(drops: Drop[]): Drop[] {
+  const rank = (d: Drop) => [d.status === 'now' ? 0 : 1, -(d.usual > 0 ? pct(d.now, d.usual) : 0), d.target ?? Infinity];
+  const better = (a: Drop, b: Drop) => {
+    const ra = rank(a), rb = rank(b);
+    for (let i = 0; i < ra.length; i++) if (ra[i] !== rb[i]) return ra[i] < rb[i];
+    return false;
+  };
+  const best = new Map<string, Drop>();
+  const count = new Map<string, number>();
+  const order: string[] = [];
+  for (const d of drops) {
+    const key = d.venueId || d.venue;
+    const cur = best.get(key);
+    if (!cur) order.push(key);
+    if (!cur || better(d, cur)) best.set(key, d);
+    count.set(key, (count.get(key) ?? 0) + 1);
+  }
+  return order.map((k) => ({ ...best.get(k)!, moreAtVenue: (count.get(k) ?? 1) - 1 }));
+}
 
 // region that frames all of the drops (Sydney inner-city)
 export const SYDNEY_REGION = {
@@ -395,6 +425,7 @@ export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): D
 
   return {
     id: d.id,
+    venueId: d.venue_id,
     venue: d.venue_name,
     cat: canonicalCat(d.category),
     suburb: d.venue_suburb ?? '',

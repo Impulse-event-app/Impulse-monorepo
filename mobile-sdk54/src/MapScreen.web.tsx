@@ -9,7 +9,7 @@ import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, money } from './data';
+import { SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, money, onePerVenue } from './data';
 import { useApp } from './theme';
 import { Glass, Touchable, ViewSwitch } from './components';
 import { Filter, categoryIconSvg } from './icons';
@@ -54,7 +54,8 @@ export default function MapScreenWeb({ onShowList }: { onShowList?: () => void }
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const matched = applyFilters(drops, filters);
+  // One pin per venue: its best matching deal (see onePerVenue).
+  const matched = onePerVenue(applyFilters(drops, filters));
   const activeCount = activeFilterCount(filters);
 
   const containerRef = useRef<HTMLDivElement | null>(null);

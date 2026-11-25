@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Tabs } from 'expo-router';
-import { Animated, Easing, Platform, Pressable, View } from 'react-native';
+import { Animated, Easing, PanResponder, Platform, Pressable, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { MaybeDarkScope, useTheme } from '../../../src/theme';
 import { FooterScrim, Glass, useReduceMotion, useReduceTransparency } from '../../../src/components';
 import { TabTonight, TabDiscover, TabPlans, TabYou } from '../../../src/icons';
 import { hapticSelection } from '../../../src/haptics';
-import { expandTabBar, tabBarCompact } from '../../../src/tabBarScroll';
+import { expandTabBar, tabBarCompact, useTabSwipeEnabled } from '../../../src/tabBarScroll';
 
 // The tab bar on every platform: a floating capsule of icons. Like
 // Instagram's, it shrinks a little as a whole (every tab still visible) while
@@ -79,16 +79,16 @@ function useLiquidLens(index: number, tabWidth: number) {
 // Floating liquid-glass tab bar over a progressive scrim.
 // On Discover (full-screen reels) the bar goes dark so it stands out against
 // the video, whatever the app's appearance.
-function FloatingTabBar(props: BottomTabBarProps) {
+function FloatingTabBar({ onTap, ...props }: BottomTabBarProps & { onTap: () => void }) {
   const onReels = props.state.routes[props.state.index]?.name === 'discover';
   return (
     <MaybeDarkScope dark={onReels}>
-      <TabBar {...props} />
+      <TabBar {...props} onTap={onTap} />
     </MaybeDarkScope>
   );
 }
 
-function TabBar({ state, descriptors, emitter, navigateToTab }: BottomTabBarProps) {
+function TabBar({ state, descriptors, emitter, navigateToTab, onTap }: BottomTabBarProps & { onTap: () => void }) {
   const T = useTheme();
   const insets = useSafeAreaInsets();
   const solid = useReduceTransparency();
@@ -156,7 +156,10 @@ function TabBar({ state, descriptors, emitter, navigateToTab }: BottomTabBarProp
                   const event = emitter.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
                   if (!focused && !event.defaultPrevented) {
                     hapticSelection();
-                    navigateToTab(route.key);
+                    // A tap jumps straight to the tab, no slide: turn the slide
+                    // off, then move once that's applied (one frame later).
+                    onTap();
+                    requestAnimationFrame(() => navigateToTab(route.key));
                   }
                 };
 
@@ -182,13 +185,78 @@ function TabBar({ state, descriptors, emitter, navigateToTab }: BottomTabBarProp
   );
 }
 
+// Tabs in bar order, for swiping between neighbours.
+const TAB_ORDER = ['home', 'discover', 'plans', 'profile'];
+// A swipe must travel this far sideways (or be flicked) to change tabs.
+const SWIPE_DISTANCE = 70;
+const SWIPE_VELOCITY = 0.5;
+
+/**
+ * Wraps each tab screen: a horizontal swipe goes to the tab on that side.
+ * It only claims clearly sideways drags, so vertical lists (and Discover's
+ * reels) scroll as usual, and a horizontal scroller inside (the category
+ * chips) still wins when it's being dragged.
+ */
+function SwipeBetweenTabs({ routeName, onGo, children }: { routeName: string; onGo: (name: string) => void; children: React.ReactNode }) {
+  const enabled = useTabSwipeEnabled();
+  const state = useRef({ enabled, routeName, onGo });
+  state.current = { enabled, routeName, onGo };
+  const responder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) =>
+        state.current.enabled && Math.abs(g.dx) > 24 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
+      onPanResponderTerminationRequest: () => true,
+      onPanResponderRelease: (_, g) => {
+        const i = TAB_ORDER.indexOf(state.current.routeName);
+        if (i < 0) return;
+        const next = g.dx < -SWIPE_DISTANCE || g.vx < -SWIPE_VELOCITY ? i + 1
+          : g.dx > SWIPE_DISTANCE || g.vx > SWIPE_VELOCITY ? i - 1 : i;
+        if (next !== i && next >= 0 && next < TAB_ORDER.length) {
+          hapticSelection();
+          state.current.onGo(TAB_ORDER[next]);
+        }
+      },
+    }),
+  ).current;
+  return <View style={{ flex: 1 }} {...responder.panHandlers}>{children}</View>;
+}
+
 export default function TabsLayout() {
   const T = useTheme();
+  const { width } = useWindowDimensions();
+  // Whether the next tab change slides (a swipe) or jumps (a tap on the bar).
+  const [slide, setSlide] = useState(false);
   return (
     <Tabs
-      tabBar={(props) => <FloatingTabBar {...props} />}
+      tabBar={(props) => <FloatingTabBar {...props} onTap={() => setSlide(false)} />}
+      screenLayout={({ route, navigation, children }) => (
+        <SwipeBetweenTabs
+          routeName={route.name}
+          // Only a swipe slides: turn the slide on, then move once it's applied.
+          onGo={(name) => { setSlide(true); requestAnimationFrame(() => navigation.navigate(name)); }}
+        >
+          {children}
+        </SwipeBetweenTabs>
+      )}
       screenOptions={{
         headerShown: false,
+        // After a swipe, tabs page sideways, full width: the old tab slides off
+        // one edge as the new one comes in from the other (progress is -1 for
+        // tabs left of the active one, 1 for tabs to its right). After a tap
+        // on the bar there's no animation: the tab just appears.
+        ...(slide
+          ? {
+              sceneStyleInterpolator: ({ current }: { current: { progress: Animated.Value } }) => ({
+                sceneStyle: {
+                  transform: [{ translateX: current.progress.interpolate({ inputRange: [-1, 0, 1], outputRange: [-width, 0, width] }) }],
+                },
+              }),
+              transitionSpec: {
+                animation: 'timing' as const,
+                config: { duration: 320, easing: Easing.out(Easing.cubic) },
+              },
+            }
+          : { animation: 'none' as const }),
         sceneStyle: { backgroundColor: T.bg },
       }}
     >

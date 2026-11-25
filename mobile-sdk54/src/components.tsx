@@ -684,6 +684,14 @@ export function unitLabel(unit: string): string {
   return `${head} per ${per}`;
 }
 
+/** The unit as a short suffix next to a price: "/pp", "/lane", "/lane/hr".
+ *  Screen readers get unitLabel's words instead. */
+export function unitShort(unit: string): string {
+  const u = (unit || '').trim().replace(/^\//, '');
+  if (!u || u === 'pp') return '/pp';
+  return '/' + u.split('·').join('/');
+}
+
 export function DiscountChip({ now, usual }: { now: number; usual: number }) {
   const T = useTheme();
   const p = pct(now, usual);
@@ -724,12 +732,22 @@ export function PriceBlock({ d, big, hideDiscount }: { d: Drop; big?: boolean; h
   const T = useTheme();
   if (big) return <BigPrice d={d} hideDiscount={hideDiscount} />;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 9, rowGap: 6 }}>
-      <Text style={{ ...fontMono(600), fontSize: big ? 34 : 26, lineHeight: big ? 38 : 30, letterSpacing: big ? -0.68 : -0.52, color: T.text }}>
+    <View
+      accessible
+      accessibilityLabel={`${money(d.now)} ${unitLabel(d.unit)}${d.usual > d.now ? `, usually ${money(d.usual)}` : ''}`}
+      style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', columnGap: 8, rowGap: 6 }}
+    >
+      {/* Was, then now: the old price struck through right before the new one. */}
+      {d.usual > d.now ? (
+        <Text style={{ ...fontMono(500), fontSize: 18, letterSpacing: -0.3, color: T.muted, textDecorationLine: 'line-through' }}>
+          {money(d.usual)}
+        </Text>
+      ) : null}
+      <Text style={{ ...fontMono(600), fontSize: 26, lineHeight: 30, letterSpacing: -0.52, color: T.text }}>
         {money(d.now)}
       </Text>
-      <Text style={{ ...fontUI(400), fontSize: big ? 15 : 13.5, color: T.muted, letterSpacing: big ? -0.12 : -0.05 }}>
-        {unitLabel(d.unit)}, usually {money(d.usual)}
+      <Text style={{ ...fontUI(400), fontSize: 13.5, color: T.muted, letterSpacing: -0.05, marginLeft: -6 }}>
+        {unitShort(d.unit)}
       </Text>
       {hideDiscount ? null : <DiscountChip now={d.now} usual={d.usual} />}
     </View>
@@ -1012,21 +1030,48 @@ export function DropCardEditorial({ d, onPress, a11yLabel, a11yHint }: { d: Drop
               <GlassBadge>
                 <Text maxFontSizeMultiplier={1.4} style={{ ...fontUI(500), fontSize: 12.5, color: T.text, letterSpacing: -0.05 }}>{d.cat}</Text>
               </GlassBadge>
+              {/* The card is the venue; its other deals are on the deal page. */}
+              {d.moreAtVenue ? (
+                <GlassBadge>
+                  <Text maxFontSizeMultiplier={1.4} style={{ ...fontUI(500), fontSize: 12.5, color: T.text, letterSpacing: -0.05 }}>
+                    +{d.moreAtVenue} more {d.moreAtVenue === 1 ? 'deal' : 'deals'}
+                  </Text>
+                </GlassBadge>
+              ) : null}
             </View>
             {/* The discount is the hook: big, top right. (Voting's rank badge moves to the bottom right.) */}
             <DiscountBadge now={d.now} usual={d.usual} />
           </View>
         </View>
         <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
-            <Text numberOfLines={2} style={{ flex: 1, ...fontUI(600), fontSize: 22, letterSpacing: -0.48, color: T.text }}>
-              {d.venue}
-            </Text>
-            <RatingDot d={d} />
-          </View>
-          <MetaLine d={d} style={{ marginTop: 5 }} />
-          <View style={{ marginTop: 16 }}>
-            <PriceBlock d={d} hideDiscount />
+          {/* Venue on the left, price on the right, bottoms aligned. */}
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 12 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+                <Text numberOfLines={2} style={{ flexShrink: 1, ...fontUI(600), fontSize: 22, letterSpacing: -0.48, color: T.text }}>
+                  {d.venue}
+                </Text>
+                <RatingDot d={d} />
+              </View>
+              <MetaLine d={d} style={{ marginTop: 5 }} />
+            </View>
+            <View
+              accessible
+              accessibilityLabel={`${money(d.now)} ${unitLabel(d.unit)}${d.usual > d.now ? `, usually ${money(d.usual)}` : ''}`}
+              style={{ alignItems: 'flex-end' }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+                {d.usual > d.now ? (
+                  <Text style={{ ...fontMono(500), fontSize: 16, letterSpacing: -0.3, color: T.muted, textDecorationLine: 'line-through' }}>
+                    {money(d.usual)}
+                  </Text>
+                ) : null}
+                <Text style={{ ...fontMono(600), fontSize: 26, lineHeight: 30, letterSpacing: -0.52, color: T.text }}>
+                  {money(d.now)}
+                  <Text style={{ ...fontUI(400), fontSize: 13, letterSpacing: -0.05, color: T.muted }}>{unitShort(d.unit)}</Text>
+                </Text>
+              </View>
+            </View>
           </View>
           {/* Deals without a countdown show their time window here. Countdown
               deals show no timer on the card; it's on the deal page. */}
