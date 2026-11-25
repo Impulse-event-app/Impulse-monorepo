@@ -5,6 +5,7 @@
 // the top brings it back to full size. Tab screens report their scroll with
 // reportTabScroll (useScrolled does it when asked); the bar reads
 // tabBarCompact, 0 = full size, 1 = compact.
+import { useEffect, useSyncExternalStore } from 'react';
 import { Animated, Platform } from 'react-native';
 
 export const tabBarCompact = new Animated.Value(0);
@@ -51,4 +52,30 @@ export function expandTabBar() {
   travel = 0;
   lastY = 0;
   animateTo(false);
+}
+
+// ── swiping between tabs ─────────────────────────────────────
+// A horizontal swipe on a tab screen moves to the next or previous tab. A
+// screen turns it off while it needs horizontal drags itself (Home's map).
+
+const blockers = new Set<string>();
+const swipeListeners = new Set<() => void>();
+const emit = () => swipeListeners.forEach((l) => l());
+
+/** Turn tab swiping off while `blocked` is true (keyed so screens don't clash). */
+export function useBlockTabSwipe(key: string, blocked: boolean) {
+  useEffect(() => {
+    if (!blocked) return;
+    blockers.add(key);
+    emit();
+    return () => { blockers.delete(key); emit(); };
+  }, [key, blocked]);
+}
+
+export function useTabSwipeEnabled(): boolean {
+  return useSyncExternalStore(
+    (l) => { swipeListeners.add(l); return () => { swipeListeners.delete(l); }; },
+    () => blockers.size === 0,
+    () => true,
+  );
 }

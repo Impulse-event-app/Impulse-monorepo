@@ -386,6 +386,7 @@ class ReelResponse(BaseModel):
     venue_name: str
     venue_category: str
     venue_suburb: Optional[str]
+    venue_description: Optional[str] = None
     venue_image_url: Optional[str]
     venue_image_urls: List[str] = []
     deal_id: Optional[str] = None
@@ -408,6 +409,7 @@ class ReelResponse(BaseModel):
             venue_name=r.venue.name,
             venue_category=r.venue.category,
             venue_suburb=r.venue.suburb,
+            venue_description=getattr(r.venue, 'description', None),
             venue_image_url=r.venue.image_url,
             venue_image_urls=gallery(r.venue),
             **(dict(

@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Line } from 'react-native-svg';
 import { apiDealToDrop, dropCoords, money, pct, useCountdown, type Drop } from './data';
 import { HeroMedia } from './HeroMedia';
+import { setSelectedDeal } from './layout';
 import { VenueMap } from './VenueMap';
 import { fontMono, fontUI, useApp, useTheme } from './theme';
 import { logInteraction } from './api';
@@ -28,13 +29,14 @@ import {
   MetaLine,
   Radar,
   unitLabel,
+  unitShort,
   RatingDot,
   ReadableColumn,
   ScreenTitle,
 } from './components';
 
 export function DealDetail({ id, embedded = false }: { id: string | undefined; embedded?: boolean }) {
-  const { T, apiDeals, signedIn } = useApp();
+  const { T, apiDeals, signedIn, drops } = useApp();
   const router = useRouter();
   const requireAuth = useRequireAuth();
   const insets = useSafeAreaInsets();
@@ -73,6 +75,7 @@ export function DealDetail({ id, embedded = false }: { id: string | undefined; e
   }
 
   const coords = dropCoords(d);
+  const others = drops.filter((o) => o.venueId === d.venueId && o.id !== d.id);
   const hasPrice = d.now > 0 || d.usual > 0;
   const where = d.km > 0 ? `${d.km} km away` : d.suburb;
   const openDirections = () => {
@@ -119,6 +122,40 @@ export function DealDetail({ id, embedded = false }: { id: string | undefined; e
             <Text style={{ ...fontUI(500), fontSize: 14, color: T.accent }}>Directions</Text>
             <ChevronRight size={7} color={T.accent} />
           </Pressable>
+
+          {/* The venue's other live deals: the feed lists each venue once. */}
+          {others.length > 0 && (
+            <>
+              <Text accessibilityRole="header" style={{ marginTop: 28, ...fontUI(700), fontSize: 20, letterSpacing: -0.4, color: T.text }}>
+                More at {d.venue}
+              </Text>
+              <View style={{ marginTop: 12, borderRadius: 18, borderCurve: 'continuous', borderWidth: 1, borderColor: T.line, backgroundColor: T.surface, overflow: 'hidden' }}>
+                {others.map((o, i) => {
+                  const off = o.usual > 0 ? pct(o.now, o.usual) : 0;
+                  return (
+                    <Pressable
+                      key={o.id}
+                      onPress={() => (embedded ? setSelectedDeal(o.id) : router.replace(`/(user)/event/${o.id}`))}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${o.gets}, ${money(o.now)} ${unitLabel(o.unit)}${off > 0 ? `, ${off} percent off` : ''}`}
+                      style={({ pressed }) => ({
+                        flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16,
+                        borderTopWidth: i === 0 ? 0 : 1, borderTopColor: T.line, opacity: pressed ? 0.6 : 1,
+                      })}
+                    >
+                      <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+                        <Text numberOfLines={1} style={{ ...fontUI(500), fontSize: 16, letterSpacing: -0.2, color: T.text }}>{o.gets}</Text>
+                        <Label>{o.window}</Label>
+                      </View>
+                      <Text style={{ ...fontMono(600), fontSize: 16, color: T.text }}>{money(o.now)}</Text>
+                      {off > 0 ? <Text style={{ ...fontMono(600), fontSize: 13, color: T.accent }}>−{off}%</Text> : null}
+                      <ChevronRight size={7} color={T.faint} />
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </>
+          )}
 
           {!!d.blurb && (
             <>
@@ -184,28 +221,29 @@ function DropTicket({ d }: { d: Drop }) {
       <View style={{ padding: 18, paddingBottom: 20, gap: 14 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-            <Radar size={18} kind="compact" decorative />
+            <Radar size={20} decorative />
             <Text style={{ ...fontUI(600), fontSize: 13.5, letterSpacing: -0.1, color: T.text }}>Impulse special</Text>
           </View>
+          {/* The discount, as text, top right. */}
           {p > 0 ? (
-            <View style={{ paddingHorizontal: 9, paddingVertical: 3, borderRadius: 8, borderCurve: 'continuous', backgroundColor: T.accent }}>
-              <Text style={{ ...fontMono(700), fontSize: 13, color: T.accentInk }}>−{p}%</Text>
-            </View>
+            <Text style={{ ...fontUI(700), fontSize: 15, letterSpacing: -0.2, color: T.accent }}>{p}% off</Text>
           ) : null}
         </View>
-        {!!d.gets && (
+        {/* An unnamed deal's title is just "50% off", already shown top right. */}
+        {!!d.gets && !/^\s*\d+\s*%\s*off\s*$/i.test(d.gets) && (
           <Text style={{ ...fontUI(600), fontSize: 21, lineHeight: 26, letterSpacing: -0.4, color: T.text }}>{d.gets}</Text>
         )}
         <View
           accessible
           accessibilityLabel={`${money(d.now)} ${unitLabel(d.unit)}${p > 0 ? `, usually ${money(d.usual)}` : ''}`}
-          style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', columnGap: 8 }}
+          style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', columnGap: 5 }}
         >
-          <Text style={{ ...fontMono(600), fontSize: 38, lineHeight: 42, letterSpacing: -1, color: T.text }}>{money(d.now)}</Text>
-          <Text style={{ ...fontUI(400), fontSize: 15, color: T.muted }}>{unitLabel(d.unit)}</Text>
+          {/* Was, then now: the old price struck through right before the new one. */}
           {p > 0 ? (
-            <Text style={{ ...fontMono(400), fontSize: 15, color: T.muted, textDecorationLine: 'line-through' }}>{money(d.usual)}</Text>
+            <Text style={{ ...fontMono(500), fontSize: 24, letterSpacing: -0.4, color: T.muted, textDecorationLine: 'line-through' }}>{money(d.usual)}</Text>
           ) : null}
+          <Text style={{ ...fontMono(600), fontSize: 38, lineHeight: 42, letterSpacing: -1, color: T.text }}>{money(d.now)}</Text>
+          <Text style={{ ...fontUI(400), fontSize: 15, color: T.muted, marginLeft: -3 }}>{unitShort(d.unit)}</Text>
         </View>
       </View>
 

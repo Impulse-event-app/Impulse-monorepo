@@ -89,6 +89,22 @@ export function Play({ size = 22, color = '#fff' }: IconProps) {
     </Svg>
   );
 }
+/** Speaker, with sound waves, or struck through when `muted`. */
+export function Speaker({ size = 18, color = '#fff', muted = false }: IconProps & { muted?: boolean }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" fill={color} />
+      {muted ? (
+        <Path d="M16 9.5l5 5M21 9.5l-5 5" />
+      ) : (
+        <>
+          <Path d="M15.5 9a4.2 4.2 0 010 6" />
+          <Path d="M18.2 6.5a7.8 7.8 0 010 11" />
+        </>
+      )}
+    </Svg>
+  );
+}
 export function ListGlyph({ size = 15, color = '#000' }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round">

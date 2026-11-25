@@ -6,7 +6,9 @@ import {
   DEFAULT_FILTERS,
   activeFilterCount,
   applyFilters,
+  onePerVenue,
 } from '../../../src/data';
+import { useBlockTabSwipe } from '../../../src/tabBarScroll';
 import { getHuddle, submitBallot, ApiError, ApiHuddle } from '../../../src/api';
 import { fontMono, fontUI, useApp, emailName } from '../../../src/theme';
 import {
@@ -277,8 +279,12 @@ export default function HomeScreen() {
   const boosted = preferred.size
     ? [...filtered].sort((a, b) => Number(preferred.has(b.cat)) - Number(preferred.has(a.cat)))
     : filtered;
-  const now = boosted.filter((d) => d.status === 'now');
-  const later = boosted.filter((d) => d.status === 'later');
+  // One card per venue, so a venue with many deals can't fill the feed. Its
+  // other deals are on the deal page. Voting is the exception: the ballot
+  // lists specific deals.
+  const listed = voting ? boosted : onePerVenue(boosted);
+  const now = listed.filter((d) => d.status === 'now');
+  const later = listed.filter((d) => d.status === 'later');
   const activeCount = activeFilterCount(filters);
 
   const openDrop = (id: string) =>
@@ -359,6 +365,8 @@ export default function HomeScreen() {
 
   // A huddle ballot is the list, so voting always shows it.
   const shown = voting ? 'list' : view;
+  // Dragging the map sideways must pan it, not switch tabs.
+  useBlockTabSwipe('home-map', shown === 'map');
 
   const screen = (
     <View style={{ flex: 1 }}>

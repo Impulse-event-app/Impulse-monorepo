@@ -144,13 +144,16 @@ export default function HuddlePayScreen() {
             <Completion view={v} />
           ) : (
             <>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <HuddleMark size={30} />
-                <Label>Huddle Pay</Label>
+              {/* Same header as the booking page: what this is, then where
+                  and when in grey, once. */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <HuddleMark size={34} />
+                <ScreenTitle>Huddle Pay</ScreenTitle>
               </View>
-              <ScreenTitle style={{ marginTop: 10 }}>{v.deal?.venue_name ?? 'Your booking'}</ScreenTitle>
-              <Text style={{ ...fontUI(400), fontSize: 17, color: T.muted, marginTop: 7 }}>
-                {[v.deal?.title, when(v)].filter(Boolean).join(' · ')}
+              <Text numberOfLines={2} style={{ ...fontUI(400), fontSize: 16, letterSpacing: -0.15, color: T.muted, marginTop: 6 }}>
+                {/* Venue and time only: an unnamed deal's title is just the
+                    venue and price again. */}
+                {[v.deal?.venue_name, when(v)].filter(Boolean).join(' · ')}
               </Text>
             </>
           )}
@@ -241,12 +244,9 @@ export default function HuddlePayScreen() {
           )}
 
           {canEdit && !editing && !v.locked_in && myShare && (
-            <View style={{ marginTop: 32 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <Text style={{ ...fontUI(500), fontSize: 17, color: T.text }}>Your share</Text>
-                <Text style={{ ...fontMono(600), fontSize: 24, color: T.text, ...NUM }}>{fmtCents(myShare.share_cents)}</Text>
-              </View>
-              <View style={{ marginTop: 16 }}>
+            <View style={{ marginTop: 24 }}>
+              {/* Your share is on the You row and the button: no third copy. */}
+              <View>
                 <SharePay
                   bookingId={v.id}
                   share={myShare}
@@ -262,10 +262,10 @@ export default function HuddlePayScreen() {
           {!v.is_initiator && collecting && myShare && (
             <View style={{ marginTop: 28 }}>
               <Text style={{ ...fontUI(400), fontSize: 17, lineHeight: 24, color: T.text }}>
-                {v.initiator_name} booked {v.deal?.venue_name}, {when(v)}
+                {/* Venue and time are already in the header. */}
                 {myShare.covered_by_name
-                  ? ` — ${myShare.covered_by_name} has your share covered.`
-                  : ` — your share is ${fmtCents(myShare.share_cents)}.`}
+                  ? `${myShare.covered_by_name} has your share covered.`
+                  : `${v.initiator_name} invited you. Your share is ${fmtCents(myShare.share_cents)}.`}
               </Text>
               {myShare.status === 'unpaid' && myShare.share_cents > 0 && (
                 v.locked_in ? (
