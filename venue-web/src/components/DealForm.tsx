@@ -2,11 +2,13 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { autoDealTitle, formatCurrency } from "@/lib/utils";
 import { useVenue } from "@/providers/VenueProvider";
-import type { DealCreate, DealUpdate, Deal, DealSchedule, DealScheduleInput } from "@/lib/api";
+import { venueApi, type DealCreate, type DealUpdate, type Deal, type DealSchedule, type DealScheduleInput, type VenueReel } from "@/lib/api";
 import { CATEGORIES } from "@/lib/categories";
 import { CategorySelect } from "@/components/CategorySelect";
+import { DealVideoPicker } from "@/components/DealVideoPicker";
 import { FONT_DISPLAY, card, fieldLabel, fieldInput, btnPrimary, btnGhost, numeric, switchTrack, switchKnob } from "@/lib/ui";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]; // index = backend weekday (0 = Monday)
@@ -74,6 +76,14 @@ export function DealForm({ venueId, initial: initialDeal, initialSchedule, onSub
   const [maxGroupSize, setMaxGroupSize] = useState(initial?.max_group_size?.toString() ?? "6");
   const [totalSpots, setTotalSpots] = useState(initial?.total_spots?.toString() ?? "");
   const [isActive, setIsActive] = useState(initial?.is_active ?? true);
+  const [reelId, setReelId] = useState<string | null>(initial?.reel_id ?? null);
+  const [videoBusy, setVideoBusy] = useState(false);
+  // Same cache as the picker: turns the saved reel_id back into its tile.
+  const { data: reels = [] } = useQuery<VenueReel[]>({
+    queryKey: ["venue-reels", venueId],
+    queryFn: () => venueApi.reels(venueId),
+  });
+  const selectedReel = reels.find((r) => r.id === reelId) ?? null;
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -120,8 +130,7 @@ export function DealForm({ venueId, initial: initialDeal, initialSchedule, onSub
     try {
       const common = {
         title: title.trim(),
-        // A schedule save replaces every field, so carry its video across.
-        ...(kind === "schedule" ? { reel_id: initialSchedule?.reel_id ?? null } : {}),
+        reel_id: reelId,
         category,
         description: description || undefined,
         unit: unit || undefined,
@@ -174,6 +183,16 @@ export function DealForm({ venueId, initial: initialDeal, initialSchedule, onSub
             <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Two signature cocktails for the price of one." style={fieldInput} />
           </div>
         </div>
+      </div>
+
+      {/* Discover video */}
+      <div style={{ ...card, padding: 28, marginBottom: 22 }}>
+        <DealVideoPicker
+          venueId={venueId}
+          value={selectedReel ? { reel: selectedReel } : null}
+          onChange={(v) => setReelId(v?.reel.id ?? null)}
+          onBusy={setVideoBusy}
+        />
       </div>
 
       {/* When it runs */}
@@ -306,8 +325,8 @@ export function DealForm({ venueId, initial: initialDeal, initialSchedule, onSub
       {/* Actions */}
       <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
         <button type="button" onClick={() => router.back()} style={btnGhost}>Cancel</button>
-        <button type="submit" disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1, cursor: saving ? "not-allowed" : "pointer" }}>
-          {saving ? "Saving…" : submitLabel}
+        <button type="submit" disabled={saving || videoBusy} style={{ ...btnPrimary, opacity: saving || videoBusy ? 0.6 : 1, cursor: saving || videoBusy ? "not-allowed" : "pointer" }}>
+          {saving ? "Saving…" : videoBusy ? "Uploading video…" : submitLabel}
         </button>
       </div>
     </form>
