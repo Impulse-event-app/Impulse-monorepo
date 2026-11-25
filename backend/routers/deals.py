@@ -10,7 +10,7 @@ from database import get_db
 from environment import can_manage_venue
 from demo_mode import hide_demo_venues, viewer_is_demo
 from deal_schedules import SYDNEY, auto_title, date_label, deal_price_for, expires_for
-from models import Deal, Venue, VenueReel
+from models import Booking, Deal, Venue, VenueReel
 from routers.merchants import can_publish_deals
 from schemas import DealCreate, DealResponse, DealUpdate, DealWithVenueResponse
 
@@ -159,6 +159,8 @@ def update_deal(
 ):
     deal = _get_deal_or_404(deal_id, db)
     _assert_deal_owner(deal, user, db)
+    if deal.deleted_at:
+        raise HTTPException(status_code=404, detail="Deal not found")
 
     venue = db.query(Venue).filter(Venue.id == deal.venue_id).first()
     updates = body.model_dump(exclude_unset=True)
@@ -207,5 +209,11 @@ def delete_deal(
 ):
     deal = _get_deal_or_404(deal_id, db)
     _assert_deal_owner(deal, user, db)
-    db.delete(deal)
+    if db.query(Booking.id).filter(Booking.deal_id == deal.id).first():
+        # Bookings keep their deal (it's their price and venue record), so a
+        # booked deal is switched off and hidden rather than removed.
+        deal.is_active = False
+        deal.deleted_at = deal.deleted_at or datetime.now(timezone.utc)
+    else:
+        db.delete(deal)
     db.commit()

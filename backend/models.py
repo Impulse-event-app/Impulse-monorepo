@@ -246,6 +246,9 @@ class Deal(Base):
     reel_id = Column(UUID(as_uuid=False), ForeignKey("venue_reels.id", ondelete="SET NULL"), nullable=True)
     # The venue left the name blank: the title is "<venue> · <price>" and follows price changes.
     auto_title = Column(Boolean, default=False, server_default="false", nullable=False)
+    # The venue deleted it but it has bookings, which must keep their deal: it is
+    # switched off and hidden from the venue's list instead of removed.
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     venue: "Venue" = relationship("Venue", back_populates="deals")
