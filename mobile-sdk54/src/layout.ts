@@ -7,7 +7,7 @@
 // wrong after the first fold. Apple's rule for Duo: lay out by available space,
 // not by idiom, orientation or a list of known screen sizes.
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import { Platform, useWindowDimensions } from 'react-native';
+import { useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /** Below this window width the app uses the single-column phone layout. */
@@ -36,16 +36,12 @@ export function useLayoutMode(): LayoutMode {
 }
 
 /**
- * Bottom padding a tab screen needs so its last row clears the tab bar.
- *
- * iOS uses native tabs (app/(user)/(tabs)/_layout.ios.tsx): the bar is
- * included in insets.bottom only while it sits along the bottom, so when iOS
- * moves it into the side rail (iPhone Duo folded or landscape) no space is
- * wasted. Web and Android draw the floating JS bar, which needs a fixed 100.
+ * Bottom padding a tab screen needs so its last row clears the floating tab
+ * bar (app/(user)/(tabs)/_layout.tsx), on every platform. The bar only ever
+ * shrinks on scroll, so its full size is what content must clear.
  */
 export function useTabBarClearance(): number {
-  const insets = useSafeAreaInsets();
-  return Platform.OS === 'ios' ? insets.bottom : 100;
+  return 100;
 }
 
 /**

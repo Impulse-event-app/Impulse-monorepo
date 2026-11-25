@@ -31,6 +31,7 @@ import { Drop, fmtCountdown, money, pct, useCountdown, venuePhotoUrl } from './d
 import { IMPULSE_RED, fontMono, fontUI, useTheme } from './theme';
 import { CategoryIcon, ChevronBack, ChevronRight, ListGlyph, LocationPin, PinTriangle } from './icons';
 import { hapticSelection } from './haptics';
+import { reportTabScroll } from './tabBarScroll';
 
 export const EASE = Easing.bezier(0.32, 0.72, 0, 1);
 export const NUM: TextStyle = { fontVariant: ['tabular-nums'] };
@@ -239,13 +240,18 @@ export function GlassBadge({ children, style }: { children: React.ReactNode; sty
 }
 
 // ── nav bar ──────────────────────────────────────────────────
-/** Tracks whether a scroll view has passed the large title. */
-export function useScrolled(threshold = 44): [boolean, (e: NativeSyntheticEvent<NativeScrollEvent>) => void] {
+/**
+ * Tracks whether a scroll view has passed the large title. `tabBar`: this is a
+ * tab's main list, so its scroll also shrinks and restores the tab bar.
+ */
+export function useScrolled(threshold = 44, { tabBar = false }: { tabBar?: boolean } = {}): [boolean, (e: NativeSyntheticEvent<NativeScrollEvent>) => void] {
   const [scrolled, setScrolled] = useState(false);
   const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const next = e.nativeEvent.contentOffset.y > threshold;
+    const y = e.nativeEvent.contentOffset.y;
+    if (tabBar) reportTabScroll(y);
+    const next = y > threshold;
     setScrolled((prev) => (prev === next ? prev : next));
-  }, [threshold]);
+  }, [threshold, tabBar]);
   return [scrolled, onScroll];
 }
 
@@ -716,6 +722,7 @@ export function DiscountBadge({ now, usual }: { now: number; usual: number }) {
 /** Price, unit and usual price. `hideDiscount` when a DiscountBadge already shows it. */
 export function PriceBlock({ d, big, hideDiscount }: { d: Drop; big?: boolean; hideDiscount?: boolean }) {
   const T = useTheme();
+  if (big) return <BigPrice d={d} hideDiscount={hideDiscount} />;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 9, rowGap: 6 }}>
       <Text style={{ ...fontMono(600), fontSize: big ? 34 : 26, lineHeight: big ? 38 : 30, letterSpacing: big ? -0.68 : -0.52, color: T.text }}>
@@ -725,6 +732,44 @@ export function PriceBlock({ d, big, hideDiscount }: { d: Drop; big?: boolean; h
         {unitLabel(d.unit)}, usually {money(d.usual)}
       </Text>
       {hideDiscount ? null : <DiscountChip now={d.now} usual={d.usual} />}
+    </View>
+  );
+}
+
+/** The deal page's price: what you pay and the discount first, then the usual
+ *  price struck through and what you save, so the deal reads at a glance. */
+function BigPrice({ d, hideDiscount }: { d: Drop; hideDiscount?: boolean }) {
+  const T = useTheme();
+  const p = pct(d.now, d.usual);
+  const off = p > 0;
+  const saved = off ? d.usual - d.now : 0;
+  return (
+    <View style={{ gap: 6 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 10, rowGap: 6 }}>
+        <Text style={{ ...fontMono(600), fontSize: 34, lineHeight: 38, letterSpacing: -0.68, color: T.text }}>
+          {money(d.now)}
+        </Text>
+        <Text style={{ ...fontUI(400), fontSize: 15, color: T.muted, letterSpacing: -0.12 }}>{unitLabel(d.unit)}</Text>
+        {off && !hideDiscount ? (
+          <View
+            accessible
+            accessibilityLabel={`${p} percent off`}
+            style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 9, borderCurve: 'continuous', backgroundColor: T.accent }}
+          >
+            <Text style={{ ...fontUI(700), fontSize: 15, letterSpacing: -0.1, color: T.accentInk }}>{p}% off</Text>
+          </View>
+        ) : null}
+      </View>
+      {off ? (
+        <Text
+          accessibilityLabel={`Usually ${money(d.usual)}. You save ${money(saved)}.`}
+          style={{ ...fontUI(400), fontSize: 15, color: T.muted, letterSpacing: -0.12 }}
+        >
+          Usually <Text style={{ textDecorationLine: 'line-through' }}>{money(d.usual)}</Text>
+          {'  ·  '}
+          <Text style={{ ...fontUI(600), color: T.accent }}>You save {money(saved)}</Text>
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -967,7 +1012,6 @@ export function DropCardEditorial({ d, onPress, a11yLabel, a11yHint }: { d: Drop
               <GlassBadge>
                 <Text maxFontSizeMultiplier={1.4} style={{ ...fontUI(500), fontSize: 12.5, color: T.text, letterSpacing: -0.05 }}>{d.cat}</Text>
               </GlassBadge>
-              {d.target ? <CountdownPill d={d} /> : null}
             </View>
             {/* The discount is the hook: big, top right. (Voting's rank badge moves to the bottom right.) */}
             <DiscountBadge now={d.now} usual={d.usual} />
@@ -984,8 +1028,8 @@ export function DropCardEditorial({ d, onPress, a11yLabel, a11yHint }: { d: Drop
           <View style={{ marginTop: 16 }}>
             <PriceBlock d={d} hideDiscount />
           </View>
-          {/* Deals with a countdown show it once, on the photo badge. Only deals
-              without one need this row, for their time window. */}
+          {/* Deals without a countdown show their time window here. Countdown
+              deals show no timer on the card; it's on the deal page. */}
           {!d.target && (
             <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: T.line }}>
               <Live d={d} />

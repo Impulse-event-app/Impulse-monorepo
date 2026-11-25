@@ -1,24 +1,31 @@
 import { useEffect, useRef, useState } from 'react';
 import { Tabs } from 'expo-router';
-import { Animated, Easing, Platform, Pressable, Text, View } from 'react-native';
+import { Animated, Easing, Platform, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
-import { useTheme, fontUI } from '../../../src/theme';
+import { MaybeDarkScope, useTheme } from '../../../src/theme';
 import { FooterScrim, Glass, useReduceMotion, useReduceTransparency } from '../../../src/components';
 import { TabTonight, TabDiscover, TabPlans, TabYou } from '../../../src/icons';
 import { hapticSelection } from '../../../src/haptics';
+import { expandTabBar, tabBarCompact } from '../../../src/tabBarScroll';
 
-// Web and Android tab bar. iOS uses native tabs instead (_layout.ios.tsx).
-// Screens clear this bar via useTabBarClearance() in src/layout.ts (100pt).
+// The tab bar on every platform: a floating capsule of icons. Like
+// Instagram's, it shrinks a little as a whole (every tab still visible) while
+// you scroll a tab's list down, and grows back when you scroll up, reach the
+// top or switch tabs (src/tabBarScroll.ts). Screens clear it via
+// useTabBarClearance() in src/layout.ts (100pt, the bar at full size).
 
 // On iPad (and wide Split View panes) the bar stays phone-sized and centred
 // rather than stretching edge to edge.
 const TAB_BAR_MAX_WIDTH = 520;
 
-const BAR_HEIGHT = 54;
+const BAR_HEIGHT = 56;
 // Gap between the lens and the bar's edge.
 const LENS_INSET = 4;
 const NATIVE_DRIVER = Platform.OS !== 'web';
+// Size of the bar when compact, as a fraction of full size (Instagram's is
+// about 0.86).
+const COMPACT_SCALE = 0.86;
 
 /**
  * The selection "lens": a brighter pane of glass behind the focused tab that
@@ -70,13 +77,32 @@ function useLiquidLens(index: number, tabWidth: number) {
 }
 
 // Floating liquid-glass tab bar over a progressive scrim.
-function FloatingTabBar({ state, descriptors, emitter, navigateToTab }: BottomTabBarProps) {
+// On Discover (full-screen reels) the bar goes dark so it stands out against
+// the video, whatever the app's appearance.
+function FloatingTabBar(props: BottomTabBarProps) {
+  const onReels = props.state.routes[props.state.index]?.name === 'discover';
+  return (
+    <MaybeDarkScope dark={onReels}>
+      <TabBar {...props} />
+    </MaybeDarkScope>
+  );
+}
+
+function TabBar({ state, descriptors, emitter, navigateToTab }: BottomTabBarProps) {
   const T = useTheme();
   const insets = useSafeAreaInsets();
   const solid = useReduceTransparency();
   const [barWidth, setBarWidth] = useState(0);
   const tabWidth = barWidth / state.routes.length;
   const lens = useLiquidLens(state.index, tabWidth);
+
+  // A new tab starts with the bar at full size.
+  useEffect(() => { expandTabBar(); }, [state.index]);
+
+  // Scale the whole capsule, pinned at its bottom edge so it shrinks down
+  // towards the home indicator rather than floating up.
+  const scale = tabBarCompact.interpolate({ inputRange: [0, 1], outputRange: [1, COMPACT_SCALE] });
+  const sink = tabBarCompact.interpolate({ inputRange: [0, 1], outputRange: [0, (BAR_HEIGHT * (1 - COMPACT_SCALE)) / 2] });
 
   const lensFill = solid
     ? (T.dark ? T.surface2 : '#FFFFFF')
@@ -89,7 +115,7 @@ function FloatingTabBar({ state, descriptors, emitter, navigateToTab }: BottomTa
         pointerEvents="box-none"
         style={{ paddingHorizontal: 14, paddingBottom: insets.bottom > 0 ? Math.max(insets.bottom - 10, 8) : 16, alignItems: 'center' }}
       >
-        <View style={[{ borderCurve: 'continuous', borderRadius: 27, width: '100%', maxWidth: TAB_BAR_MAX_WIDTH }, T.floatShadow]}>
+        <Animated.View style={[{ borderCurve: 'continuous', borderRadius: 27, width: '100%', maxWidth: TAB_BAR_MAX_WIDTH, transform: [{ translateY: sink }, { scale }] }, T.floatShadow]}>
           <Glass radius={27} style={{ height: BAR_HEIGHT, flexDirection: 'row', alignItems: 'center' }}>
             {tabWidth > 0 && (
               <Animated.View
@@ -122,7 +148,8 @@ function FloatingTabBar({ state, descriptors, emitter, navigateToTab }: BottomTa
               {state.routes.map((route, index) => {
                 const { options } = descriptors[route.key];
                 const focused = state.index === index;
-                const color = focused ? T.accent : T.muted;
+                // Unselected icons in full text colour, like Instagram; the selected one in red.
+                const color = focused ? T.accent : T.text;
                 const label = (options.title ?? route.name) as string;
 
                 const onPress = () => {
@@ -142,16 +169,14 @@ function FloatingTabBar({ state, descriptors, emitter, navigateToTab }: BottomTa
                     accessibilityLabel={label}
                     style={{ flex: 1, height: '100%', alignItems: 'center', justifyContent: 'center', gap: 2 }}
                   >
-                    {options.tabBarIcon?.({ focused, color, size: 23 })}
-                    <Text maxFontSizeMultiplier={1.2} numberOfLines={1} style={{ ...fontUI(focused ? 600 : 500), fontSize: 10.5, letterSpacing: -0.04, color }}>
-                      {label}
-                    </Text>
+                    {/* Icons only, like Instagram; VoiceOver reads the label. */}
+                    {options.tabBarIcon?.({ focused, color, size: 27 })}
                   </Pressable>
                 );
               })}
             </View>
           </Glass>
-        </View>
+        </Animated.View>
       </View>
     </View>
   );
@@ -171,28 +196,28 @@ export default function TabsLayout() {
         name="home"
         options={{
           title: "What's on",
-          tabBarIcon: ({ focused, color }) => <TabTonight color={color} on={focused} />,
+          tabBarIcon: ({ focused, color, size }) => <TabTonight size={size} color={color} on={focused} />,
         }}
       />
       <Tabs.Screen
         name="discover"
         options={{
           title: 'Discover',
-          tabBarIcon: ({ focused, color }) => <TabDiscover color={color} on={focused} />,
+          tabBarIcon: ({ focused, color, size }) => <TabDiscover size={size} color={color} on={focused} />,
         }}
       />
       <Tabs.Screen
         name="plans"
         options={{
           title: 'Plans',
-          tabBarIcon: ({ color }) => <TabPlans color={color} />,
+          tabBarIcon: ({ color, size }) => <TabPlans size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'You',
-          tabBarIcon: ({ focused, color }) => <TabYou color={color} on={focused} />,
+          tabBarIcon: ({ focused, color, size }) => <TabYou size={size} color={color} on={focused} />,
         }}
       />
     </Tabs>

@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { BlurView } from 'expo-blur';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { AppState, FlatList, Image, Pressable, Text, useWindowDimensions, View, type ListViewToken } from 'react-native';
+import { AppState, FlatList, Image, Platform, Pressable, Text, useWindowDimensions, View, type ListViewToken } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DarkScope, fontMono, fontUI, useApp } from '../../../src/theme';
-import { Btn, DiscountChip, EmptyState, Scrim, Skeleton, unitLabel, useReduceMotion } from '../../../src/components';
+import { Btn, DiscountChip, EmptyState, Scrim, Skeleton, useReduceMotion } from '../../../src/components';
 import { Play } from '../../../src/icons';
 import { canonicalCat, money } from '../../../src/data';
 import { listReels, type ApiReel } from '../../../src/api';
+import { reportTabScroll } from '../../../src/tabBarScroll';
 import { setSelectedDeal, useLayoutMode, useSelectedDeal, useSideInsets, useTabBarClearance } from '../../../src/layout';
 import { SplitPane } from '../../../src/SplitPane';
 import { DealDetail } from '../../../src/DealDetail';
@@ -97,24 +99,18 @@ function ReelItem({ r, height, width, near, playing, paused, onTogglePause }: {
       <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}>
         <Scrim stops={[[0, 0], [0.35, 0.55], [1, 0.92]]} style={{ top: -80 }} />
         <View pointerEvents="box-none" style={{ ...sideInsets, paddingBottom: tabClearance + 8, gap: 10 }}>
-          <View>
-            <Text numberOfLines={2} style={{ ...fontUI(600), fontSize: 26, letterSpacing: -0.5, color: T.text }}>{r.venue_name}</Text>
-            <Text numberOfLines={1} style={{ ...fontUI(500), fontSize: 14, color: T.muted, marginTop: 2 }}>
-              {[canonicalCat(r.venue_category), r.venue_suburb].filter(Boolean).join(' · ')}
-            </Text>
-          </View>
+          <Text numberOfLines={1} style={{ ...fontUI(600), fontSize: 24, letterSpacing: -0.45, color: T.text }}>
+            {r.venue_name}
+            {r.venue_suburb ? <Text style={{ ...fontUI(500), fontSize: 15, letterSpacing: -0.1, color: T.muted }}>{`  ${r.venue_suburb}`}</Text> : null}
+          </Text>
           {!!r.caption && (
-            <Text numberOfLines={3} style={{ ...fontUI(400), fontSize: 16, lineHeight: 21, color: T.text }}>{r.caption}</Text>
+            <Text numberOfLines={2} style={{ ...fontUI(400), fontSize: 15, lineHeight: 20, color: T.text, opacity: 0.9 }}>{r.caption}</Text>
           )}
           {bookable ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4 }}>
-              <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-                <Text numberOfLines={1} style={{ ...fontUI(500), fontSize: 14, color: T.muted }}>{r.deal_title}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 8, rowGap: 4 }}>
-                  <Text style={{ ...fontMono(600), fontSize: 20, color: T.text }}>{money(r.deal_price ?? 0)}</Text>
-                  <Text style={{ ...fontUI(400), fontSize: 13, color: T.muted }}>{unitLabel(r.unit ?? '')}</Text>
-                  {r.original_price ? <DiscountChip now={r.deal_price ?? 0} usual={r.original_price} /> : null}
-                </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 2 }}>
+              <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ ...fontMono(600), fontSize: 20, color: T.text }}>{money(r.deal_price ?? 0)}</Text>
+                {r.original_price ? <DiscountChip now={r.deal_price ?? 0} usual={r.original_price} /> : null}
               </View>
               {/* Open Duo / split layout: no Book here, the drop's own Book now
                   is in the detail pane beside the reel. */}
@@ -124,11 +120,34 @@ function ReelItem({ r, height, width, near, playing, paused, onTogglePause }: {
                 </Btn>
               )}
             </View>
-          ) : (
-            <Text style={{ ...fontUI(500), fontSize: 14, color: T.muted, marginTop: 4 }}>No drop live right now</Text>
-          )}
+          ) : null}
         </View>
       </View>
+    </View>
+  );
+}
+
+/**
+ * A fixed blur from the tab bar's top edge to the bottom edge of the screen.
+ * While you swipe between reels, the edge between two clips slides behind the
+ * glass tab bar and showed through as a hard line; under this blur it doesn't.
+ * Without a mask library, the fade comes from stacked layers: each one runs
+ * to the bottom and starts a little lower, so the blur builds up downwards
+ * with no hard top edge. iOS only.
+ */
+const BLUR_STEPS = [0.0, 0.25, 0.5, 0.75];
+function BottomBlur({ height }: { height: number }) {
+  if (Platform.OS !== 'ios' || height <= 0) return null;
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height }}>
+      {BLUR_STEPS.map((start) => (
+        <BlurView
+          key={start}
+          intensity={14}
+          tint="dark"
+          style={{ position: 'absolute', left: 0, right: 0, bottom: 0, top: Math.round(height * start) }}
+        />
+      ))}
     </View>
   );
 }
@@ -191,7 +210,7 @@ function DiscoverFeed({ fill = false, onActiveDeal }: { fill?: boolean; onActive
   let body: React.ReactNode;
   if (reels === null && !failed) {
     body = (
-      <View accessible accessibilityLabel="Loading" style={{ flex: 1, width: reelWidth || '100%', alignSelf: 'center', justifyContent: 'flex-end', padding: 16, paddingBottom: tabClearance + 8, gap: 10 }}>
+      <View accessible accessibilityLabel="Loading" style={{ flex: 1, backgroundColor: '#000', width: reelWidth || '100%', alignSelf: 'center', justifyContent: 'flex-end', padding: 16, paddingBottom: tabClearance + 8, gap: 10 }}>
         <Skeleton width="55%" height={26} />
         <Skeleton width="35%" height={14} />
         <Skeleton width="80%" height={16} />
@@ -200,7 +219,7 @@ function DiscoverFeed({ fill = false, onActiveDeal }: { fill?: boolean; onActive
     );
   } else if (failed || !reels?.length) {
     body = (
-      <View style={{ flex: 1, justifyContent: 'center', paddingBottom: 60 }}>
+      <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', paddingBottom: 60 }}>
         <EmptyState
           title={failed ? "Couldn't load Discover." : 'Nothing to watch yet.'}
           body={failed ? 'Check your connection and try again.' : 'Venues will post clips here soon.'}
@@ -211,6 +230,7 @@ function DiscoverFeed({ fill = false, onActiveDeal }: { fill?: boolean; onActive
   } else if (height > 0) {
     body = (
       <FlatList
+        style={{ backgroundColor: '#000' }}
         data={reels}
         keyExtractor={(r) => r.id}
         renderItem={({ item, index }) => {
@@ -238,6 +258,8 @@ function DiscoverFeed({ fill = false, onActiveDeal }: { fill?: boolean; onActive
         maxToRenderPerBatch={2}
         onViewableItemsChanged={onViewable}
         viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
+        onScroll={(e) => reportTabScroll(e.nativeEvent.contentOffset.y)}
+        scrollEventThrottle={16}
         onRefresh={load}
         refreshing={false}
       />
@@ -245,9 +267,12 @@ function DiscoverFeed({ fill = false, onActiveDeal }: { fill?: boolean; onActive
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#000' }} onLayout={(e) => setSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}>
+    // Black is on each body (loading, empty, the reel list), not this root.
+    <View style={{ flex: 1 }} onLayout={(e) => setSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}>
       {onScreen && <StatusBar style="light" />}
       {body}
+      {/* From the bar's top edge down: any higher and it blurs the reel's text. */}
+      {reels?.length ? <BottomBlur height={tabClearance} /> : null}
       {header}
     </View>
   );

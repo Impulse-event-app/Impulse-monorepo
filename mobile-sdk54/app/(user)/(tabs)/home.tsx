@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useIsFocused, useRouter } from 'expo-router';
-import { ActivityIndicator, Alert, Platform, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, View } from 'react-native';
 import {
   categoryOptions,
   DEFAULT_FILTERS,
@@ -194,7 +194,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const requireAuth = useRequireAuth();
   const navTop = useNavTop();
-  const [scrolled, onScroll] = useScrolled();
+  const [scrolled, onScroll] = useScrolled(44, { tabBar: true });
   const [submitting, setSubmitting] = useState(false);
 
   // Huddle voting mode: the feed becomes the ballot. Only deals that fit the
@@ -361,9 +361,10 @@ export default function HomeScreen() {
   const shown = voting ? 'list' : view;
 
   const screen = (
-    <View style={{ flex: 1, backgroundColor: T.bg }}>
+    <View style={{ flex: 1 }}>
       <View style={{ flex: 1, display: shown === 'list' ? 'flex' : 'none' }}>
         <ScrollView
+          style={{ backgroundColor: T.bg }}
           showsVerticalScrollIndicator={false}
           onScroll={onScroll}
           scrollEventThrottle={16}
@@ -518,7 +519,7 @@ export default function HomeScreen() {
 
       {/* Voting submit — floats clear above the tab bar */}
       {voting && (
-        <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: tabClearance + (Platform.OS === 'ios' ? 8 : -4), paddingHorizontal: 16 }}>
+        <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: tabClearance - 4, paddingHorizontal: 16 }}>
           <ReadableColumn>
             {submitting ? (
               <View style={{ height: 52, alignItems: 'center', justifyContent: 'center' }}>

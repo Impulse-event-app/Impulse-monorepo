@@ -499,6 +499,17 @@ export function useTheme(): Theme {
 }
 
 /** Renders its subtree with the dark tokens whatever the appearance setting — for screens over video. */
+/**
+ * Dark tokens for its children while `dark` is on, the app's own theme
+ * otherwise. Same component either way, so toggling it doesn't remount them.
+ */
+export function MaybeDarkScope({ dark, children }: { dark: boolean; children: React.ReactNode }) {
+  const app = useApp();
+  const darkT = useMemo(() => tokens(true), []);
+  const value = useMemo(() => (dark ? { ...app, T: darkT, dark: true, accent: darkT.accent } : app), [app, darkT, dark]);
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
 export function DarkScope({ children }: { children: React.ReactNode }) {
   const app = useApp();
   const T = useMemo(() => tokens(true), []);
