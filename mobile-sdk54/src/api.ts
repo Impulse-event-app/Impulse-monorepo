@@ -266,6 +266,8 @@ export type ApiReel = {
   venue_name: string;
   venue_category: string;
   venue_suburb: string | null;
+  /** Older backends don't send it. */
+  venue_description?: string | null;
   venue_image_url: string | null;
   venue_image_urls?: string[];
   deal_id: string | null;

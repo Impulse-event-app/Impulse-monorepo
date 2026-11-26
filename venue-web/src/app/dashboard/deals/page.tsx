@@ -122,7 +122,12 @@ export default function DealsPage() {
 
   const deleteDeal = useMutation({
     mutationFn: (id: string) => dealApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["deals", venue?.id] }),
+    onSuccess: (_, id) => {
+      // Drop the row now rather than waiting on the refetch.
+      qc.setQueryData<Deal[]>(["deals", venue?.id], (old) => old?.filter((d) => d.id !== id));
+      qc.invalidateQueries({ queryKey: ["deals", venue?.id] });
+    },
+    onError: (err) => alert(err instanceof Error ? `Couldn't delete the deal: ${err.message}` : "Couldn't delete the deal. Try again."),
   });
 
   function confirmDelete(deal: Deal) {

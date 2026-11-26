@@ -55,7 +55,7 @@ def test_each_venue_gets_its_own_deal():
 # ── Building the response ─────────────────────────────────────────────────────
 
 def _reel():
-    venue = SimpleNamespace(name="Kingpin Lanes", category="Bowling", suburb="Surry Hills", image_url=None)
+    venue = SimpleNamespace(name="Kingpin Lanes", category="Bowling", suburb="Surry Hills", image_url=None, description="Ten lanes, neon and a late kitchen.")
     return SimpleNamespace(
         id="r1", venue_id="v1", venue=venue, video_url="https://x/r1.mp4", poster_url=None, caption="Strike!",
     )
@@ -67,6 +67,7 @@ def test_reel_with_deal_carries_its_fields():
     assert (out.deal_id, out.deal_title, out.deal_price, out.original_price, out.unit) == (
         d.id, "Lane for 4", 40.0, 80.0, "/lane")
     assert out.venue_name == "Kingpin Lanes"
+    assert out.venue_description == "Ten lanes, neon and a late kitchen."
 
 
 def test_reel_without_deal_has_no_book_target():

@@ -383,7 +383,7 @@ def list_venue_deals(
     _assert_owner(venue, user)
     return (
         db.query(Deal)
-        .filter(Deal.venue_id == venue_id)
+        .filter(Deal.venue_id == venue_id, Deal.deleted_at.is_(None))
         .order_by(Deal.created_at.desc())
         .all()
     )

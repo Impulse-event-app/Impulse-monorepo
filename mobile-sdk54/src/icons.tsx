@@ -6,33 +6,33 @@ import type { ColorValue } from 'react-native';
 type IconProps = { size?: number; color?: ColorValue };
 
 // ── tab bar icons (23pt) ─────────────────────────────────────
-export function TabTonight({ color = '#000', on = false }: IconProps & { on?: boolean }) {
+export function TabTonight({ size = 23, color = '#000', on = false }: IconProps & { on?: boolean }) {
   return (
-    <Svg width={23} height={23} viewBox="0 0 24 24">
+    <Svg width={size} height={size} viewBox="0 0 24 24">
       <Circle cx={12} cy={12} r={9} fill="none" stroke={color} strokeWidth={1.6} opacity={on ? 0.55 : 0.9} />
       <Circle cx={12} cy={12} r={3.4} fill={color} />
     </Svg>
   );
 }
-export function TabDiscover({ color = '#000', on = false }: IconProps & { on?: boolean }) {
+export function TabDiscover({ size = 23, color = '#000', on = false }: IconProps & { on?: boolean }) {
   return (
-    <Svg width={23} height={23} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7} strokeLinejoin="round">
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7} strokeLinejoin="round">
       <Rect x={5.5} y={3.5} width={13} height={17} rx={3.5} />
       <Path d="M10.5 9.3v5.4l4.3-2.7z" fill={on ? color : 'none'} />
     </Svg>
   );
 }
-export function TabPlans({ color = '#000' }: IconProps) {
+export function TabPlans({ size = 23, color = '#000' }: IconProps) {
   return (
-    <Svg width={23} height={23} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
       <Rect x={4.5} y={4.5} width={15} height={15} rx={3.5} />
       <Path d="M9 10h6M9 14h4" />
     </Svg>
   );
 }
-export function TabYou({ color = '#000', on = false }: IconProps & { on?: boolean }) {
+export function TabYou({ size = 23, color = '#000', on = false }: IconProps & { on?: boolean }) {
   return (
-    <Svg width={23} height={23} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
       <Circle cx={12} cy={8.5} r={3.4} fill={on ? color : 'none'} />
       <Path d="M5.5 19.5c0-3.4 2.9-5.6 6.5-5.6s6.5 2.2 6.5 5.6" />
     </Svg>
@@ -86,6 +86,22 @@ export function Play({ size = 22, color = '#fff' }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 14 14">
       <Path d="M4 2.4v9.2c0 .5.5.8.9.5l7-4.6a.6.6 0 000-1L4.9 1.9c-.4-.3-.9 0-.9.5z" fill={color} />
+    </Svg>
+  );
+}
+/** Speaker, with sound waves, or struck through when `muted`. */
+export function Speaker({ size = 18, color = '#fff', muted = false }: IconProps & { muted?: boolean }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" fill={color} />
+      {muted ? (
+        <Path d="M16 9.5l5 5M21 9.5l-5 5" />
+      ) : (
+        <>
+          <Path d="M15.5 9a4.2 4.2 0 010 6" />
+          <Path d="M18.2 6.5a7.8 7.8 0 010 11" />
+        </>
+      )}
     </Svg>
   );
 }

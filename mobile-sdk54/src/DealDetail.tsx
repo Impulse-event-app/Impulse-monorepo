@@ -6,32 +6,37 @@
 //   beside the list it was picked from. Embedded, there is no back button (the
 //   list is right there) and the booking bar sits inside the pane: every
 //   absolute child here is positioned against this component's root View.
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { ScrollView, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { apiDealToDrop, dropCoords } from './data';
+import Svg, { Line } from 'react-native-svg';
+import { apiDealToDrop, dropCoords, money, pct, useCountdown, type Drop } from './data';
 import { HeroMedia } from './HeroMedia';
+import { setSelectedDeal } from './layout';
 import { VenueMap } from './VenueMap';
-import { fontUI, useApp } from './theme';
+import { fontMono, fontUI, useApp, useTheme } from './theme';
 import { logInteraction } from './api';
 import { useRequireAuth } from './auth';
+import { ChevronRight, LocationPin } from './icons';
 import {
   BackButton,
   Btn,
   EmptyState,
   FloatingFooter,
   Label,
-  Live,
+  LiveDot,
   MetaLine,
-  PriceBlock,
+  Radar,
+  unitLabel,
+  unitShort,
   RatingDot,
   ReadableColumn,
   ScreenTitle,
 } from './components';
 
 export function DealDetail({ id, embedded = false }: { id: string | undefined; embedded?: boolean }) {
-  const { T, apiDeals, signedIn } = useApp();
+  const { T, apiDeals, signedIn, drops } = useApp();
   const router = useRouter();
   const requireAuth = useRequireAuth();
   const insets = useSafeAreaInsets();
@@ -57,7 +62,6 @@ export function DealDetail({ id, embedded = false }: { id: string | undefined; e
       }}
     >
       {embedded ? null : <BackButton onPress={() => router.back()} />}
-      {/* No countdown pill here: the Live line under the price already shows it. */}
     </View>
   );
 
@@ -71,10 +75,13 @@ export function DealDetail({ id, embedded = false }: { id: string | undefined; e
   }
 
   const coords = dropCoords(d);
-  const facts = [
-    ['What you get', d.gets],
-    ['Where', d.addr],
-  ].filter(([, v]) => !!v);
+  const others = drops.filter((o) => o.venueId === d.venueId && o.id !== d.id);
+  const hasPrice = d.now > 0 || d.usual > 0;
+  const where = d.km > 0 ? `${d.km} km away` : d.suburb;
+  const openDirections = () => {
+    const q = encodeURIComponent(d.addr || `${d.venue}, ${d.suburb}`);
+    Linking.openURL(Platform.OS === 'ios' ? `http://maps.apple.com/?daddr=${q}` : `https://www.google.com/maps/dir/?api=1&destination=${q}`);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
@@ -93,25 +100,73 @@ export function DealDetail({ id, embedded = false }: { id: string | undefined; e
             </View>
           </View>
 
-          <View style={{ marginTop: 24, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: T.line, gap: 12 }}>
-            <PriceBlock d={d} big />
-            <Live d={d} />
-          </View>
+          <DropTicket d={d} />
 
-          {!!d.blurb && (
-            <Text style={{ marginTop: 24, ...fontUI(400), fontSize: 17, lineHeight: 25, letterSpacing: -0.19, color: T.text }}>
-              {d.blurb}
-            </Text>
+          {/* Where: one row, tap for directions. */}
+          <Pressable
+            onPress={openDirections}
+            accessibilityRole="button"
+            accessibilityLabel={`${d.addr || d.suburb}. ${where}`}
+            accessibilityHint="Opens directions in Maps."
+            style={({ pressed }) => ({
+              marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 12,
+              paddingVertical: 14, paddingHorizontal: 16, opacity: pressed ? 0.6 : 1,
+              borderRadius: 16, borderCurve: 'continuous', backgroundColor: T.fill,
+            })}
+          >
+            <LocationPin size={16} color={T.accent} />
+            <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+              <Text numberOfLines={1} style={{ ...fontUI(500), fontSize: 15, letterSpacing: -0.15, color: T.text }}>{d.addr || d.suburb}</Text>
+              <Label>{where}</Label>
+            </View>
+            <Text style={{ ...fontUI(500), fontSize: 14, color: T.accent }}>Directions</Text>
+            <ChevronRight size={7} color={T.accent} />
+          </Pressable>
+
+          {/* The venue's other live deals: the feed lists each venue once. */}
+          {others.length > 0 && (
+            <>
+              <Text accessibilityRole="header" style={{ marginTop: 28, ...fontUI(700), fontSize: 20, letterSpacing: -0.4, color: T.text }}>
+                More at {d.venue}
+              </Text>
+              <View style={{ marginTop: 12, borderRadius: 18, borderCurve: 'continuous', borderWidth: 1, borderColor: T.line, backgroundColor: T.surface, overflow: 'hidden' }}>
+                {others.map((o, i) => {
+                  const off = o.usual > 0 ? pct(o.now, o.usual) : 0;
+                  return (
+                    <Pressable
+                      key={o.id}
+                      onPress={() => (embedded ? setSelectedDeal(o.id) : router.replace(`/(user)/event/${o.id}`))}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${o.gets}, ${money(o.now)} ${unitLabel(o.unit)}${off > 0 ? `, ${off} percent off` : ''}`}
+                      style={({ pressed }) => ({
+                        flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16,
+                        borderTopWidth: i === 0 ? 0 : 1, borderTopColor: T.line, opacity: pressed ? 0.6 : 1,
+                      })}
+                    >
+                      <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+                        <Text numberOfLines={1} style={{ ...fontUI(500), fontSize: 16, letterSpacing: -0.2, color: T.text }}>{o.gets}</Text>
+                        <Label>{o.window}</Label>
+                      </View>
+                      <Text style={{ ...fontMono(600), fontSize: 16, color: T.text }}>{money(o.now)}</Text>
+                      {off > 0 ? <Text style={{ ...fontMono(600), fontSize: 13, color: T.accent }}>−{off}%</Text> : null}
+                      <ChevronRight size={7} color={T.faint} />
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </>
           )}
 
-          <View style={{ marginTop: 28, gap: 16 }}>
-            {facts.map(([k, v]) => (
-              <View key={k} accessible accessibilityLabel={`${k}: ${v}`}>
-                <Label>{k}</Label>
-                <Text style={{ ...fontUI(400), fontSize: 17, lineHeight: 23, letterSpacing: -0.19, color: T.text, marginTop: 4 }}>{v}</Text>
-              </View>
-            ))}
-          </View>
+          {!!d.blurb && (
+            <>
+              <Text accessibilityRole="header" style={{ marginTop: 28, ...fontUI(700), fontSize: 20, letterSpacing: -0.4, color: T.text }}>
+                About
+              </Text>
+              <Text style={{ marginTop: 10, ...fontUI(400), fontSize: 16, lineHeight: 23, letterSpacing: -0.15, color: T.text }}>
+                {d.blurb}
+              </Text>
+            </>
+          )}
 
           {/* No coordinates: leave the map out rather than show a placeholder. */}
           {coords ? (
@@ -132,6 +187,108 @@ export function DealDetail({ id, embedded = false }: { id: string | undefined; e
           Book now
         </Btn>
       </FloatingFooter>
+    </View>
+  );
+}
+
+/**
+ * The drop as a ticket: the offer and price up top, a perforated tear line,
+ * and a stub with the time left and what you save. Impulse's own shape for a
+ * deal (your booking becomes a door code, so the deal reads like a ticket).
+ */
+function DropTicket({ d }: { d: Drop }) {
+  const T = useTheme();
+  const ms = useCountdown(d.target);
+  const p = d.usual > 0 ? pct(d.now, d.usual) : 0;
+  const saved = p > 0 ? d.usual - d.now : 0;
+  const counting = !!d.target && ms > 0;
+  const NOTCH = 18;
+  const [w, setW] = useState(0);
+
+  const s = Math.floor(ms / 1000);
+  const parts: [number, string][] = [[Math.floor(s / 3600), 'h'], [Math.floor((s % 3600) / 60), 'm'], [s % 60, 's']];
+  const shown = parts[0][0] > 0 ? parts : parts.slice(1);
+
+  return (
+    <View
+      onLayout={(e) => setW(e.nativeEvent.layout.width)}
+      style={{
+        marginTop: 22, borderRadius: 22, borderCurve: 'continuous', borderWidth: 1, borderColor: T.line,
+        backgroundColor: T.surface, overflow: 'hidden',
+      }}
+    >
+      {/* Offer and price */}
+      <View style={{ padding: 18, paddingBottom: 20, gap: 14 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+            <Radar size={20} decorative />
+            <Text style={{ ...fontUI(600), fontSize: 13.5, letterSpacing: -0.1, color: T.text }}>Impulse special</Text>
+          </View>
+          {/* The discount, as text, top right. */}
+          {p > 0 ? (
+            <Text style={{ ...fontUI(700), fontSize: 15, letterSpacing: -0.2, color: T.accent }}>{p}% off</Text>
+          ) : null}
+        </View>
+        {/* An unnamed deal's title is just "50% off", already shown top right. */}
+        {!!d.gets && !/^\s*\d+\s*%\s*off\s*$/i.test(d.gets) && (
+          <Text style={{ ...fontUI(600), fontSize: 21, lineHeight: 26, letterSpacing: -0.4, color: T.text }}>{d.gets}</Text>
+        )}
+        <View
+          accessible
+          accessibilityLabel={`${money(d.now)} ${unitLabel(d.unit)}${p > 0 ? `, usually ${money(d.usual)}` : ''}`}
+          style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', columnGap: 5 }}
+        >
+          {/* Was, then now: the old price struck through right before the new one. */}
+          {p > 0 ? (
+            <Text style={{ ...fontMono(500), fontSize: 24, letterSpacing: -0.4, color: T.muted, textDecorationLine: 'line-through' }}>{money(d.usual)}</Text>
+          ) : null}
+          <Text style={{ ...fontMono(600), fontSize: 38, lineHeight: 42, letterSpacing: -1, color: T.text }}>{money(d.now)}</Text>
+          <Text style={{ ...fontUI(400), fontSize: 15, color: T.muted, marginLeft: -3 }}>{unitShort(d.unit)}</Text>
+        </View>
+      </View>
+
+      {/* Tear line, with a notch cut into each side */}
+      <View style={{ height: 1, justifyContent: 'center' }}>
+        {w > 0 && (
+          <Svg width={w} height={2} style={{ position: 'absolute', left: 0 }}>
+            <Line x1={NOTCH} y1={1} x2={w - NOTCH} y2={1} stroke={T.line2} strokeWidth={1.5} strokeDasharray="5 5" />
+          </Svg>
+        )}
+        <View style={{ position: 'absolute', left: -NOTCH / 2 - 1, width: NOTCH, height: NOTCH, borderRadius: NOTCH / 2, backgroundColor: T.bg, borderWidth: 1, borderColor: T.line }} />
+        <View style={{ position: 'absolute', right: -NOTCH / 2 - 1, width: NOTCH, height: NOTCH, borderRadius: NOTCH / 2, backgroundColor: T.bg, borderWidth: 1, borderColor: T.line }} />
+      </View>
+
+      {/* Stub: time left and what you save */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 16, gap: 12 }}>
+        <View
+          style={{ flex: 1, gap: 6 }}
+          accessible
+          accessibilityLabel={counting ? `Ends in ${shown.map(([n, u]) => `${n}${u}`).join(' ')}` : d.window}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <LiveDot color={d.status === 'now' ? T.accent : T.muted} blink={counting} />
+            <Label>{counting ? 'Ends in' : 'When'}</Label>
+          </View>
+          {counting ? (
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+              {shown.map(([n, u]) => (
+                <Text key={u} style={{ ...fontMono(600), fontSize: 22, letterSpacing: -0.4, color: T.text, fontVariant: ['tabular-nums'] }}>
+                  {String(n).padStart(2, '0')}
+                  <Text style={{ ...fontUI(500), fontSize: 13, color: T.muted }}>{u}</Text>
+                </Text>
+              ))}
+            </View>
+          ) : (
+            <Text numberOfLines={2} style={{ ...fontUI(500), fontSize: 16, letterSpacing: -0.15, color: T.text }}>{d.window}</Text>
+          )}
+        </View>
+        {saved > 0 ? (
+          <View style={{ alignItems: 'flex-end', gap: 6 }}>
+            <Label>You save</Label>
+            <Text style={{ ...fontMono(600), fontSize: 22, letterSpacing: -0.4, color: T.accent }}>{money(saved)}</Text>
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }

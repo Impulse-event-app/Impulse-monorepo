@@ -93,11 +93,12 @@ export default function PlansScreen() {
   const plans = allPlans.filter((p) => isUpcoming(p, now));
   const router = useRouter();
   const navTop = useNavTop();
-  const [scrolled, onScroll] = useScrolled();
+  const [scrolled, onScroll] = useScrolled(44, { tabBar: true });
 
   return (
-    <View style={{ flex: 1, backgroundColor: T.bg }}>
+    <View style={{ flex: 1 }}>
       <ScrollView
+        style={{ backgroundColor: T.bg }}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={16}

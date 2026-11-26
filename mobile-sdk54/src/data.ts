@@ -122,6 +122,7 @@ export function fmtCountdown(ms: number) {
 // ── dataset: Sydney drops ────────────────────────────────────
 export type Drop = {
   id: string;
+  venueId: string;
   venue: string;
   cat: string;
   suburb: string;
@@ -143,6 +144,8 @@ export type Drop = {
   image: string | null;   // real venue photo URL, or null → category placeholder
   images: string[];       // every venue photo, cover first, for the detail slideshow
   video: { url: string; poster: string | null } | null;  // the deal's Discover video
+  /** Set by onePerVenue: how many other live deals this venue has. */
+  moreAtVenue?: number;
 };
 
 // max party each venue fits (drives the party-size filter)
@@ -155,7 +158,7 @@ const CAPS: Record<string, number> = {
 // on the most time-critical drops). window → human label for the rest.
 const T0 = Date.now();
 
-type RawDrop = Omit<Drop, 'target' | 'cap' | 'latitude' | 'longitude' | 'image' | 'images' | 'video'>;
+type RawDrop = Omit<Drop, 'venueId' | 'target' | 'cap' | 'latitude' | 'longitude' | 'image' | 'images' | 'video'>;
 
 const RAW: RawDrop[] = [
   {
@@ -239,6 +242,7 @@ export const LATLNG: Record<string, LatLng> = {
 
 export const DROPS: Drop[] = RAW.map((d) => ({
   ...d,
+  venueId: d.id,
   target: d.hotMin ? T0 + d.hotMin * 60000 : null,
   cap: CAPS[d.id],
   latitude: LATLNG[d.id]?.latitude ?? null,
@@ -247,6 +251,32 @@ export const DROPS: Drop[] = RAW.map((d) => ({
   images: [],
   video: null,
 }));
+
+/**
+ * Listings are per venue, not per deal: a venue with 20 deals still gets one
+ * card. Keeps each venue's best deal (live before later, then the biggest
+ * discount, then the one ending soonest), in the position of the venue's
+ * first deal in `drops`, and notes how many more it has in moreAtVenue.
+ */
+export function onePerVenue(drops: Drop[]): Drop[] {
+  const rank = (d: Drop) => [d.status === 'now' ? 0 : 1, -(d.usual > 0 ? pct(d.now, d.usual) : 0), d.target ?? Infinity];
+  const better = (a: Drop, b: Drop) => {
+    const ra = rank(a), rb = rank(b);
+    for (let i = 0; i < ra.length; i++) if (ra[i] !== rb[i]) return ra[i] < rb[i];
+    return false;
+  };
+  const best = new Map<string, Drop>();
+  const count = new Map<string, number>();
+  const order: string[] = [];
+  for (const d of drops) {
+    const key = d.venueId || d.venue;
+    const cur = best.get(key);
+    if (!cur) order.push(key);
+    if (!cur || better(d, cur)) best.set(key, d);
+    count.set(key, (count.get(key) ?? 0) + 1);
+  }
+  return order.map((k) => ({ ...best.get(k)!, moreAtVenue: (count.get(k) ?? 1) - 1 }));
+}
 
 // region that frames all of the drops (Sydney inner-city)
 export const SYDNEY_REGION = {
@@ -386,15 +416,17 @@ export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): D
   const hotMin = msLeft !== null && msLeft > 0 ? Math.round(msLeft / 60_000) : null;
 
   // Human-readable availability window
+  const openSlots = upcomingSlots(d.date, d.slots);
   const window =
-    d.slots.length > 0
+    openSlots.length > 0
       ? status === 'now'
-        ? `On now · ${d.slots.join(', ')}`
-        : `From ${d.slots[0]} tonight`
+        ? `On now · ${openSlots.join(', ')}`
+        : `From ${openSlots[0]} tonight`
       : d.date;
 
   return {
     id: d.id,
+    venueId: d.venue_id,
     venue: d.venue_name,
     cat: canonicalCat(d.category),
     suburb: d.venue_suburb ?? '',
@@ -406,7 +438,10 @@ export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): D
     window,
     hotMin,
     rating: d.venue_avg_rating,
-    blurb: d.description ?? d.title,
+    // The intro is the venue's description, or nothing: falling back to the
+    // title repeated it under "What you get". An unnamed deal already shows its
+    // description there, so its intro stays empty too.
+    blurb: d.auto_title ? '' : d.description ?? '',
     // An unnamed deal's title just repeats the venue and price shown above it.
     gets: d.auto_title ? d.description || `${Math.round(d.discount_pct)}% off` : d.title,
     addr: d.venue_address ?? '',
@@ -450,4 +485,45 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
     Math.cos((lat2 * Math.PI) / 180) *
     Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ── slots that haven't started ───────────────────────────────
+// Deals list their day as text ("Thursday 26 November 2026") and their slots
+// as "3:00 PM", both in the venue's time zone (Sydney, as on the server).
+const VENUE_TZ = 'Australia/Sydney';
+const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july',
+  'august', 'september', 'october', 'november', 'december'];
+
+/** Wall-clock minutes since an epoch-free origin, for comparing local times. */
+const wallKey = (y: number, mo: number, d: number, h: number, mi: number) =>
+  Date.UTC(y, mo, d, h, mi) / 60000;
+
+function venueNowKey(now: Date): number {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-AU', {
+      timeZone: VENUE_TZ, year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: 'numeric', minute: 'numeric', hourCycle: 'h23',
+    }).formatToParts(now).map((p) => [p.type, p.value]),
+  );
+  return wallKey(+parts.year, +parts.month - 1, +parts.day, +parts.hour % 24, +parts.minute);
+}
+
+function slotKey(dateText: string, slot: string): number | null {
+  const d = dateText.match(/(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
+  const t = slot.match(/(\d{1,2}):(\d{2})\s*([AaPp])[Mm]/);
+  if (!d || !t) return null;
+  const mo = MONTHS.indexOf(d[2].toLowerCase());
+  if (mo < 0) return null;
+  const h = (+t[1] % 12) + (t[3].toLowerCase() === 'p' ? 12 : 0);
+  return wallKey(+d[3], mo, +d[1], h, +t[2]);
+}
+
+/** The slots that haven't started yet. A slot whose time can't be read is kept
+ *  (the server still checks it). */
+export function upcomingSlots(dateText: string, slots: string[], now = new Date()): string[] {
+  const nowKey = venueNowKey(now);
+  return slots.filter((s) => {
+    const k = slotKey(dateText, s);
+    return k === null || k > nowKey;
+  });
 }

@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useIsFocused, useRouter } from 'expo-router';
-import { ActivityIndicator, Alert, Platform, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, View } from 'react-native';
 import {
   categoryOptions,
   DEFAULT_FILTERS,
   activeFilterCount,
   applyFilters,
+  onePerVenue,
 } from '../../../src/data';
+import { useBlockTabSwipe } from '../../../src/tabBarScroll';
 import { getHuddle, submitBallot, ApiError, ApiHuddle } from '../../../src/api';
 import { fontMono, fontUI, useApp, emailName } from '../../../src/theme';
 import {
@@ -194,7 +196,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const requireAuth = useRequireAuth();
   const navTop = useNavTop();
-  const [scrolled, onScroll] = useScrolled();
+  const [scrolled, onScroll] = useScrolled(44, { tabBar: true });
   const [submitting, setSubmitting] = useState(false);
 
   // Huddle voting mode: the feed becomes the ballot. Only deals that fit the
@@ -277,8 +279,12 @@ export default function HomeScreen() {
   const boosted = preferred.size
     ? [...filtered].sort((a, b) => Number(preferred.has(b.cat)) - Number(preferred.has(a.cat)))
     : filtered;
-  const now = boosted.filter((d) => d.status === 'now');
-  const later = boosted.filter((d) => d.status === 'later');
+  // One card per venue, so a venue with many deals can't fill the feed. Its
+  // other deals are on the deal page. Voting is the exception: the ballot
+  // lists specific deals.
+  const listed = voting ? boosted : onePerVenue(boosted);
+  const now = listed.filter((d) => d.status === 'now');
+  const later = listed.filter((d) => d.status === 'later');
   const activeCount = activeFilterCount(filters);
 
   const openDrop = (id: string) =>
@@ -359,11 +365,14 @@ export default function HomeScreen() {
 
   // A huddle ballot is the list, so voting always shows it.
   const shown = voting ? 'list' : view;
+  // Dragging the map sideways must pan it, not switch tabs.
+  useBlockTabSwipe('home-map', shown === 'map');
 
   const screen = (
-    <View style={{ flex: 1, backgroundColor: T.bg }}>
+    <View style={{ flex: 1 }}>
       <View style={{ flex: 1, display: shown === 'list' ? 'flex' : 'none' }}>
         <ScrollView
+          style={{ backgroundColor: T.bg }}
           showsVerticalScrollIndicator={false}
           onScroll={onScroll}
           scrollEventThrottle={16}
@@ -518,7 +527,7 @@ export default function HomeScreen() {
 
       {/* Voting submit — floats clear above the tab bar */}
       {voting && (
-        <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: tabClearance + (Platform.OS === 'ios' ? 8 : -4), paddingHorizontal: 16 }}>
+        <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: tabClearance - 4, paddingHorizontal: 16 }}>
           <ReadableColumn>
             {submitting ? (
               <View style={{ height: 52, alignItems: 'center', justifyContent: 'center' }}>

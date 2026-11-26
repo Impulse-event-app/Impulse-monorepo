@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
-import { DEFAULT_FILTERS, Drop, LatLng, SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, money } from './data';
+import { DEFAULT_FILTERS, Drop, LatLng, SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, money, onePerVenue } from './data';
 import { fontUI, useApp } from './theme';
 import { DropCardCompact, FadeIn, Glass, Pin, TextBtn, Touchable, ViewSwitch } from './components';
 import { Filter } from './icons';
@@ -101,7 +101,9 @@ export default function MapScreen({ onShowList }: { onShowList?: () => void }) {
   // map). Fading the rest left them stacked over the matches — same-suburb
   // deals share a coordinate — so the filters looked like they did nothing.
   const matchIds = new Set(applyFilters(located.map((x) => x.d), filters).map((d) => d.id));
-  const shown = located.filter((x) => matchIds.has(x.d.id));
+  // One pin per venue: its best matching deal (see onePerVenue).
+  const venueIds = new Set(onePerVenue(located.filter((x) => matchIds.has(x.d.id)).map((x) => x.d)).map((d) => d.id));
+  const shown = located.filter((x) => venueIds.has(x.d.id));
   const selDrop = shown.find((x) => x.d.id === sel)?.d ?? null;
   const activeCount = activeFilterCount(filters);
 

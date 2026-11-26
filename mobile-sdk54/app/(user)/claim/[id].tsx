@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
-import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { money, apiDealToDrop, apiBookingToPlan } from '../../../src/data';
+import { money, apiDealToDrop, apiBookingToPlan, upcomingSlots } from '../../../src/data';
 import { fontMono, fontUI, useApp } from '../../../src/theme';
 import { createBooking, ApiError, ApiBooking } from '../../../src/api';
 import {
@@ -11,12 +11,9 @@ import {
   Chip,
   EmptyState,
   FloatingFooter,
-  Group,
   HuddleMark,
   Label,
-  Radio,
   ReadableColumn,
-  Row,
   ScreenTitle,
   Stepper,
   unitLabel,
@@ -42,12 +39,23 @@ export default function ClaimScreen() {
   const apiDeal = id ? apiDeals[id] ?? null : null;
   const d = apiDeal ? apiDealToDrop(apiDeal) : null;
 
-  const times = apiDeal?.slots ?? (d?.status === 'now' ? ['Now', '7:30pm', '8:30pm'] : ['7:00pm', '8:00pm', '9:00pm']);
+  // Only slots that haven't started yet. Re-checked every minute so a slot
+  // drops off while the screen is open.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  const times = apiDeal ? upcomingSlots(apiDeal.date, apiDeal.slots, now) : [];
   const [party, setParty] = useState(2);
   // How a group pays: one person covers everyone (default), or Huddle Pay —
   // split it, with each friend invited into their own spot.
   const [huddlePay, setHuddlePay] = useState(false);
   const [time, setTime] = useState(times[0]);
+  // The picked slot passed (or none was picked yet): move to the next one.
+  useEffect(() => {
+    if (times.length && !times.includes(time)) setTime(times[0]);
+  }, [times.join('|'), time]);
   const [loading, setLoading] = useState(false);
   // Once the slot is reserved we keep the unpaid booking and hold the card.
   const [pendingBooking, setPendingBooking] = useState<ApiBooking | null>(null);
@@ -61,13 +69,17 @@ export default function ClaimScreen() {
     navigation.setOptions({ gestureEnabled: !pendingBooking });
   }, [navigation, pendingBooking]);
 
-  if (!d || !apiDeal) {
+  if (!d || !apiDeal || (!pendingBooking && times.length === 0)) {
     return (
       <View style={{ flex: 1, backgroundColor: T.bg, justifyContent: 'center' }}>
         <View style={{ position: 'absolute', top: insets.top + 4, left: insets.left + 16 }}>
           <BackButton onPress={() => router.back()} />
         </View>
-        <EmptyState title="This drop has gone." body="It may have sold out or ended." />
+        {d && apiDeal ? (
+          <EmptyState title="No times left today." body="Every slot for this deal has started." />
+        ) : (
+          <EmptyState title="This drop has gone." body="It may have sold out or ended." />
+        )}
       </View>
     );
   }
@@ -142,16 +154,35 @@ export default function ClaimScreen() {
     }
   };
 
-  const line = (k: string, v: string) => (
-    <View
-      key={k}
-      accessible
-      accessibilityLabel={`${k}, ${v}`}
-      style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', columnGap: 14, paddingVertical: 12 }}
+  const heldCents = depositCents + balanceCents;
+  const card = {
+    borderRadius: 20, borderCurve: 'continuous' as const, borderWidth: 1, borderColor: T.line,
+    backgroundColor: T.surface,
+  };
+  const sectionLabel = (text: string) => (
+    <Text accessibilityRole="header" style={{ ...fontUI(600), fontSize: 15, letterSpacing: -0.15, color: T.text }}>{text}</Text>
+  );
+
+  // Who pays: one tile each, side by side.
+  const payTile = (on: boolean, title: string, sub: string, onPress: () => void, icon?: React.ReactNode) => (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ checked: on }}
+      accessibilityLabel={`${title}, ${sub}`}
+      style={({ pressed }) => ({
+        flex: 1, padding: 14, gap: 4, opacity: pressed ? 0.75 : 1,
+        borderRadius: 16, borderCurve: 'continuous', borderWidth: on ? 1.5 : 1,
+        borderColor: on ? T.accent : T.line,
+        backgroundColor: on ? T.accentSoft : T.surface,
+      })}
     >
-      <Text style={{ ...fontUI(400), fontSize: 15, letterSpacing: -0.15, color: T.muted }}>{k}</Text>
-      <Text style={{ ...fontMono(400), fontSize: 15, letterSpacing: -0.15, color: T.text }}>{v}</Text>
-    </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+        {icon}
+        <Text style={{ ...fontUI(600), fontSize: 16, letterSpacing: -0.2, color: T.text }}>{title}</Text>
+      </View>
+      <Text style={{ ...fontUI(400), fontSize: 13, letterSpacing: -0.05, color: T.muted }}>{sub}</Text>
+    </Pressable>
   );
 
   return (
@@ -163,69 +194,60 @@ export default function ClaimScreen() {
       >
         <ReadableColumn>
           <ScreenTitle>{pendingBooking ? 'Hold your spot' : 'Your booking'}</ScreenTitle>
-          <Text style={{ ...fontUI(400), fontSize: 17, letterSpacing: -0.19, color: T.muted, marginTop: 7 }}>
-            {d.venue}{d.suburb ? ` · ${d.suburb}` : ''}
+          <Text numberOfLines={2} style={{ ...fontUI(400), fontSize: 16, letterSpacing: -0.15, color: T.muted, marginTop: 6 }}>
+            {[d.venue, d.gets].filter(Boolean).join(' · ')}
           </Text>
 
           {!pendingBooking ? (
             <>
-              <View style={{ marginTop: 36 }}>
-                <Text accessibilityRole="header" style={{ ...fontUI(500), fontSize: 17, letterSpacing: -0.19, color: T.text }}>How many?</Text>
-                <Label style={{ marginTop: 4, marginBottom: 18 }}>{d.gets}</Label>
-                <Stepper value={party} onChange={setParty} max={d.cap} label="People" />
-              </View>
-
-              <View style={{ marginTop: 36 }}>
-                <Text accessibilityRole="header" style={{ ...fontUI(500), fontSize: 17, letterSpacing: -0.19, color: T.text, marginBottom: 14 }}>Pick a time</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 8, rowGap: 10 }}>
-                  {times.map((t) => (
-                    <Chip key={t} active={time === t} onPress={() => setTime(t)}>{t}</Chip>
-                  ))}
+              {/* Guests and time in one card. */}
+              <View style={[card, { marginTop: 28 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 }}>
+                  {sectionLabel(perPerson ? 'Guests' : 'People')}
+                  <Stepper value={party} onChange={setParty} max={d.cap} size={36} label="People" />
+                </View>
+                <View style={{ height: 1, backgroundColor: T.line, marginHorizontal: 16 }} />
+                <View style={{ padding: 16, gap: 12 }}>
+                  {sectionLabel('Time')}
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 8, rowGap: 8 }}>
+                    {times.map((t) => (
+                      <Chip key={t} active={time === t} onPress={() => setTime(t)}>{t}</Chip>
+                    ))}
+                  </View>
                 </View>
               </View>
 
               {party > 1 && (
-                <Group label="How are you paying?">
-                  <Row
-                    label="I'll pay for everyone"
-                    sublabel="One payment, one code"
-                    trailing={<Radio on={!huddlePay} />}
-                    selected={!huddlePay}
-                    onPress={() => setHuddlePay(false)}
-                  />
-                  <Row
-                    icon={<HuddleMark size={18} />}
-                    label="Huddle Pay"
-                    sublabel="Split it — invite each person to pay their share"
-                    trailing={<Radio on={huddlePay} />}
-                    selected={huddlePay}
-                    onPress={() => setHuddlePay(true)}
-                  />
-                </Group>
+                <View style={{ marginTop: 24, gap: 10 }}>
+                  {sectionLabel("Who's paying?")}
+                  <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 10 }}>
+                    {payTile(!huddlePay, 'Just me', 'One payment', () => setHuddlePay(false))}
+                    {payTile(huddlePay, 'Split it', 'Huddle Pay', () => setHuddlePay(true), <HuddleMark size={18} />)}
+                  </View>
+                </View>
               )}
             </>
           ) : null}
 
-          <View style={{ marginTop: 40 }}>
-            {line("Tonight's price", `${money(d.now)} ${unitLabel(d.unit)}`)}
-            {line(perPerson ? 'People' : 'Slot', perPerson ? `× ${party}` : '× 1')}
-            {splitting
-              ? line('Split between', `${party} people`)
-              : line('Charged at check-in', fmtCents(depositCents + balanceCents))}
+          {/* Total: the sum, the amount, one line on when it's charged. */}
+          <View style={[card, { marginTop: 24, padding: 16 }]}>
             <View
               accessible
-              accessibilityLabel={`Total, ${money(total)}`}
-              style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingTop: 14, marginTop: 2, borderTopWidth: 1, borderTopColor: T.line }}
+              accessibilityLabel={`Total, ${money(total)}${perPerson ? `, ${party} at ${money(d.now)}` : ''}`}
+              style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}
             >
-              <Text style={{ ...fontUI(500), fontSize: 17, letterSpacing: -0.19, color: T.text }}>Total</Text>
+              <View style={{ gap: 2 }}>
+                <Text style={{ ...fontUI(600), fontSize: 15, letterSpacing: -0.15, color: T.text }}>Total</Text>
+                <Text style={{ ...fontMono(400), fontSize: 13, color: T.muted }}>
+                  {perPerson ? `${party} × ${money(d.now)}` : `${money(d.now)} ${unitLabel(d.unit)}`}
+                </Text>
+              </View>
               <Text style={{ ...fontMono(600), fontSize: 28, letterSpacing: -0.56, color: T.text }}>{money(total)}</Text>
             </View>
-            <Label style={{ marginTop: 14, lineHeight: 18 }}>
-              {splitting
-                ? 'Next, invite everyone and set the split. Each person holds their share on their card, and it’s charged when your code is scanned at the venue.'
-                : `We hold ${fmtCents(depositCents + balanceCents)} on your card now and charge it when your code is scanned at the venue. If nobody shows, ${fmtCents(depositCents)} (10%) is kept and the rest is released.`}
-            </Label>
           </View>
+          <Label style={{ marginTop: 10, marginHorizontal: 4, lineHeight: 18 }}>
+            Charged when you check in. 10% is kept if no one shows.
+          </Label>
         </ReadableColumn>
       </ScrollView>
 
@@ -238,7 +260,7 @@ export default function ClaimScreen() {
           {loading ? (
             <ActivityIndicator color={T.accent} style={{ height: 52 }} accessibilityLabel="Reserving your slot" />
           ) : (
-            <Btn full onPress={onReserve}>{splitting ? 'Continue to Huddle Pay' : 'Continue to payment'}</Btn>
+            <Btn full onPress={onReserve}>Continue</Btn>
           )}
         </FloatingFooter>
       )}
@@ -247,7 +269,7 @@ export default function ClaimScreen() {
           {loading ? (
             <ActivityIndicator color={T.accent} style={{ height: 52 }} accessibilityLabel="Holding your spot" />
           ) : (
-            <Btn full onPress={onHold}>{`Hold my spot · ${fmtCents(depositCents + balanceCents)}`}</Btn>
+            <Btn full onPress={onHold}>{`Hold my spot · ${fmtCents(heldCents)}`}</Btn>
           )}
         </FloatingFooter>
       )}
