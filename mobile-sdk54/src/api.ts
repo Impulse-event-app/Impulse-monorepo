@@ -108,7 +108,11 @@ export type ApiDeal = {
   unit: string | null;          // pricing unit, e.g. "pp", "/lane", "/room·hr"
   original_price: number;
   discount_pct: number;
-  deal_price: number;
+  deal_price: number;            // at the opening discount
+  // Falling discount: the discount steps down as each slot fills. slot_prices
+  // is what the next booking in each slot pays now (older backends omit it).
+  price_drops?: { after: number; discount_pct: number }[] | null;
+  slot_prices?: { slot: string; discount_pct: number; deal_price: number; left_at_price: number | null }[];
   date: string;
   slots: string[];
   max_group_size: number;

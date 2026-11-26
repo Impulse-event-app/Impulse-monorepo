@@ -9,17 +9,37 @@ import type { Venue } from "@/lib/api";
 import { useTheme } from "@/providers/ThemeProvider";
 import { PulseMark } from "@/components/Logo";
 import { FONT_DISPLAY, numeric } from "@/lib/ui";
+import {
+  CalendarCheck, CreditCard, KeyRound, LayoutDashboard, LogOut, Moon, PanelLeftClose, ScanLine, Store, Sun, Tag,
+  type LucideIcon,
+} from "lucide-react";
 
-const NAV: { href: string; label: string; match: (p: string) => boolean }[] = [
-  { href: "/dashboard", label: "Dashboard", match: (p) => p === "/dashboard" },
-  { href: "/dashboard/venue", label: "Venue details", match: (p) => p === "/dashboard/venue" },
-  { href: "/dashboard/deals", label: "Deals", match: (p) => p.startsWith("/dashboard/deals") },
-  { href: "/dashboard/bookings", label: "Bookings", match: (p) => p.startsWith("/dashboard/bookings") },
-  { href: "/dashboard/payments-setup", label: "Payments setup", match: (p) => p.startsWith("/dashboard/payments-setup") },
-  { href: "/dashboard/redeem", label: "Redeem", match: (p) => p.startsWith("/dashboard/redeem") },
+const NAV: { href: string; label: string; icon: LucideIcon; match: (p: string) => boolean }[] = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, match: (p) => p === "/dashboard" },
+  { href: "/dashboard/venue", label: "Venue details", icon: Store, match: (p) => p === "/dashboard/venue" },
+  { href: "/dashboard/deals", label: "Deals", icon: Tag, match: (p) => p.startsWith("/dashboard/deals") },
+  { href: "/dashboard/bookings", label: "Bookings", icon: CalendarCheck, match: (p) => p.startsWith("/dashboard/bookings") },
+  { href: "/dashboard/payments-setup", label: "Payments setup", icon: CreditCard, match: (p) => p.startsWith("/dashboard/payments-setup") },
+  { href: "/dashboard/redeem", label: "Redeem", icon: ScanLine, match: (p) => p.startsWith("/dashboard/redeem") },
 ];
 
-export function Sidebar() {
+const EASE = "cubic-bezier(.32,.72,0,1)";
+
+/** Labels fade out as the sidebar folds; the icons stay put. */
+function Label({ hidden, children }: { hidden: boolean; children: React.ReactNode }) {
+  return (
+    <span style={{ whiteSpace: "nowrap", overflow: "hidden", opacity: hidden ? 0 : 1, transition: `opacity ${hidden ? ".12s" : ".28s .08s"} ease` }}>
+      {children}
+    </span>
+  );
+}
+
+const footerRow: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 12, padding: "10px 11px", borderRadius: 10, border: "none", background: "none",
+  color: "var(--muted)", fontSize: 13, fontWeight: 500, cursor: "pointer", width: "100%", textAlign: "left",
+};
+
+export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const pathname = usePathname();
   const { signOut } = useAuth();
   const { venue, venues, selectVenue } = useVenue();
@@ -28,61 +48,82 @@ export function Sidebar() {
   return (
     <aside
       style={{
+        position: "sticky", top: 0, height: "100vh", boxSizing: "border-box", overflow: "hidden",
         display: "flex", flexDirection: "column", padding: "24px 18px",
         background: "var(--surface)", borderRight: "1px solid var(--line)",
       }}
     >
       {/* Logo */}
-      <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "6px 8px 20px" }}>
-        <PulseMark size={30} />
-        <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 20, letterSpacing: "-.02em" }}>impulse</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "6px 5px 20px" }}>
+        <span style={{ flexShrink: 0 }}><PulseMark size={30} /></span>
+        <Label hidden={collapsed}>
+          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 20, letterSpacing: "-.02em" }}>impulse</span>
+        </Label>
       </div>
 
       {/* Venue chip — becomes a switcher when the owner has more than one */}
-      {venue && <VenueSwitcher venue={venue} venues={venues} onSelect={selectVenue} />}
+      {venue && (collapsed ? (
+        <div title={venue.name} style={{ display: "flex", justifyContent: "center", padding: "3px 0", marginBottom: 22 }}>
+          <VenueInitial name={venue.name} />
+        </div>
+      ) : (
+        <VenueSwitcher venue={venue} venues={venues} onSelect={selectVenue} />
+      ))}
 
       {/* Nav */}
       <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {NAV.map(({ href, label, match }) => {
+        {NAV.map(({ href, label, icon: Icon, match }) => {
           const on = match(pathname);
           return (
             <Link
               key={href}
               href={href}
+              title={collapsed ? label : undefined}
+              aria-label={collapsed ? label : undefined}
+              aria-current={on ? "page" : undefined}
               style={{
-                display: "flex", alignItems: "center", gap: 12, padding: "11px 12px", borderRadius: 11,
+                display: "flex", alignItems: "center", gap: 12, padding: "10px 11px", borderRadius: 11,
                 textAlign: "left", fontSize: 14, fontWeight: on ? 600 : 500,
                 background: on ? "var(--accent-soft)" : "transparent",
                 color: on ? "var(--accent)" : "var(--muted)",
+                transition: "background-color .15s ease, color .15s ease",
               }}
             >
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: on ? "var(--accent)" : "var(--faint)" }} />
-              <span>{label}</span>
+              <Icon size={18} strokeWidth={on ? 2.2 : 1.8} style={{ flexShrink: 0 }} aria-hidden />
+              <Label hidden={collapsed}>{label}</Label>
             </Link>
           );
         })}
       </nav>
 
       {/* Footer actions */}
-      <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 8, paddingTop: 18, borderTop: "1px solid var(--line)" }}>
-        <button
-          onClick={toggle}
-          style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", borderRadius: 10, border: "none", background: "none", color: "var(--muted)", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
-        >
-          <span style={{ width: 16, height: 16, borderRadius: "50%", border: "2px solid var(--muted)", background: theme === "light" ? "var(--muted)" : "transparent" }} />
-          {theme === "dark" ? "Dark" : "Light"} mode
+      <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 4, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
+        <button onClick={toggle} title={collapsed ? `${theme === "dark" ? "Dark" : "Light"} mode` : undefined} style={footerRow}>
+          {theme === "dark" ? <Moon size={17} strokeWidth={1.8} style={{ flexShrink: 0 }} aria-hidden /> : <Sun size={17} strokeWidth={1.8} style={{ flexShrink: 0 }} aria-hidden />}
+          <Label hidden={collapsed}>{theme === "dark" ? "Dark" : "Light"} mode</Label>
         </button>
-        <Link
-          href="/reset-password"
-          style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", borderRadius: 10, color: "var(--muted)", fontSize: 13, fontWeight: 500 }}
-        >
-          <span style={{ fontSize: 15 }}>⚿</span> Change password
+        <Link href="/reset-password" title={collapsed ? "Change password" : undefined} style={footerRow}>
+          <KeyRound size={17} strokeWidth={1.8} style={{ flexShrink: 0 }} aria-hidden />
+          <Label hidden={collapsed}>Change password</Label>
         </Link>
+        <button onClick={() => signOut()} title={collapsed ? "Sign out" : undefined} style={footerRow}>
+          <LogOut size={17} strokeWidth={1.8} style={{ flexShrink: 0 }} aria-hidden />
+          <Label hidden={collapsed}>Sign out</Label>
+        </button>
         <button
-          onClick={() => signOut()}
-          style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", borderRadius: 10, border: "none", background: "none", color: "var(--muted)", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
+          onClick={onToggle}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : undefined}
+          style={{ ...footerRow, marginTop: 6 }}
         >
-          <span style={{ fontSize: 15 }}>⏻</span> Sign out
+          <PanelLeftClose
+            size={17}
+            strokeWidth={1.8}
+            aria-hidden
+            style={{ flexShrink: 0, transform: collapsed ? "rotate(180deg)" : "none", transition: `transform .32s ${EASE}` }}
+          />
+          <Label hidden={collapsed}>Collapse</Label>
         </button>
       </div>
     </aside>

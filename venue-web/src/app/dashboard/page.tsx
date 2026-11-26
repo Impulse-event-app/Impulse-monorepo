@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { CalendarCheck, ChevronRight, DollarSign, Plus, ScanLine, Users, Zap, type LucideIcon } from "lucide-react";
 import { merchantApi, userApi, venueApi, type ApiError, type DealPerformanceItem, type PaymentsStatus, type RecentBooking, type StatsResponse } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useVenue } from "@/providers/VenueProvider";
@@ -226,12 +227,12 @@ function DashboardContent({ venueId }: { venueId: string }) {
   const pctFilled =
     stats && stats.total_spots > 0 ? Math.round((stats.spots_filled / stats.total_spots) * 100) : 0;
 
-  const statCards = stats
+  const statCards: { label: string; value: string; sub: string; icon: LucideIcon; tone: string; fill?: number; live?: boolean }[] = stats
     ? [
-        { label: "Bookings today", value: String(stats.bookings_today), sub: "Across all deals" },
-        { label: "Revenue today", value: formatCurrency(stats.revenue_today), sub: "Confirmed today" },
-        { label: "Spots filled", value: `${stats.spots_filled}/${stats.total_spots}`, sub: `${pctFilled}% of capacity` },
-        { label: "Active deals", value: String(stats.active_deals), sub: "Live right now" },
+        { label: "Bookings today", value: String(stats.bookings_today), sub: "Across all deals", icon: CalendarCheck, tone: "var(--accent)" },
+        { label: "Revenue today", value: formatCurrency(stats.revenue_today), sub: "Confirmed today", icon: DollarSign, tone: "var(--good)" },
+        { label: "Spots filled", value: `${stats.spots_filled}/${stats.total_spots}`, sub: `${pctFilled}% of capacity`, icon: Users, tone: "var(--info)", fill: pctFilled },
+        { label: "Active deals", value: String(stats.active_deals), sub: "Live right now", icon: Zap, tone: "var(--warn)", live: true },
       ]
     : [];
 
@@ -266,14 +267,33 @@ function DashboardContent({ venueId }: { venueId: string }) {
               <div key={i} style={{ ...card, borderRadius: 16, height: 128, animation: "pm-glow 1.4s ease-in-out infinite" }} />
             ))
           : statCards.map((st) => (
-              <div key={st.label} style={{ ...card, borderRadius: 16, padding: 22, position: "relative", overflow: "hidden" }}>
-                <span style={{ position: "absolute", top: 0, left: 0, width: "100%", height: 3, background: "var(--accent)" }} />
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent)" }} />
-                  <span style={{ ...numeric, fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--muted)" }}>{st.label}</span>
+              <div key={st.label} style={{ ...card, borderRadius: 16, padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: "var(--muted)" }}>{st.label}</span>
+                  <span
+                    aria-hidden
+                    style={{
+                      width: 34, height: 34, borderRadius: 10, display: "grid", placeItems: "center", flexShrink: 0,
+                      color: st.tone, background: `color-mix(in oklab, ${st.tone} 14%, transparent)`,
+                    }}
+                  >
+                    <st.icon size={17} strokeWidth={2} />
+                  </span>
                 </div>
-                <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 32, letterSpacing: "-.02em", lineHeight: 1, whiteSpace: "nowrap" }}>{st.value}</div>
-                <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 10 }}>{st.sub}</div>
+                <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 30, letterSpacing: "-.02em", lineHeight: 1, whiteSpace: "nowrap" }}>{st.value}</div>
+                {st.fill !== undefined ? (
+                  <div>
+                    <div style={{ height: 5, borderRadius: 999, background: "var(--sunken)", overflow: "hidden" }}>
+                      <div style={{ width: `${Math.min(100, Math.max(st.fill, st.fill > 0 ? 2 : 0))}%`, height: "100%", borderRadius: 999, background: st.tone, transition: "width .4s ease" }} />
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 8 }}>{st.sub}</div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "var(--faint)" }}>
+                    {st.live && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--good)", boxShadow: "0 0 0 3px color-mix(in oklab, var(--good) 22%, transparent)" }} />}
+                    {st.sub}
+                  </div>
+                )}
               </div>
             ))}
       </div>
@@ -305,14 +325,26 @@ function DashboardContent({ venueId }: { venueId: string }) {
           <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 17, marginBottom: 6 }}>Quick actions</div>
           <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 20 }}>Publish a deal or check in a guest.</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <button onClick={() => router.push("/dashboard/deals/new")} style={{ textAlign: "left", padding: 16, borderRadius: 12, border: "1px solid var(--line2)", background: "var(--surface)", color: "var(--text)", cursor: "pointer" }}>
-              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 3 }}>+ New deal</div>
-              <div style={{ fontSize: 12, color: "var(--muted)" }}>Fill empty tables tonight</div>
-            </button>
-            <button onClick={() => router.push("/dashboard/redeem")} style={{ textAlign: "left", padding: 16, borderRadius: 12, border: "1px solid var(--line2)", background: "var(--surface)", color: "var(--text)", cursor: "pointer" }}>
-              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 3 }}>Redeem ticket</div>
-              <div style={{ fontSize: 12, color: "var(--muted)" }}>Enter a 6-digit code</div>
-            </button>
+            {([
+              { href: "/dashboard/deals/new", title: "New deal", sub: "Fill empty tables tonight", icon: Plus, tone: "var(--accent)" },
+              { href: "/dashboard/redeem", title: "Redeem ticket", sub: "Enter a 6-digit code", icon: ScanLine, tone: "var(--good)" },
+            ] as const).map((a) => (
+              <button
+                key={a.href}
+                onClick={() => router.push(a.href)}
+                className="dash-action"
+                style={{ display: "flex", alignItems: "center", gap: 14, textAlign: "left", padding: 14, borderRadius: 12, border: "1px solid var(--line2)", background: "var(--surface)", color: "var(--text)", cursor: "pointer" }}
+              >
+                <span aria-hidden style={{ width: 38, height: 38, borderRadius: 10, display: "grid", placeItems: "center", flexShrink: 0, color: a.tone, background: `color-mix(in oklab, ${a.tone} 14%, transparent)` }}>
+                  <a.icon size={18} strokeWidth={2} />
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", fontWeight: 600, fontSize: 14, marginBottom: 3 }}>{a.title}</span>
+                  <span style={{ display: "block", fontSize: 12, color: "var(--muted)" }}>{a.sub}</span>
+                </span>
+                <ChevronRight size={16} strokeWidth={2} aria-hidden style={{ color: "var(--faint)" }} />
+              </button>
+            ))}
           </div>
         </div>
       </div>

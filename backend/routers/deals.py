@@ -11,6 +11,7 @@ from environment import can_manage_venue
 from demo_mode import hide_demo_venues, viewer_is_demo
 from deal_schedules import SYDNEY, auto_title, date_label, deal_price_for, expires_for
 from models import Booking, Deal, Venue, VenueReel
+from price_drops import check_drops, slot_usage
 from routers.merchants import can_publish_deals
 from schemas import DealCreate, DealResponse, DealUpdate, DealWithVenueResponse
 
@@ -88,7 +89,8 @@ def list_deals(
     if date:
         q = q.filter(Deal.date == date)
     deals = q.order_by(Deal.created_at.desc()).all()
-    return [DealWithVenueResponse.from_deal(d) for d in deals]
+    usage = slot_usage(db, [d.id for d in deals if d.price_drops])
+    return [DealWithVenueResponse.from_deal(d, usage) for d in deals]
 
 
 @router.post("", response_model=DealResponse, status_code=201)
@@ -147,7 +149,7 @@ def get_deal(
     )
     if not deal or (deal.venue.is_demo and not viewer_is_demo(db, user)):
         raise HTTPException(status_code=404, detail="Deal not found")
-    return DealWithVenueResponse.from_deal(deal)
+    return DealWithVenueResponse.from_deal(deal, slot_usage(db, [deal.id]) if deal.price_drops else {})
 
 
 @router.patch("/{deal_id}", response_model=DealResponse)
@@ -176,6 +178,17 @@ def update_deal(
         new_original = float(updates.get("original_price", deal.original_price))
         new_discount = float(updates.get("discount_pct", deal.discount_pct))
         updates["deal_price"] = deal_price_for(new_original, new_discount)
+
+    # The steps are checked against the opening discount, whichever of the two changed.
+    if "price_drops" in updates or "discount_pct" in updates or "total_spots" in updates:
+        try:
+            updates["price_drops"] = check_drops(
+                float(updates.get("discount_pct", deal.discount_pct)),
+                updates.get("price_drops", deal.price_drops),
+                updates.get("total_spots", deal.total_spots),
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     # Renamed, cleared back to automatic, or an automatic title whose price moved.
     price_changed = any(k in updates for k in ("original_price", "discount_pct", "unit"))

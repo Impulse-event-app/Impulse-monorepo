@@ -39,7 +39,7 @@ def test_scheduled_deal_keeps_auto_title_and_video():
     s = SimpleNamespace(
         venue_id="v", id="s", title="Flight Club · $15 pp", auto_title=True, reel_id="r",
         category="Bar", description=None, unit="pp", original_price=30, discount_pct=50,
-        slots=["7:00 PM"], max_group_size=6, total_spots=10,
+        slots=["7:00 PM"], max_group_size=6, total_spots=10, price_drops=None,
     )
     from datetime import date
     d = deal_from_schedule(s, date(2026, 11, 3))

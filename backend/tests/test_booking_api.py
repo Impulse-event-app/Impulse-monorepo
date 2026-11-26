@@ -521,3 +521,66 @@ def test_live_activity_token_register_and_updates(env, monkeypatch):
     ok(env["as"]("host").delete(f"/bookings/{bid}/live-activity-token"), 204)
     with env["Session"]() as db:
         assert db.query(LiveActivityToken).filter_by(booking_id=bid).count() == 0
+
+
+# ── Falling discount (price_drops) ───────────────────────────────────────────
+
+def test_falling_discount_steps_down_per_slot_as_bookings_lock_in(env):
+    with env["Session"]() as db:
+        base = db.get(Deal, env["deals"]["pp"])
+        d = Deal(venue_id=base.venue_id, title="early birds", category="Bowling", unit="pp",
+                 original_price=40, discount_pct=50, deal_price=20, date=base.date,
+                 slots=["4:00 PM", "7:00 PM"], max_group_size=8, total_spots=40, spots_remaining=40,
+                 is_active=True, price_drops=[{"after": 2, "discount_pct": 25}])
+        db.add(d)
+        db.commit()
+        deal_id = d.id
+
+    def book(who, slot="7:00 PM", n=1):
+        return ok(env["as"](who).post("/bookings", json={"deal_id": deal_id, "slot_time": slot,
+                                                         "num_people": n, "split": False}), 201)
+
+    def prices():
+        return {p["slot"]: p for p in ok(env["as"]("jo").get(f"/deals/{deal_id}"))["slot_prices"]}
+
+    assert prices()["7:00 PM"] == {"slot": "7:00 PM", "discount_pct": 50, "deal_price": 20, "left_at_price": 2}
+
+    # An unpaid checkout doesn't use up the slot's better price.
+    book("alex")
+    assert prices()["7:00 PM"]["left_at_price"] == 2
+
+    # A group is one use, whatever its size.
+    for who, n in (("sam", 3), ("jo", 1)):
+        b = book(who, n=n)
+        assert whole(b) == 2000 * n
+        ok(pay(env["as"](who), b["id"], whole(b)))
+
+    p = prices()
+    assert p["7:00 PM"]["discount_pct"] == 25 and p["7:00 PM"]["deal_price"] == 30
+    assert p["7:00 PM"]["left_at_price"] is None
+    assert p["4:00 PM"]["deal_price"] == 20          # each slot counts on its own
+    assert whole(book("host")) == 3000
+    assert whole(book("host", slot="4:00 PM")) == 2000
+
+
+def test_venue_sets_and_clears_price_steps(env):
+    c = env["as"]("owner")
+    deal_id = env["deals"]["room"]
+    r = c.patch(f"/deals/{deal_id}", json={"discount_pct": 40, "price_drops": [{"after": 5, "discount_pct": 40}]})
+    assert r.status_code == 400 and "less off" in r.json()["detail"]
+    r = ok(c.patch(f"/deals/{deal_id}", json={"discount_pct": 40,
+                                              "price_drops": [{"after": 5, "discount_pct": 30}, {"after": 9, "discount_pct": 20}]}))
+    assert r["price_drops"] == [{"after": 5, "discount_pct": 30}, {"after": 9, "discount_pct": 20}]
+    # Lowering the opening discount below a step is caught too.
+    assert c.patch(f"/deals/{deal_id}", json={"discount_pct": 25}).status_code == 400
+    r = ok(c.patch(f"/deals/{deal_id}", json={"discount_pct": 0, "price_drops": []}))
+    assert r["price_drops"] is None
+
+
+def test_shrinking_spots_below_the_price_steps_is_refused(env):
+    c = env["as"]("owner")
+    deal_id = env["deals"]["room"]
+    ok(c.patch(f"/deals/{deal_id}", json={"discount_pct": 40, "price_drops": [{"after": 5, "discount_pct": 30}]}))
+    r = c.patch(f"/deals/{deal_id}", json={"total_spots": 5})
+    assert r.status_code == 400 and "5 spots" in r.json()["detail"]
+    ok(c.patch(f"/deals/{deal_id}", json={"price_drops": []}))

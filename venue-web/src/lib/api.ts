@@ -274,6 +274,14 @@ export const UNLIMITED_SPOTS = 9999;
 /** The most people one booking can hold, whatever a deal says (MAX_GROUP in backend/routers/bookings.py). */
 export const MAX_GROUP_SIZE = 10;
 
+/** A falling discount's step: from the (after + 1)th booking in a time slot,
+ *  the deal gives discount_pct off. Each slot counts its own bookings. */
+export interface PriceDrop {
+  after: number;
+  discount_pct: number;
+  price_drops?: PriceDrop[] | null;
+}
+
 export interface Deal {
   id: string;
   venue_id: string;
@@ -283,6 +291,7 @@ export interface Deal {
   unit: string | null;
   original_price: number;
   discount_pct: number;
+  price_drops?: PriceDrop[] | null;
   deal_price: number;
   date: string;
   deal_date: string | null;      // "2026-11-03"; null on older free-text deals
@@ -308,6 +317,7 @@ export interface DealCreate {
   unit?: string;
   original_price: number;
   discount_pct: number;
+  price_drops?: PriceDrop[] | null;
   date?: string;
   deal_date?: string;
   slots: string[];
@@ -326,6 +336,7 @@ export interface DealUpdate {
   unit?: string;
   original_price?: number;
   discount_pct?: number;
+  price_drops?: PriceDrop[] | null;
   date?: string;
   deal_date?: string;
   slots?: string[];
@@ -358,6 +369,7 @@ export interface DealSchedule {
   unit: string | null;
   original_price: number;
   discount_pct: number;
+  price_drops?: PriceDrop[] | null;
   deal_price: number;
   slots: string[];
   weekdays: number[];          // 0 = Monday … 6 = Sunday
@@ -379,6 +391,7 @@ export interface DealScheduleInput {
   unit?: string;
   original_price: number;
   discount_pct: number;
+  price_drops?: PriceDrop[] | null;
   slots: string[];
   weekdays: number[];
   starts_on?: string | null;
