@@ -138,7 +138,7 @@ export default function LegalScreen() {
         ))}
 
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, marginTop: 40 }}>
-          <Radar size={20} kind="compact" />
+          <Radar size={20} />
           <Label>Impulse · Sydney</Label>
         </View>
       </ScrollView>
