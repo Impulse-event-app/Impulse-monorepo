@@ -230,8 +230,11 @@ class Deal(Base):
     description = Column(Text, nullable=True)
     unit = Column(Text, nullable=True)                         # pricing unit, e.g. "pp", "/lane"
     original_price = Column(Numeric(10, 2), nullable=False)
-    discount_pct = Column(Numeric(5, 2), nullable=False)
-    deal_price = Column(Numeric(10, 2), nullable=False)        # computed on create/update
+    discount_pct = Column(Numeric(5, 2), nullable=False)       # the opening discount
+    deal_price = Column(Numeric(10, 2), nullable=False)        # computed on create/update, at discount_pct
+    # Falling discount (price_drops.py): [{"after": 5, "discount_pct": 25}, …],
+    # counted per slot. Null is a flat deal.
+    price_drops = Column(JSONB, nullable=True)
     date = Column(Text, nullable=False)                        # e.g. "Monday 3 June 2026"
     deal_date = Column(Date, nullable=True)                    # the evening it runs (Sydney); null on legacy free-text deals
     slots = Column(JSONB, nullable=False)                      # ["5:00 PM", "6:00 PM"]
@@ -275,6 +278,7 @@ class DealSchedule(Base):
     unit = Column(Text, nullable=True)
     original_price = Column(Numeric(10, 2), nullable=False)
     discount_pct = Column(Numeric(5, 2), nullable=False)
+    price_drops = Column(JSONB, nullable=True)                 # copied onto each deal it makes
     slots = Column(JSONB, nullable=False)                      # ["6:00pm", "7:30pm"]
     weekdays = Column(ARRAY(SmallInteger()), nullable=False)   # 0 = Monday … 6 = Sunday
     starts_on = Column(Date, nullable=True)                    # first evening it may run

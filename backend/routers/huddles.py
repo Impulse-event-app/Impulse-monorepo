@@ -14,6 +14,7 @@ from booking_logic import deal_cutoff, resolve_borda
 from database import get_db
 from demo_mode import hide_demo_venues
 from models import Booking, BookingParticipant, Deal, Venue
+from price_drops import current_price, slot_usage
 from routers.bookings import ensure_user_row, profile_name
 from schemas import BallotSubmit, BookingView, DealWithVenueResponse, HuddleCreate, HuddleJoin
 
@@ -196,7 +197,8 @@ def huddle_candidates(
         )
         .all()
     )
-    return [DealWithVenueResponse.from_deal(d) for d in deals]
+    usage = slot_usage(db, [d.id for d in deals if d.price_drops])
+    return [DealWithVenueResponse.from_deal(d, usage) for d in deals]
 
 
 def _resolve_huddle(db: Session, b: Booking) -> None:
@@ -219,7 +221,7 @@ def _resolve_huddle(db: Session, b: Booking) -> None:
     b.deal_id = winner.id
     b.deal = winner
     b.slot_time = (winner.slots or [None])[0]
-    flow.lock_price(b, winner)
+    flow.lock_price(b, winner, current_price(db, winner, b.slot_time))
     try:
         flow.lock_spots(db, b)
     except HTTPException:

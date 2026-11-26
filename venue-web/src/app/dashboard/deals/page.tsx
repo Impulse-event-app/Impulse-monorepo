@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { UNLIMITED_SPOTS, dealApi, scheduleApi, venueApi, type Deal, type DealSchedule } from "@/lib/api";
+import { UNLIMITED_SPOTS, dealApi, scheduleApi, venueApi, type Deal, type DealSchedule, type PriceDrop } from "@/lib/api";
 import { useVenue } from "@/providers/VenueProvider";
+import { priceDropsLadder } from "@/components/PriceDropsEditor";
 import { formatCurrency } from "@/lib/utils";
 import { FONT_DISPLAY, numeric, card, btnPrimary, iconBtn, iconBtnDanger, switchTrack, switchKnob } from "@/lib/ui";
 
@@ -96,7 +97,8 @@ export default function DealsPage() {
     mutationFn: (s: DealSchedule) =>
       scheduleApi.update(s.id, {
         title: s.title, category: s.category, description: s.description ?? undefined, unit: s.unit ?? undefined,
-        original_price: s.original_price, discount_pct: s.discount_pct, slots: s.slots, weekdays: s.weekdays,
+        original_price: s.original_price, discount_pct: s.discount_pct, price_drops: s.price_drops ?? null,
+        slots: s.slots, weekdays: s.weekdays,
         starts_on: s.starts_on, ends_on: s.ends_on, max_group_size: s.max_group_size, total_spots: s.total_spots,
         is_active: !s.is_active,
       }),
@@ -217,6 +219,7 @@ export default function DealsPage() {
                 <div>
                   <span style={{ fontWeight: 600, fontSize: 15 }}>{formatCurrency(s.deal_price)}</span>
                   <span style={{ fontSize: 12, color: "var(--faint)", textDecoration: "line-through", marginLeft: 6 }}>{formatCurrency(s.original_price)}</span>
+                  <EarlyBird opening={s.discount_pct} drops={s.price_drops} />
                 </div>
                 <div>
                   {run ? <FillBar filled={run.total_spots - run.spots_remaining} total={run.total_spots} /> : <span style={{ fontSize: 13, color: "var(--faint)" }}>Not on tonight</span>}
@@ -252,6 +255,7 @@ export default function DealsPage() {
               <div>
                 <span style={{ fontWeight: 600, fontSize: 15 }}>{formatCurrency(d.deal_price)}</span>
                 <span style={{ fontSize: 12, color: "var(--faint)", textDecoration: "line-through", marginLeft: 6 }}>{formatCurrency(d.original_price)}</span>
+                <EarlyBird opening={d.discount_pct} drops={d.price_drops} />
               </div>
               <div>
                 <FillBar filled={d.total_spots - d.spots_remaining} total={d.total_spots} />
@@ -310,6 +314,17 @@ export default function DealsPage() {
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+/** "Early bird 50% → 40% → 30%" under a deal's price, when it has steps. */
+function EarlyBird({ opening, drops }: { opening: number; drops?: PriceDrop[] | null }) {
+  const ladder = priceDropsLadder(opening, drops);
+  if (!ladder) return null;
+  return (
+    <div title="Early-bird pricing: the discount steps down as each time slot fills" style={{ ...numeric, fontSize: 11.5, color: "var(--muted)", marginTop: 4, whiteSpace: "nowrap" }}>
+      <span style={{ color: "var(--accent-text, var(--accent))", fontWeight: 600 }}>Early bird</span> · {ladder}
     </div>
   );
 }

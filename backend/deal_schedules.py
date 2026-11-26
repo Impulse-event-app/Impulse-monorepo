@@ -88,6 +88,7 @@ def deal_from_schedule(schedule: DealSchedule, day: date) -> Deal:
         original_price=original,
         discount_pct=discount,
         deal_price=deal_price_for(original, discount),
+        price_drops=schedule.price_drops,
         date=date_label(day),
         deal_date=day,
         slots=list(schedule.slots),

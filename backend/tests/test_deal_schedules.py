@@ -235,3 +235,31 @@ def test_feed_hides_deals_whose_last_slot_has_passed(env):
         db.commit()
     titles = [d["title"] for d in env.api.get("/deals").json()]
     assert "Old news" not in titles and "Launch night" in titles
+
+
+def test_weekly_deal_passes_its_price_steps_to_each_evening(env):
+    from deal_schedules import generate_scheduled_deals
+    drops = [{"after": 5, "discount_pct": 15}]
+    r = env.api.post("/deal-schedules", json=dict(
+        venue_id=env.ids.lanes, title="Fill-up lanes", category="Bowling", original_price=40, discount_pct=35,
+        price_drops=drops, slots=["7pm"], weekdays=[3], starts_on="2030-01-01", total_spots=8,
+    ))
+    assert r.status_code == 201, r.text
+    assert r.json()["price_drops"] == drops
+    with env.Session() as db:
+        generate_scheduled_deals(db, now=datetime(2026, 11, 5, 17, 0, tzinfo=SYDNEY))  # a Thursday, before starts_on
+    sid = r.json()["id"]
+    assert _deals_for(env, sid) == []
+    from models import DealSchedule
+    with env.Session() as db:
+        db.get(DealSchedule, sid).starts_on = None
+        db.commit()
+        generate_scheduled_deals(db, now=datetime(2026, 11, 5, 17, 0, tzinfo=SYDNEY))
+    [deal] = _deals_for(env, sid)
+    assert deal.price_drops == drops and float(deal.discount_pct) == 35
+
+    bad = env.api.post("/deal-schedules", json=dict(
+        venue_id=env.ids.lanes, title="x", category="Bowling", original_price=40, discount_pct=35,
+        price_drops=[{"after": 5, "discount_pct": 50}], slots=["7pm"], weekdays=[3], total_spots=8,
+    ))
+    assert bad.status_code == 422

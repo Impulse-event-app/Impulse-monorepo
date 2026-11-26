@@ -7,6 +7,7 @@ from auth import get_optional_user
 from database import get_db
 from demo_mode import hide_demo_venues
 from models import Deal, Venue, VenueReel
+from price_drops import best_price, slot_usage
 from schemas import ReelResponse
 
 router = APIRouter()
@@ -62,4 +63,9 @@ def list_reels(db: Session = Depends(get_db), user: Optional[dict] = Depends(get
     ) if venue_ids else []
     live = newest_live_deal_by_venue(deals)
     linked = newest_live_deal_by_reel(deals)
-    return [ReelResponse.from_reel(r, linked.get(r.id) or live.get(r.venue_id)) for r in reels]
+    usage = slot_usage(db, [d.id for d in deals if d.price_drops])
+    out = []
+    for r in reels:
+        deal = linked.get(r.id) or live.get(r.venue_id)
+        out.append(ReelResponse.from_reel(r, deal, best_price(deal, usage) if deal is not None else None))
+    return out

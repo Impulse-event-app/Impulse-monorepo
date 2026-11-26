@@ -6,6 +6,7 @@ import { PHOTO_BUCKET, extOf, uploadPublic } from "@/lib/storage";
 import { FONT_DISPLAY, numeric, card, fieldLabel, fieldInput, btnPrimary, btnGhost, requiredMark, switchTrack, switchKnob } from "@/lib/ui";
 import { CATEGORIES } from "@/lib/categories";
 import { CategorySelect } from "@/components/CategorySelect";
+import { HoursPill, HoursScale } from "@/components/HoursPill";
 import { DAYS, parseHours, serializeHours, type Day, type DayHours, type WeekHours } from "@/lib/hours";
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -363,7 +364,7 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit, firstNa
       {/* Opening hours */}
       <div style={{ ...card, padding: 28, marginBottom: 24 }}>
         <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 17, marginBottom: 6 }}>Opening hours</div>
-        <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 20 }}>Toggle a day off to mark it closed.</div>
+        <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 20 }}>Drag the ends of each day&apos;s bar to set opening and closing times. Toggle a day off to mark it closed.</div>
         {parsedHours.unread && (
           <p role="alert" style={{ borderRadius: 10, padding: "10px 14px", margin: "0 0 16px", fontSize: 13, lineHeight: 1.5, background: "var(--accent-soft)", color: "var(--accent)" }}>
             We couldn&apos;t read your saved hours (&ldquo;{initial?.opening_hours}&rdquo;), so these are placeholders.
@@ -371,6 +372,10 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit, firstNa
           </p>
         )}
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "150px 1fr", gap: 16 }}>
+            <span />
+            <HoursScale />
+          </div>
           {DAYS.map((day) => {
             const h = week[day];
             return (
@@ -379,13 +384,11 @@ export function VenueForm({ initial, submitLabel, savingLabel, onSubmit, firstNa
                   <span style={switchTrack(h.open, true)}><span style={switchKnob(h.open, true)} /></span>
                   <span style={{ fontWeight: 600, width: 44 }}>{day}</span>
                 </button>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                   {h.open ? (
-                    <>
-                      <input type="time" value={h.from} onChange={(e) => setDay(day, { from: e.target.value })} style={timeInput} />
-                      <span style={{ color: "var(--faint)", fontSize: 13 }}>to</span>
-                      <input type="time" value={h.to} onChange={(e) => setDay(day, { to: e.target.value })} style={timeInput} />
-                    </>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <HoursPill day={day} from={h.from} to={h.to} onChange={(next) => setDay(day, next)} />
+                    </div>
                   ) : (
                     <span style={{ ...numeric, fontSize: 12, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)" }}>Closed</span>
                   )}
@@ -437,13 +440,3 @@ const photoBtn: React.CSSProperties = {
 
 const errStyle: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: "var(--accent)", margin: "8px 0 0" };
 
-const timeInput: React.CSSProperties = {
-  width: 130,
-  padding: "9px 12px",
-  borderRadius: 9,
-  border: "1px solid var(--line2)",
-  background: "var(--sunken)",
-  color: "var(--text)",
-  fontSize: 13,
-  ...numeric,
-};
