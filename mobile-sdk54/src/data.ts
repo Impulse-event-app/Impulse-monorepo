@@ -416,11 +416,12 @@ export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): D
   const hotMin = msLeft !== null && msLeft > 0 ? Math.round(msLeft / 60_000) : null;
 
   // Human-readable availability window
+  const openSlots = upcomingSlots(d.date, d.slots);
   const window =
-    d.slots.length > 0
+    openSlots.length > 0
       ? status === 'now'
-        ? `On now · ${d.slots.join(', ')}`
-        : `From ${d.slots[0]} tonight`
+        ? `On now · ${openSlots.join(', ')}`
+        : `From ${openSlots[0]} tonight`
       : d.date;
 
   return {
@@ -484,4 +485,45 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
     Math.cos((lat2 * Math.PI) / 180) *
     Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ── slots that haven't started ───────────────────────────────
+// Deals list their day as text ("Thursday 26 November 2026") and their slots
+// as "3:00 PM", both in the venue's time zone (Sydney, as on the server).
+const VENUE_TZ = 'Australia/Sydney';
+const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july',
+  'august', 'september', 'october', 'november', 'december'];
+
+/** Wall-clock minutes since an epoch-free origin, for comparing local times. */
+const wallKey = (y: number, mo: number, d: number, h: number, mi: number) =>
+  Date.UTC(y, mo, d, h, mi) / 60000;
+
+function venueNowKey(now: Date): number {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-AU', {
+      timeZone: VENUE_TZ, year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: 'numeric', minute: 'numeric', hourCycle: 'h23',
+    }).formatToParts(now).map((p) => [p.type, p.value]),
+  );
+  return wallKey(+parts.year, +parts.month - 1, +parts.day, +parts.hour % 24, +parts.minute);
+}
+
+function slotKey(dateText: string, slot: string): number | null {
+  const d = dateText.match(/(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
+  const t = slot.match(/(\d{1,2}):(\d{2})\s*([AaPp])[Mm]/);
+  if (!d || !t) return null;
+  const mo = MONTHS.indexOf(d[2].toLowerCase());
+  if (mo < 0) return null;
+  const h = (+t[1] % 12) + (t[3].toLowerCase() === 'p' ? 12 : 0);
+  return wallKey(+d[3], mo, +d[1], h, +t[2]);
+}
+
+/** The slots that haven't started yet. A slot whose time can't be read is kept
+ *  (the server still checks it). */
+export function upcomingSlots(dateText: string, slots: string[], now = new Date()): string[] {
+  const nowKey = venueNowKey(now);
+  return slots.filter((s) => {
+    const k = slotKey(dateText, s);
+    return k === null || k > nowKey;
+  });
 }

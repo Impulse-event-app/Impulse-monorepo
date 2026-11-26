@@ -274,6 +274,22 @@ def test_share_deadline_is_slot_minus_an_hour_in_sydney(env):
     assert (local.hour, local.minute) == (18, 0), local
 
 
+def test_past_slot_cannot_be_booked(env):
+    day = datetime.now() - timedelta(days=1)
+    with env["engine"].begin() as x:
+        was = x.execute(text("select date from deals where id = :id"), {"id": env["deals"]["pp"]}).scalar()
+        x.execute(text("update deals set date = :d where id = :id"),
+                  {"d": f"{day:%A} {day.day} {day:%B %Y}", "id": env["deals"]["pp"]})
+    try:
+        r = env["as"]("jo").post("/bookings", json={"deal_id": env["deals"]["pp"], "slot_time": "7:00 PM",
+                                                    "num_people": 1, "split": False})
+        assert r.status_code == 400 and "already passed" in r.json()["detail"]
+    finally:
+        # The deals are shared by the whole module: put the day back.
+        with env["engine"].begin() as x:
+            x.execute(text("update deals set date = :d where id = :id"), {"d": was, "id": env["deals"]["pp"]})
+
+
 # ── Huddle Pay ───────────────────────────────────────────────────────────────
 
 def test_split_must_add_up(env):

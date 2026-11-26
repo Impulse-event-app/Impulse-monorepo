@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { money, apiDealToDrop, apiBookingToPlan } from '../../../src/data';
+import { money, apiDealToDrop, apiBookingToPlan, upcomingSlots } from '../../../src/data';
 import { fontMono, fontUI, useApp } from '../../../src/theme';
 import { createBooking, ApiError, ApiBooking } from '../../../src/api';
 import {
@@ -39,12 +39,23 @@ export default function ClaimScreen() {
   const apiDeal = id ? apiDeals[id] ?? null : null;
   const d = apiDeal ? apiDealToDrop(apiDeal) : null;
 
-  const times = apiDeal?.slots ?? (d?.status === 'now' ? ['Now', '7:30pm', '8:30pm'] : ['7:00pm', '8:00pm', '9:00pm']);
+  // Only slots that haven't started yet. Re-checked every minute so a slot
+  // drops off while the screen is open.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  const times = apiDeal ? upcomingSlots(apiDeal.date, apiDeal.slots, now) : [];
   const [party, setParty] = useState(2);
   // How a group pays: one person covers everyone (default), or Huddle Pay —
   // split it, with each friend invited into their own spot.
   const [huddlePay, setHuddlePay] = useState(false);
   const [time, setTime] = useState(times[0]);
+  // The picked slot passed (or none was picked yet): move to the next one.
+  useEffect(() => {
+    if (times.length && !times.includes(time)) setTime(times[0]);
+  }, [times.join('|'), time]);
   const [loading, setLoading] = useState(false);
   // Once the slot is reserved we keep the unpaid booking and hold the card.
   const [pendingBooking, setPendingBooking] = useState<ApiBooking | null>(null);
@@ -58,13 +69,17 @@ export default function ClaimScreen() {
     navigation.setOptions({ gestureEnabled: !pendingBooking });
   }, [navigation, pendingBooking]);
 
-  if (!d || !apiDeal) {
+  if (!d || !apiDeal || (!pendingBooking && times.length === 0)) {
     return (
       <View style={{ flex: 1, backgroundColor: T.bg, justifyContent: 'center' }}>
         <View style={{ position: 'absolute', top: insets.top + 4, left: insets.left + 16 }}>
           <BackButton onPress={() => router.back()} />
         </View>
-        <EmptyState title="This drop has gone." body="It may have sold out or ended." />
+        {d && apiDeal ? (
+          <EmptyState title="No times left today." body="Every slot for this deal has started." />
+        ) : (
+          <EmptyState title="This drop has gone." body="It may have sold out or ended." />
+        )}
       </View>
     );
   }
