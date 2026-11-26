@@ -1,5 +1,6 @@
 import logging
 import secrets
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,7 +10,7 @@ import booking_flow as flow
 import live_activity
 import payouts
 from auth import get_current_user
-from booking_logic import SplitError
+from booking_logic import SplitError, slot_at
 from database import get_db
 from environment import can_manage_venue
 from models import Booking, BookingParticipant, Deal, User, Venue
@@ -147,6 +148,9 @@ def create_booking(
         raise HTTPException(status_code=404, detail="Deal not found or inactive")
     if body.slot_time not in deal.slots:
         raise HTTPException(status_code=400, detail="Invalid time slot for this deal")
+    starts = slot_at(deal.date, body.slot_time)
+    if starts is not None and starts <= datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="That time has already passed. Pick a later one.")
     if body.num_people < 1:
         raise HTTPException(status_code=400, detail="num_people must be at least 1")
     if body.num_people > min(deal.max_group_size, MAX_GROUP):
