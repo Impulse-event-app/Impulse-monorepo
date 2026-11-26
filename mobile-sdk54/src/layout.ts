@@ -20,18 +20,71 @@ export const SPLIT_MIN_WIDTH = 700;
  */
 export const SPLIT_MIN_HEIGHT = 500;
 
-/** Width of the list pane in the split layout. The detail pane takes the rest. */
-export const LIST_PANE_WIDTH = 400;
+/**
+ * Width of the list pane in the split layout: half the window, so on an open
+ * iPhone Duo the split lands on the hinge and neither pane runs across the
+ * fold. The detail pane takes the other half.
+ */
+export function useListPaneWidth(): number {
+  const { width } = useWindowDimensions();
+  return Math.floor(width / 2);
+}
 
 export type LayoutMode = 'compact' | 'split';
 
+// ── hinge ────────────────────────────────────────────────────
+// The iPhone Duo's hinge status, fed by HingeObserver (src/HingeObserver.ios.tsx,
+// mounted once in app/_layout.tsx) from SwiftUI's onHingeChange. Stays
+// 'unknown' on devices without a hinge, Android, web and iOS before 27.1.
+// Used only to spot one pose the window size can't: see useSplitAxis().
+export type HingeStatus = 'closed' | 'partiallyOpen' | 'fullyOpen' | 'unknown';
+let hingeStatus: HingeStatus = 'unknown';
+const hingeListeners = new Set<() => void>();
+
+export function setHingeStatus(status: HingeStatus) {
+  if (status === hingeStatus) return;
+  hingeStatus = status;
+  hingeListeners.forEach((l) => l());
+}
+
+function useHingeStatus(): HingeStatus {
+  return useSyncExternalStore(
+    (l) => {
+      hingeListeners.add(l);
+      return () => hingeListeners.delete(l);
+    },
+    () => hingeStatus,
+    () => hingeStatus,
+  );
+}
+
+/**
+ * Which way the split layout divides the window.
+ *
+ * `'horizontal'` (side by side) normally. `'vertical'` (one pane above the
+ * other) on an iPhone Duo held upright and partially open, like a small
+ * laptop: the fold then runs across the middle of the screen, so a single
+ * column would have its content bent over the crease. Split top and bottom,
+ * the list sits on the upright half and the picked drop, with its Book now
+ * button, on the half lying flat, within reach of a thumb.
+ */
+export function useSplitAxis(): 'horizontal' | 'vertical' {
+  const { width, height } = useWindowDimensions();
+  const hinge = useHingeStatus();
+  return hinge === 'partiallyOpen' && height > width && height >= SPLIT_MIN_WIDTH ? 'vertical' : 'horizontal';
+}
+
 /**
  * `'split'` when the window has room for a list and a detail side by side: an
- * open iPhone Duo in landscape, an iPad, a large browser window. Every normal
- * iPhone (in either orientation) and a folded Duo are `'compact'`.
+ * open iPhone Duo in landscape, an iPad, a large browser window. Also an
+ * iPhone Duo held upright and partially open, split top and bottom
+ * (useSplitAxis()). Every normal iPhone (in either orientation) and a folded
+ * Duo are `'compact'`.
  */
 export function useLayoutMode(): LayoutMode {
   const { width, height } = useWindowDimensions();
+  const axis = useSplitAxis();
+  if (axis === 'vertical') return 'split';
   return width >= SPLIT_MIN_WIDTH && height >= SPLIT_MIN_HEIGHT ? 'split' : 'compact';
 }
 
@@ -42,6 +95,23 @@ export function useLayoutMode(): LayoutMode {
  */
 export function useTabBarClearance(): number {
   return 100;
+}
+
+/** Height of the floating tab bar's capsule. */
+export const TAB_BAR_HEIGHT = 56;
+
+/** Gap between the bottom of the window and the floating tab bar. */
+export function tabBarBottomGap(insetBottom: number): number {
+  return insetBottom > 0 ? Math.max(insetBottom - 10, 8) : 16;
+}
+
+/**
+ * How far the floating tab bar reaches up from the bottom of the window, plus
+ * a little air. The split layout's detail pane uses it as its bottom safe-area
+ * inset, so its pinned Book now bar sits above the tab bar instead of under it.
+ */
+export function tabBarFootprint(insetBottom: number): number {
+  return tabBarBottomGap(insetBottom) + TAB_BAR_HEIGHT + 8;
 }
 
 /**

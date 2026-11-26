@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useIsFocused, useRouter } from 'expo-router';
 import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, View } from 'react-native';
 import {
@@ -40,7 +40,7 @@ import { ChevronRight, Filter } from '../../../src/icons';
 import MapScreen from '../../../src/MapScreen';
 import { useRequireAuth } from '../../../src/auth';
 import { hapticError, hapticSelection, hapticSuccess } from '../../../src/haptics';
-import { setSelectedDeal, useLayoutModeChange, useSelectedDeal, useTabBarClearance } from '../../../src/layout';
+import { setSelectedDeal, useLayoutModeChange, useSelectedDeal, useSplitAxis, useTabBarClearance } from '../../../src/layout';
 import { SplitPane } from '../../../src/SplitPane';
 import { DealDetail } from '../../../src/DealDetail';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -172,10 +172,18 @@ export default function HomeScreen() {
   // full screen, so the user keeps their place.
   const selected = useSelectedDeal();
   const focused = useIsFocused();
+  const splitAxis = useSplitAxis();
+  // The drop Home picked itself in the stacked pose, if any (see below).
+  const autoPicked = useRef<string | null>(null);
   const layoutMode = useLayoutModeChange((mode) => {
     // Only the tab on screen: both tab screens stay mounted, and each would
     // otherwise push the drop.
-    if (mode === 'compact' && selected && focused) router.push(`/(user)/event/${selected}`);
+    if (mode !== 'compact' || !selected || !focused) return;
+    // A drop picked for the user (see the stacked pose below) wasn't their
+    // choice, so it doesn't follow them out of the split; just drop it.
+    if (selected === autoPicked.current) setSelectedDeal(null);
+    else router.push(`/(user)/event/${selected}`);
+    autoPicked.current = null;
   });
   const {
     T, filters, setFilters, drops, dealsLoaded, dealsFailed, refreshDeals, retryDeals, profile, signedIn,
@@ -286,6 +294,35 @@ export default function HomeScreen() {
   const now = listed.filter((d) => d.status === 'now');
   const later = listed.filter((d) => d.status === 'later');
   const activeCount = activeFilterCount(filters);
+
+  // Upright, partially open iPhone Duo (split top and bottom, useSplitAxis()):
+  // the upright top half shows the map and the flat bottom half the picked
+  // drop with Book now. The top half is too short for the list's header plus
+  // any cards, while the map works at any size. Leaving the pose brings back
+  // whichever view was showing before; the map's List switch still works in
+  // the pose. With no drop picked yet, pick the first one, so the bottom half
+  // opens on a drop rather than an empty "Pick a drop".
+  const stacked = layoutMode === 'split' && splitAxis === 'vertical';
+  const viewBeforeStacked = useRef<'list' | 'map' | null>(null);
+  useEffect(() => {
+    if (stacked) {
+      viewBeforeStacked.current = view;
+      setMapMounted(true);
+      setView('map');
+    } else if (viewBeforeStacked.current) {
+      setView(viewBeforeStacked.current);
+      viewBeforeStacked.current = null;
+    }
+    // Only on entering or leaving the pose, not on every view change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stacked]);
+  const firstDrop = (now[0] ?? later[0])?.id ?? null;
+  useEffect(() => {
+    if (stacked && focused && !selected && firstDrop) {
+      autoPicked.current = firstDrop;
+      setSelectedDeal(firstDrop);
+    }
+  }, [stacked, focused, selected, firstDrop]);
 
   const openDrop = (id: string) =>
     layoutMode === 'split' ? setSelectedDeal(id) : router.push(`/(user)/event/${id}`);

@@ -280,7 +280,7 @@ export default function ProfileScreen() {
           )}
 
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, marginTop: 28 }}>
-            <Radar size={20} kind="compact" decorative />
+            <Radar size={20} decorative />
             <Label>{VERSION ? `Version ${VERSION} · Sydney` : 'Impulse · Sydney'}</Label>
           </View>
         </ReadableColumn>

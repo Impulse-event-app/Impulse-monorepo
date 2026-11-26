@@ -8,6 +8,7 @@ import { FooterScrim, Glass, useReduceMotion, useReduceTransparency } from '../.
 import { TabTonight, TabDiscover, TabPlans, TabYou } from '../../../src/icons';
 import { hapticSelection } from '../../../src/haptics';
 import { expandTabBar, tabBarCompact, useTabSwipeEnabled } from '../../../src/tabBarScroll';
+import { TAB_BAR_HEIGHT, tabBarBottomGap } from '../../../src/layout';
 
 // The tab bar on every platform: a floating capsule of icons. Like
 // Instagram's, it shrinks a little as a whole (every tab still visible) while
@@ -19,7 +20,7 @@ import { expandTabBar, tabBarCompact, useTabSwipeEnabled } from '../../../src/ta
 // rather than stretching edge to edge.
 const TAB_BAR_MAX_WIDTH = 520;
 
-const BAR_HEIGHT = 56;
+const BAR_HEIGHT = TAB_BAR_HEIGHT;
 // Gap between the lens and the bar's edge.
 const LENS_INSET = 4;
 const NATIVE_DRIVER = Platform.OS !== 'web';
@@ -113,7 +114,7 @@ function TabBar({ state, descriptors, emitter, navigateToTab, onTap }: BottomTab
       <FooterScrim opacity={0.92} extend={36} />
       <View
         pointerEvents="box-none"
-        style={{ paddingHorizontal: 14, paddingBottom: insets.bottom > 0 ? Math.max(insets.bottom - 10, 8) : 16, alignItems: 'center' }}
+        style={{ paddingHorizontal: 14, paddingBottom: tabBarBottomGap(insets.bottom), alignItems: 'center' }}
       >
         <Animated.View style={[{ borderCurve: 'continuous', borderRadius: 27, width: '100%', maxWidth: TAB_BAR_MAX_WIDTH, transform: [{ translateY: sink }, { scale }] }, T.floatShadow]}>
           <Glass radius={27} style={{ height: BAR_HEIGHT, flexDirection: 'row', alignItems: 'center' }}>

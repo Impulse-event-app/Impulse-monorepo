@@ -9,6 +9,7 @@ import { DesktopNotice } from '../src/DesktopNotice';
 import { StripeRoot } from '../src/StripeRoot';
 import { UpdateGate } from '../src/UpdateGate';
 import { tokens } from '../src/theme';
+import { HingeObserver } from '../src/HingeObserver';
 
 /**
  * Orientation.
@@ -74,6 +75,8 @@ export default function RootLayout() {
         {/* Web-only; compiles to null on native. Above the Stack so it covers
             every route, including the auth gate's blank frames. */}
         <DesktopNotice />
+        {/* iPhone Duo hinge status for the split layout; null off iOS. */}
+        <HingeObserver />
       </StripeRoot>
     </SafeAreaProvider>
   );
