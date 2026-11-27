@@ -414,6 +414,47 @@ export const scheduleApi = {
     request<void>("DELETE", `/deal-schedules/${id}`),
 };
 
+// ── Standard offer (full-price booking) ───────────────────────────────────────
+
+/** What the venue sells at its usual price when no deal is on. Booked like a
+ *  deal, with a start each hour of the day's opening hours. */
+export interface StandardOffer {
+  id: string;
+  venue_id: string;
+  title: string;
+  auto_title: boolean;
+  description: string | null;
+  unit: string | null;
+  original_price: number;
+  max_group_size: number;
+  total_spots: number;
+  reel_id: string | null;
+  is_active: boolean;
+  slots_today: string[];   // today's start times; empty when closed or no hours set
+  hours_set: boolean;
+  payments_ready: boolean;
+}
+
+export interface StandardOfferInput {
+  title?: string;
+  description?: string;
+  unit?: string;
+  original_price: number;
+  max_group_size: number;
+  total_spots: number;
+  reel_id?: string | null;
+  is_active: boolean;
+}
+
+export const standardOfferApi = {
+  get: (venueId: string) =>
+    request<StandardOffer | null>("GET", `/venues/${venueId}/standard-offer`),
+  save: (venueId: string, body: StandardOfferInput) =>
+    request<StandardOffer>("PUT", `/venues/${venueId}/standard-offer`, body),
+  remove: (venueId: string) =>
+    request<void>("DELETE", `/venues/${venueId}/standard-offer`),
+};
+
 // ── Bookings ──────────────────────────────────────────────────────────────────
 
 export type BookingStatus =

@@ -3,8 +3,8 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useColorScheme } from 'react-native';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { DEFAULT_FILTERS, Drop, Filters, Plan, SUBURB_COORDS, apiBookingToPlan, apiDealToDrop } from './data';
-import { ApiDeal, listDeals, getMyBookings } from './api';
+import { DEFAULT_FILTERS, Drop, Filters, Plan, SUBURB_COORDS, apiBookingToPlan, apiDealToDrop, withBrowseVenues } from './data';
+import { ApiDeal, listDeals, listVenues, getMyBookings } from './api';
 import { supabase } from './supabase';
 import { fetchUserProfile, syncUserProfile } from './auth';
 import { persistDel, persistGet, persistSet } from './persist';
@@ -290,8 +290,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const fetchDeals = async (): Promise<boolean> => {
     setDealsLoading(true);
     try {
-      const data = await listDeals();
-      setRawDeals(data);
+      // Venues are extra: if that call fails the feed still shows the deals.
+      const [data, venues] = await Promise.all([listDeals(), listVenues().catch(() => [])]);
+      setRawDeals(withBrowseVenues(data, venues));
       dealsLoadedRef.current = true;
       setDealsLoaded(true);
       setDealsFailed(false);

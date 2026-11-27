@@ -345,6 +345,7 @@ class DealResponse(BaseModel):
     total_spots: int
     spots_remaining: int
     is_active: bool
+    is_standard: bool = False
     expires_at: Optional[datetime]
     created_at: datetime
 
@@ -395,6 +396,7 @@ class DealWithVenueResponse(DealResponse):
             total_spots=d.total_spots,
             spots_remaining=d.spots_remaining,
             is_active=d.is_active,
+            is_standard=bool(d.is_standard),
             expires_at=d.expires_at,
             created_at=d.created_at,
             # venue fields
@@ -410,6 +412,59 @@ class DealWithVenueResponse(DealResponse):
             reel_video_url=d.reel.video_url if getattr(d, "reel", None) else None,
             reel_poster_url=d.reel.poster_url if getattr(d, "reel", None) else None,
         )
+
+
+# ── Standard offers (full-price booking) ──────────────────────────────────────
+
+class StandardOfferInput(BaseModel):
+    """What a venue sells at its usual price when no deal is running. Slots
+    come from the venue's opening hours, a start every hour."""
+    title: Optional[str] = Field(None, max_length=120)   # blank → "<venue> · <price>"
+    description: Optional[str] = Field(None, max_length=500)
+    unit: Optional[str] = Field(None, max_length=20)
+    original_price: float = Field(gt=0)
+    max_group_size: int = Field(6, ge=1, le=20)
+    total_spots: int = Field(ge=1)                       # per day
+    reel_id: Optional[str] = None
+    is_active: bool = True
+
+
+class StandardOfferResponse(BaseModel):
+    id: str
+    venue_id: str
+    title: str
+    auto_title: bool
+    description: Optional[str]
+    unit: Optional[str]
+    original_price: float
+    max_group_size: int
+    total_spots: int
+    reel_id: Optional[str]
+    is_active: bool
+    # Today's bookable start times from the opening hours (empty when closed
+    # or no hours are set), and whether the venue can take payments yet.
+    slots_today: List[str]
+    hours_set: bool
+    payments_ready: bool
+
+
+class BrowseVenue(BaseModel):
+    """A venue for the app's feed, whether or not it has anything bookable."""
+    id: str
+    name: str
+    category: str
+    description: Optional[str]
+    address: Optional[str]
+    suburb: Optional[str]
+    lat: Optional[float]
+    lng: Optional[float]
+    opening_hours: Optional[str]
+    avg_rating: float
+    image_url: Optional[str]
+    image_urls: List[str] = []
+    accessibility_features: List[str] = []
+    reel_video_url: Optional[str] = None
+    reel_poster_url: Optional[str] = None
 
 
 # ── Reels (Discover) ──────────────────────────────────────────────────────────

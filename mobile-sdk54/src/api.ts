@@ -109,6 +109,12 @@ export type ApiDeal = {
   original_price: number;
   discount_pct: number;
   deal_price: number;            // at the opening discount
+  // The venue's standard offer: bookable at the usual price (0% off) on a day
+  // it has no deal. Only sent because listDeals asks with include_standard.
+  is_standard?: boolean;
+  // Client-made stand-in for a venue with nothing bookable today (venueToApiDeal):
+  // shown in the feed so every venue is there, with no Book button.
+  browse_only?: boolean;
   // Falling discount: the discount steps down as each slot fills. slot_prices
   // is what the next booking in each slot pays now (older backends omit it).
   price_drops?: { after: number; discount_pct: number }[] | null;
@@ -293,8 +299,32 @@ export async function listDeals(filters: DealFilters = {}): Promise<ApiDeal[]> {
   if (filters.category) params.set('category', filters.category);
   if (filters.date) params.set('date', filters.date);
   if (filters.active_only !== undefined) params.set('active_only', String(filters.active_only));
+  params.set('include_standard', 'true');
   const qs = params.toString();
   return publicRequest<ApiDeal[]>(`/deals${qs ? `?${qs}` : ''}`);
+}
+
+/** Every active venue, for the feed: venues with nothing bookable still show. */
+export type ApiBrowseVenue = {
+  id: string;
+  name: string;
+  category: string;
+  description: string | null;
+  address: string | null;
+  suburb: string | null;
+  lat: number | null;
+  lng: number | null;
+  opening_hours: string | null;
+  avg_rating: number;
+  image_url: string | null;
+  image_urls: string[];
+  accessibility_features: string[];
+  reel_video_url: string | null;
+  reel_poster_url: string | null;
+};
+
+export async function listVenues(): Promise<ApiBrowseVenue[]> {
+  return publicRequest<ApiBrowseVenue[]>('/venues/browse');
 }
 
 /** Fetch a single deal by ID. */

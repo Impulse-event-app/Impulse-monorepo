@@ -28,6 +28,7 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from booking_logic import deposit_split
+from opening_hours import DAY_NAMES, clock, week_hours
 from database import SessionLocal
 from deal_schedules import date_label
 from models import Booking, BookingParticipant, Deal, Venue
@@ -88,52 +89,16 @@ FIRST_NAMES = [
 ]
 
 
-DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-
-
-def _clock(text: str) -> int | None:
-    """'11am' / '4:30pm' / 'midnight' → minutes since midnight."""
-    t = text.strip().lower()
-    if t == "midnight":
-        return 24 * 60
-    if t in ("noon", "midday"):
-        return 12 * 60
-    m = re.fullmatch(r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)", t)
-    if not m:
-        return None
-    h = int(m.group(1)) % 12 + (12 if m.group(3) == "pm" else 0)
-    return h * 60 + int(m.group(2) or 0)
-
-
 def opening_hours(text: str | None) -> dict[int, tuple[int, int] | None]:
-    """The venue form's 'Mon: 11am–10pm, ..., Sun: Closed' (or 'Every day 4pm–midnight')
-    → {weekday: (open, close) or None}. Unreadable days fall back to 4pm–midnight."""
-    week: dict[int, tuple[int, int] | None] = {d: (16 * 60, 24 * 60) for d in range(7)}
-    for part in (text or "").split(","):
-        m = re.match(r"\s*(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Every day|Daily):?\s*(.+)$", part.strip())
-        if not m:
-            continue
-        days = range(7) if m.group(1) in ("Every day", "Daily") else [DAY_NAMES.index(m.group(1))]
-        rng = m.group(2).strip()
-        if rng.lower() == "closed":
-            for d in days:
-                week[d] = None
-            continue
-        ends = [_clock(x) for x in re.split(r"[–-]", rng)]
-        if len(ends) == 2 and None not in ends:
-            open_, close = ends
-            if close <= open_:
-                close = 24 * 60   # past midnight: a deal's slots stay on its own date
-            for d in days:
-                week[d] = (open_, close)
-    return week
+    """{weekday: (open, close) or None}. Unreadable days fall back to 4pm–midnight."""
+    return week_hours(text, default=(16 * 60, 24 * 60))
 
 
 def quiet_hours(text: str) -> tuple[set[int], int, int]:
     """'Mon,Tue,Wed 11:30am-3pm' → ({0, 1, 2}, 690, 900)."""
     m = re.fullmatch(r"\s*([A-Za-z, ]+?)\s+(\S+)\s*[–-]\s*(\S+)\s*", text)
     days = [d.strip()[:3].title() for d in m.group(1).split(",")] if m else []
-    start, end = (_clock(m.group(2)), _clock(m.group(3))) if m else (None, None)
+    start, end = (clock(m.group(2)), clock(m.group(3))) if m else (None, None)
     if not days or any(d not in DAY_NAMES for d in days) or start is None or end is None or end <= start:
         raise SystemExit(f"Can't read --quiet {text!r}; expected e.g. 'Mon,Tue,Wed 11:30am-3pm'")
     return {DAY_NAMES.index(d) for d in days}, start, end

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { UNLIMITED_SPOTS, dealApi, scheduleApi, venueApi, type Deal, type DealSchedule, type PriceDrop } from "@/lib/api";
 import { useVenue } from "@/providers/VenueProvider";
 import { priceDropsLadder } from "@/components/PriceDropsEditor";
+import { StandardOfferCard } from "@/components/StandardOfferCard";
 import { formatCurrency } from "@/lib/utils";
 import { FONT_DISPLAY, numeric, card, btnPrimary, iconBtn, iconBtnDanger, switchTrack, switchKnob } from "@/lib/ui";
 
@@ -182,6 +183,8 @@ export default function DealsPage() {
           + New deal
         </button>
       </div>
+
+      <StandardOfferCard venue={venue} />
 
       <h2 style={sectionEyebrow}>Live &amp; upcoming</h2>
       {isLoading ? (

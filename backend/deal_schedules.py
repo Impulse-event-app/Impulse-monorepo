@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from booking_logic import VENUE_TZ as SYDNEY
 from models import Deal, DealSchedule, Venue
+from opening_hours import hourly_slots, week_hours
 
 logger = logging.getLogger("impulse.schedules")
 
@@ -73,7 +74,18 @@ def runs_on(schedule: DealSchedule, day: date) -> bool:
     return True
 
 
-def deal_from_schedule(schedule: DealSchedule, day: date) -> Deal:
+def standard_slots(venue: Venue, day: date) -> List[str]:
+    """A standard offer's slots on a day: on the hour (or half hour) through
+    the venue's opening hours. No hours set, or closed that day: none."""
+    return hourly_slots(week_hours(venue.opening_hours)[day.weekday()])
+
+
+def slots_for(schedule: DealSchedule, venue: Venue, day: date) -> List[str]:
+    return standard_slots(venue, day) if schedule.is_standard else list(schedule.slots)
+
+
+def deal_from_schedule(schedule: DealSchedule, day: date, slots: Optional[List[str]] = None) -> Deal:
+    slots = list(schedule.slots) if slots is None else slots
     original = float(schedule.original_price)
     discount = float(schedule.discount_pct)
     return Deal(
@@ -91,12 +103,13 @@ def deal_from_schedule(schedule: DealSchedule, day: date) -> Deal:
         price_drops=schedule.price_drops,
         date=date_label(day),
         deal_date=day,
-        slots=list(schedule.slots),
+        slots=slots,
         max_group_size=schedule.max_group_size,
         total_spots=schedule.total_spots,
         spots_remaining=schedule.total_spots,
         is_active=True,
-        expires_at=expires_for(day, schedule.slots),
+        is_standard=bool(getattr(schedule, "is_standard", False)),
+        expires_at=expires_for(day, slots),
     )
 
 
@@ -121,7 +134,9 @@ def generate_scheduled_deals(
 
     created: List[Deal] = []
     for schedule in q.all():
-        if not runs_on(schedule, today) or expires_for(today, schedule.slots) <= now:
+        venue = db.query(Venue).filter(Venue.id == schedule.venue_id).first()
+        slots = slots_for(schedule, venue, today)
+        if not slots or not runs_on(schedule, today) or expires_for(today, slots) <= now:
             continue
         exists = (
             db.query(Deal.id)
@@ -130,10 +145,9 @@ def generate_scheduled_deals(
         )
         if exists:
             continue
-        venue = db.query(Venue).filter(Venue.id == schedule.venue_id).first()
         if not can_publish_deals(venue):
             continue
-        deal = deal_from_schedule(schedule, today)
+        deal = deal_from_schedule(schedule, today, slots)
         try:
             with db.begin_nested():
                 db.add(deal)
