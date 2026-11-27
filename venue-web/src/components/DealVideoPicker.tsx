@@ -25,9 +25,11 @@ interface Props {
   onChange: (v: DealVideo | null) => void;
   /** True while a video uploads, so the deal can't be published without it. */
   onBusy: (busy: boolean) => void;
+  /** The page shows its own heading for this section. */
+  hideHeading?: boolean;
 }
 
-export function DealVideoPicker({ venueId, value, onChange, onBusy }: Props) {
+export function DealVideoPicker({ venueId, value, onChange, onBusy, hideHeading }: Props) {
   const qc = useQueryClient();
   const { data: reels = [] } = useQuery<VenueReel[]>({
     queryKey: ["venue-reels", venueId],
@@ -71,27 +73,27 @@ export function DealVideoPicker({ venueId, value, onChange, onBusy }: Props) {
 
   const tile = (on: boolean): React.CSSProperties => ({
     position: "relative", width: 96, height: 150, flexShrink: 0, borderRadius: 12, overflow: "hidden", padding: 0,
-    border: `2px solid ${on ? "var(--accent)" : "var(--line2)"}`, background: "var(--surface2)", cursor: "pointer",
+    border: `2px solid ${on ? "var(--accent)" : "transparent"}`, background: "var(--surface2)", cursor: "pointer",
     display: "grid", placeItems: "center", color: "var(--muted)",
   });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div>
+      {!hideHeading && <div>
         <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em" }}>
           Video <span style={{ fontSize: 14, fontWeight: 500, color: "var(--muted)" }}>(optional)</span>
         </h2>
         <p style={{ margin: "4px 0 0", fontSize: 14, color: "var(--muted)", lineHeight: 1.5 }}>
           A short clip that plays in the app&apos;s Discover feed with a Book button for this deal. Upright, under a minute.
         </p>
-      </div>
+      </div>}
 
       <div role="radiogroup" aria-label="Video for this deal" style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
         <button type="button" role="radio" aria-checked={!value} onClick={() => onChange(null)} style={tile(!value)}>
           <span style={{ fontSize: 13, fontWeight: 600 }}>No video</span>
         </button>
 
-        <label style={{ ...tile(false), cursor: uploading ? "wait" : "pointer", borderStyle: "dashed", textAlign: "center" }}>
+        <label style={{ ...tile(false), cursor: uploading ? "wait" : "pointer", textAlign: "center" }}>
           <span style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, padding: 8 }}>
             <Upload size={18} strokeWidth={1.75} aria-hidden />
             {uploading ? "Uploading…" : "Upload new"}

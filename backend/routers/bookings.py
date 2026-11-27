@@ -14,6 +14,7 @@ from booking_logic import SplitError, slot_at
 from database import get_db
 from environment import can_manage_venue
 from models import Booking, BookingParticipant, Deal, User, Venue
+from price_drops import current_price
 from schemas import (
     BookingCreate,
     BookingHoldConfirm,
@@ -198,7 +199,8 @@ def create_booking(
         split_confirmed_at=flow.now(),
     )
     b.deal = deal
-    flow.lock_price(b, deal)
+    # A falling-discount deal costs what this slot is at now (price_drops.py).
+    flow.lock_price(b, deal, current_price(db, deal, body.slot_time))
     db.add(b)
     db.flush()
 

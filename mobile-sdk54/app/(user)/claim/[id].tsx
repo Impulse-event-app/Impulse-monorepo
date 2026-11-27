@@ -85,7 +85,18 @@ export default function ClaimScreen() {
   }
 
   const perPerson = d.unit === 'pp';
-  const total = perPerson ? d.now * party : d.now;
+  // A falling-discount deal costs what the chosen slot is at now.
+  const slotPrice = d.slotPrices?.[time];
+  const pricesDiffer = !!d.slotPrices && new Set(Object.values(d.slotPrices).map((p) => p.now)).size > 1;
+  // Once reserved, the server's locked price is the one that counts (another
+  // guest may have taken the last spot at the better price first).
+  const lockedCents = pendingBooking?.deposit_amount_cents != null && pendingBooking.balance_amount_cents != null
+    ? pendingBooking.deposit_amount_cents + pendingBooking.balance_amount_cents
+    : null;
+  const unitPrice = lockedCents !== null
+    ? lockedCents / 100 / (perPerson ? party : 1)
+    : slotPrice?.now ?? d.now;
+  const total = perPerson ? unitPrice * party : unitPrice;
   const totalCents = Math.round(total * 100);
   // Once the booking exists, show the server's numbers (the locked price),
   // never a client-side guess — that's exactly what gets charged.
@@ -211,9 +222,16 @@ export default function ClaimScreen() {
                   {sectionLabel('Time')}
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 8, rowGap: 8 }}>
                     {times.map((t) => (
-                      <Chip key={t} active={time === t} onPress={() => setTime(t)}>{t}</Chip>
+                      <Chip key={t} active={time === t} onPress={() => setTime(t)}>
+                        {pricesDiffer && d.slotPrices?.[t] ? `${t} · ${money(d.slotPrices[t].now)}` : t}
+                      </Chip>
                     ))}
                   </View>
+                  {slotPrice?.left != null && (
+                    <Label style={{ lineHeight: 18 }}>
+                      Early bird: {slotPrice.left === 1 ? 'last booking' : `${slotPrice.left} bookings left`} at this price for {time}.
+                    </Label>
+                  )}
                 </View>
               </View>
 
@@ -233,13 +251,13 @@ export default function ClaimScreen() {
           <View style={[card, { marginTop: 24, padding: 16 }]}>
             <View
               accessible
-              accessibilityLabel={`Total, ${money(total)}${perPerson ? `, ${party} at ${money(d.now)}` : ''}`}
+              accessibilityLabel={`Total, ${money(total)}${perPerson ? `, ${party} at ${money(unitPrice)}` : ''}`}
               style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}
             >
               <View style={{ gap: 2 }}>
                 <Text style={{ ...fontUI(600), fontSize: 15, letterSpacing: -0.15, color: T.text }}>Total</Text>
                 <Text style={{ ...fontMono(400), fontSize: 13, color: T.muted }}>
-                  {perPerson ? `${party} × ${money(d.now)}` : `${money(d.now)} ${unitLabel(d.unit)}`}
+                  {perPerson ? `${party} × ${money(unitPrice)}` : `${money(unitPrice)} ${unitLabel(d.unit)}`}
                 </Text>
               </View>
               <Text style={{ ...fontMono(600), fontSize: 28, letterSpacing: -0.56, color: T.text }}>{money(total)}</Text>

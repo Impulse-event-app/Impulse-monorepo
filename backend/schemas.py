@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from booking_logic import slot_at
 from deal_schedules import normalize_slot
+from price_drops import check_drops, slot_prices
 
 
 def gallery(venue: Any) -> List[str]:
@@ -157,6 +158,31 @@ class VenueReelItem(BaseModel):
     created_at: datetime
 
 
+# ── Falling discounts (price_drops.py) ─────────────────────────────────────
+
+class PriceDrop(BaseModel):
+    """One step of a falling discount: from the (after + 1)th booking in a
+    slot, the deal gives discount_pct off."""
+    after: int = Field(ge=1, le=1000)
+    discount_pct: float = Field(ge=0, le=100)
+
+
+class SlotPrice(BaseModel):
+    """What the next booking in a slot pays right now."""
+    slot: str
+    discount_pct: float
+    deal_price: float
+    left_at_price: Optional[int] = None   # bookings before the next step; null if none
+
+
+def _check_drops(body: Any) -> None:
+    """Validate and tidy body.price_drops against body.discount_pct (both set)."""
+    if body.price_drops is None or body.discount_pct is None:
+        return
+    tidy = check_drops(body.discount_pct, [d.model_dump() for d in body.price_drops], getattr(body, "total_spots", None))
+    body.price_drops = [PriceDrop(**d) for d in tidy] if tidy else None
+
+
 # ── Deal ──────────────────────────────────────────────────────────────────────
 
 class DealCreate(BaseModel):
@@ -168,6 +194,7 @@ class DealCreate(BaseModel):
     unit: Optional[str] = None         # pricing unit, e.g. "pp", "/lane", "/room·hr"
     original_price: float
     discount_pct: float
+    price_drops: Optional[List[PriceDrop]] = None
     # A one-off deal names its evening with deal_date; the server derives the
     # display `date` and an expires_at at the last slot. Free-text `date` alone
     # is the legacy shape and is still accepted.
@@ -185,6 +212,7 @@ class DealCreate(BaseModel):
     def _needs_a_day(self) -> "DealCreate":
         if not self.deal_date and not self.date:
             raise ValueError("Pick the date this deal runs")
+        _check_drops(self)
         return self
 
 
@@ -195,6 +223,7 @@ class DealUpdate(BaseModel):
     unit: Optional[str] = None
     original_price: Optional[float] = None
     discount_pct: Optional[float] = None
+    price_drops: Optional[List[PriceDrop]] = None   # [] or null → a flat deal
     date: Optional[str] = None
     deal_date: Optional[Date] = None
     slots: Optional[List[str]] = Field(None, min_length=1)
@@ -225,6 +254,7 @@ class DealScheduleBase(BaseModel):
     unit: Optional[str] = None
     original_price: float = Field(ge=0)
     discount_pct: float = Field(ge=0, le=100)
+    price_drops: Optional[List[PriceDrop]] = None
     slots: List[str] = Field(min_length=1)
     weekdays: List[int] = Field(min_length=1)    # 0 = Monday … 6 = Sunday
     starts_on: Optional[Date] = None
@@ -246,6 +276,7 @@ class DealScheduleBase(BaseModel):
     def _date_range(self) -> "DealScheduleBase":
         if self.starts_on and self.ends_on and self.ends_on < self.starts_on:
             raise ValueError("The end date is before the start date")
+        _check_drops(self)
         return self
 
 
@@ -269,6 +300,7 @@ class DealScheduleResponse(BaseModel):
     original_price: float
     discount_pct: float
     deal_price: float
+    price_drops: Optional[List[PriceDrop]] = None
     slots: List[str]
     weekdays: List[int]
     starts_on: Optional[Date]
@@ -301,7 +333,8 @@ class DealResponse(BaseModel):
     unit: Optional[str]
     original_price: float
     discount_pct: float
-    deal_price: float
+    deal_price: float                  # at the opening discount
+    price_drops: Optional[List[PriceDrop]] = None
     date: str
     deal_date: Optional[Date] = None
     schedule_id: Optional[str] = None
@@ -330,12 +363,18 @@ class DealWithVenueResponse(DealResponse):
     # The deal's Discover video, if it has one.
     reel_video_url: Optional[str] = None
     reel_poster_url: Optional[str] = None
+    # Each slot's price right now. Differs from deal_price only on a deal with
+    # price_drops, once a slot has filled past a step.
+    slot_prices: List[SlotPrice] = []
 
     @classmethod
-    def from_deal(cls, deal: object) -> "DealWithVenueResponse":
-        """Build from a Deal ORM object that has its .venue relationship loaded."""
+    def from_deal(cls, deal: object, usage: Optional[dict] = None) -> "DealWithVenueResponse":
+        """Build from a Deal ORM object that has its .venue relationship loaded.
+        usage is price_drops.slot_usage for this deal (only read with price_drops)."""
         d = deal  # type: ignore[assignment]
         return cls(
+            price_drops=d.price_drops,
+            slot_prices=slot_prices(d, usage or {}),
             # deal fields
             id=d.id,
             venue_id=d.venue_id,
@@ -396,8 +435,9 @@ class ReelResponse(BaseModel):
     unit: Optional[str] = None
 
     @classmethod
-    def from_reel(cls, reel: object, deal: Optional[object] = None) -> "ReelResponse":
-        """Build from a VenueReel with .venue loaded, plus that venue's live deal."""
+    def from_reel(cls, reel: object, deal: Optional[object] = None, price: Optional[float] = None) -> "ReelResponse":
+        """Build from a VenueReel with .venue loaded, plus that venue's live deal.
+        price: the deal's cheapest slot right now, if it has a falling discount."""
         r = reel  # type: ignore[assignment]
         d = deal  # type: ignore[assignment]
         return cls(
@@ -415,7 +455,7 @@ class ReelResponse(BaseModel):
             **(dict(
                 deal_id=d.id,
                 deal_title=d.title,
-                deal_price=float(d.deal_price),
+                deal_price=float(d.deal_price) if price is None else price,
                 original_price=float(d.original_price),
                 unit=d.unit,
             ) if d is not None else {}),

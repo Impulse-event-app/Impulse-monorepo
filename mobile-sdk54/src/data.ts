@@ -144,6 +144,9 @@ export type Drop = {
   image: string | null;   // real venue photo URL, or null → category placeholder
   images: string[];       // every venue photo, cover first, for the detail slideshow
   video: { url: string; poster: string | null } | null;  // the deal's Discover video
+  /** Falling-discount deals: each slot's price now, and bookings left at it
+   *  before the discount steps down (null: it won't). `now` is the cheapest. */
+  slotPrices?: Record<string, { now: number; left: number | null }>;
   /** Set by onePerVenue: how many other live deals this venue has. */
   moreAtVenue?: number;
 };
@@ -424,6 +427,10 @@ export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): D
         : `From ${openSlots[0]} tonight`
       : d.date;
 
+  const slotPrices = d.price_drops?.length && d.slot_prices?.length
+    ? Object.fromEntries(d.slot_prices.map((p) => [p.slot, { now: p.deal_price, left: p.left_at_price }]))
+    : undefined;
+
   return {
     id: d.id,
     venueId: d.venue_id,
@@ -431,7 +438,7 @@ export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): D
     cat: canonicalCat(d.category),
     suburb: d.venue_suburb ?? '',
     km: Math.round(km * 10) / 10,
-    now: d.deal_price,
+    now: slotPrices ? Math.min(...Object.values(slotPrices).map((p) => p.now)) : d.deal_price,
     usual: d.original_price,
     unit: d.unit ?? 'pp',
     status,
@@ -452,6 +459,7 @@ export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): D
     image: d.venue_image_url,
     images: d.venue_image_urls?.length ? d.venue_image_urls : d.venue_image_url ? [d.venue_image_url] : [],
     video: d.reel_video_url ? { url: d.reel_video_url, poster: d.reel_poster_url ?? null } : null,
+    slotPrices,
   };
 }
 

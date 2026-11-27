@@ -138,14 +138,16 @@ def per_person(deal: Deal) -> bool:
     return (deal.unit or "pp") == "pp"
 
 
-def lock_price(b: Booking, deal: Deal) -> None:
+def lock_price(b: Booking, deal: Deal, deal_price: Optional[float] = None) -> None:
     """Freeze the price. Called once — at creation, or at Huddle resolution —
-    and never again: later deal repricing can't reach this booking.
+    and never again: later deal repricing can't reach this booking. deal_price
+    is the slot's current price on a falling-discount deal (price_drops.py);
+    by default the deal's own.
 
     locked_unit_price_cents is what one extra person adds (and what taking
     one out removes): the price for a per-person deal, nothing for a
     per-lane / per-room one, where the group shares one fixed price."""
-    price = cents(deal.deal_price)
+    price = cents(deal.deal_price if deal_price is None else deal_price)
     if per_person(deal):
         b.locked_unit_price_cents = price
         b.locked_price_cents = price * b.num_people

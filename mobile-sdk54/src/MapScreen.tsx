@@ -12,7 +12,7 @@ import { fontUI, useApp } from './theme';
 import { DropCardCompact, FadeIn, Glass, Pin, TextBtn, Touchable, ViewSwitch } from './components';
 import { Filter } from './icons';
 import { hapticSelection } from './haptics';
-import { setSelectedDeal, useLayoutMode, useSelectedDeal } from './layout';
+import { setSelectedDeal, useLayoutMode, useSelectedDeal, useSplitAxis } from './layout';
 
 // The selected-drop card stays card-sized on iPad instead of spanning the map.
 const SELECTED_CARD_MAX_WIDTH = 460;
@@ -88,6 +88,7 @@ export default function MapScreen({ onShowList }: { onShowList?: () => void }) {
   // does, so there's no card over the map. The highlighted pin follows the
   // pane's drop, including one picked from the list before switching to the map.
   const split = useLayoutMode() === 'split';
+  const splitAxis = useSplitAxis();
   const paneSel = useSelectedDeal();
   const sel = split ? paneSel : cardSel;
   const setSel = (id: string | null) => (split ? setSelectedDeal(id) : setCardSel(id));
@@ -142,8 +143,11 @@ export default function MapScreen({ onShowList }: { onShowList?: () => void }) {
     }
   };
 
-  // Sit the selected card just above the floating tab bar.
-  const barTop = (insets.bottom > 0 ? Math.max(insets.bottom - 10, 8) : 16) + 54;
+  // Sit the selected card just above the floating tab bar. Split top and
+  // bottom (upright, partially open iPhone Duo), the map is the top pane and
+  // ends at the fold, with the tab bar in the other pane: nothing to clear.
+  const stacked = split && splitAxis === 'vertical';
+  const barTop = stacked ? 16 : (insets.bottom > 0 ? Math.max(insets.bottom - 10, 8) : 16) + 54;
 
   return (
     <View style={{ flex: 1, backgroundColor: T.mapBg }}>

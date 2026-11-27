@@ -40,6 +40,11 @@ export function DealDetail({ id, embedded = false }: { id: string | undefined; e
   const router = useRouter();
   const requireAuth = useRequireAuth();
   const insets = useSafeAreaInsets();
+  // Height this view has to fill. HeroMedia keeps the hero to ~45% of the
+  // window; in a split pane only half the window tall (an upright, partially
+  // open iPhone Duo) that hero filled the whole pane, so cap it by the pane
+  // too. Full screen the pane is the window, so nothing changes there.
+  const [paneHeight, setPaneHeight] = useState(0);
 
   const apiDeal = id ? apiDeals[id] ?? null : null;
   const d = apiDeal ? apiDealToDrop(apiDeal) : null;
@@ -84,12 +89,12 @@ export function DealDetail({ id, embedded = false }: { id: string | undefined; e
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: T.bg }}>
+    <View style={{ flex: 1, backgroundColor: T.bg }} onLayout={(e) => setPaneHeight(Math.round(e.nativeEvent.layout.height))}>
       {/* key: a new drop in the pane starts at the top, not mid-scroll. */}
       <ScrollView key={d.id} showsVerticalScrollIndicator={false}>
-        <HeroMedia d={d} height={d.video ? 420 : 300} />
+        <HeroMedia d={d} height={Math.min(d.video ? 420 : 300, paneHeight ? Math.round(paneHeight * 0.45) : Infinity)} />
 
-        <ReadableColumn style={{ paddingHorizontal: 16, paddingTop: 24, paddingBottom: 150 }}>
+        <ReadableColumn style={{ paddingHorizontal: 16, paddingTop: 24, paddingBottom: 116 + insets.bottom }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14 }}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <ScreenTitle>{d.venue}</ScreenTitle>

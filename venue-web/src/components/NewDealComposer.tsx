@@ -1,13 +1,13 @@
 "use client";
 
-// The new-deal screen (design D): the timeline over the venue's night on the
-// left, the offer form under it, and a live preview of the guest's card on the
-// right. Editing an existing deal still goes through DealForm.
+// The deal screen (design D): the timeline over the venue's night, the offer
+// form under it, and a live preview of the guest's card. It creates deals and
+// edits them: pass editDeal (a one-off) or editSchedule (a weekly deal).
 
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Check, ChevronDown, Clock, Eye, Infinity as InfinityIcon, Minus, Plus, Ticket, TrendingUp, X } from "lucide-react";
+import { AlignLeft, ArrowLeft, ArrowRight, Check, ChevronDown, Clock, DollarSign, Eye, Film, Infinity as InfinityIcon, Minus, Plus, Tag, Ticket, TrendingUp, Users, X, type LucideIcon } from "lucide-react";
 import {
   MAX_GROUP_SIZE,
   UNLIMITED_SPOTS,
@@ -18,15 +18,19 @@ import {
   ApiError,
   type Deal,
   type DealCreate,
+  type DealUpdate,
   type DealSchedule,
   type DealScheduleInput,
   type PaymentsStatus,
+  type PriceDrop,
   type Venue,
+  type VenueReel,
 } from "@/lib/api";
 import { DAYS, parseHours, type WeekHours } from "@/lib/hours";
 import { autoDealTitle, formatCurrency } from "@/lib/utils";
 import { DealVideoPicker, type DealVideo } from "@/components/DealVideoPicker";
 import { numeric, switchKnob, switchTrack } from "@/lib/ui";
+import { PriceDropsEditor, priceDropsProblem } from "@/components/PriceDropsEditor";
 import { CATEGORIES } from "@/lib/categories";
 
 
@@ -137,22 +141,70 @@ interface DayOption {
   weekday: number;    // 0 = Monday, matching the backend
 }
 
-function nextSevenDays(): DayOption[] {
+const todayIso = () => new Date().toLocaleDateString("en-CA");
+
+/** One day to pick: "Tonight", "Wed 28", or with its month when it's further out. */
+function dayOption(iso: string): DayOption {
+  const d = new Date(`${iso}T12:00:00`);
+  const tonight = iso === todayIso();
+  const ahead = (d.getTime() - Date.now()) / 86_400_000;
+  const tab = tonight
+    ? "Tonight"
+    : ahead > -1 && ahead < 7
+      ? `${d.toLocaleDateString("en-AU", { weekday: "short" })} ${d.getDate()}`
+      : d.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });
+  return { iso, tab, long: tonight ? "Tonight" : d.toLocaleDateString("en-AU", { weekday: "long" }), weekday: (d.getDay() + 6) % 7 };
+}
+
+/** A week of days from `from` days ahead: 0 starts tonight. */
+function nextSevenDays(from = 0): DayOption[] {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
-    d.setDate(d.getDate() + i);
-    return {
-      iso: d.toLocaleDateString("en-CA"),
-      tab: i === 0 ? "Tonight" : `${d.toLocaleDateString("en-AU", { weekday: "short" })} ${d.getDate()}`,
-      long: i === 0 ? "Tonight" : d.toLocaleDateString("en-AU", { weekday: "long" }),
-      weekday: (d.getDay() + 6) % 7,
-    };
+    d.setDate(d.getDate() + from + i);
+    return dayOption(d.toLocaleDateString("en-CA"));
   });
+}
+
+/** The first `weekday` (0 = Monday) on or after `fromIso`. */
+function nextOn(fromIso: string, weekday: number): DayOption {
+  const d = new Date(`${fromIso}T12:00:00`);
+  d.setDate(d.getDate() + ((weekday - weekdayOf(fromIso) + 7) % 7));
+  return dayOption(d.toLocaleDateString("en-CA"));
+}
+
+/** The days a composer offers. A weekly deal being edited gets each weekday
+ *  once, from tomorrow (changes apply from its next run); a one-off keeps its
+ *  own date even when that's outside this week. */
+function daysFor(editDeal?: Deal, editSchedule?: DealSchedule): DayOption[] {
+  if (editSchedule) return nextSevenDays(1);
+  const week = nextSevenDays();
+  const own = editDeal?.deal_date;
+  if (!own || week.some((d) => d.iso === own)) return week;
+  return [...week, dayOption(own)].sort((a, b) => a.iso.localeCompare(b.iso));
+}
+
+/** A saved deal's slots → the window and session length that make them. */
+function windowFromSlots(slots: string[]): { win: { start: number; end: number } | null; length: "0" | "30" | "60" | "120" | "custom"; custom: string } {
+  const mins = slots.map(slotMinutes).filter((m): m is number => m !== null).sort((a, b) => a - b);
+  if (!mins.length) return { win: null, length: "0", custom: "90" };
+  const gaps = mins.slice(1).map((m, i) => m - mins[i]);
+  const step = gaps.length && gaps.every((g) => g === gaps[0]) ? gaps[0] : STEP;
+  const length = step === STEP ? "0" : step === 60 ? "60" : step === 120 ? "120" : "custom";
+  return { win: { start: mins[0], end: Math.min(mins[mins.length - 1] + step, MIDNIGHT) }, length, custom: String(step) };
 }
 
 /** "2026-10-26" → 0 (Monday), matching the backend's weekday numbering. */
 function weekdayOf(iso: string): number {
   return (new Date(`${iso}T12:00:00`).getDay() + 6) % 7;
+}
+
+/** [0..4] → "Every weekday", [5, 6] → "Every weekend", else "Every Mon and Thu". */
+function weekdaysPhrase(ws: number[]): string {
+  const key = [...ws].sort((a, b) => a - b).join();
+  if (key === "0,1,2,3,4") return "Every weekday";
+  if (key === "5,6") return "Every weekend";
+  if (ws.length === 7) return "Every day";
+  return `Every ${joinAnd([...ws].sort((a, b) => a - b).map((w) => DAYS[w]))}`;
 }
 
 /** ["Wed", "Thu", "Fri"] → "Wed, Thu and Fri". */
@@ -182,10 +234,19 @@ function dayRange(week: WeekHours | null, weekday: number) {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?: () => void }) {
+export function NewDealComposer({ venue, onAnother, editDeal, editSchedule }: {
+  venue: Venue;
+  onAnother?: () => void;
+  /** Editing a one-off deal. */
+  editDeal?: Deal;
+  /** Editing a weekly deal. */
+  editSchedule?: DealSchedule;
+}) {
   const router = useRouter();
   const qc = useQueryClient();
-  const [days] = useState(nextSevenDays);
+  const editing = editDeal ?? editSchedule ?? null;
+  const [days] = useState(() => daysFor(editDeal, editSchedule));
+  const [initialWindow] = useState(() => windowFromSlots(editing?.slots ?? []));
 
   const hours = (() => {
     if (!venue.opening_hours?.trim()) return null;
@@ -195,15 +256,35 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
 
   // Tonight is only offered while there's an hour of it left.
   const earliestTonight = Math.ceil(nowMinutes() / STEP) * STEP;
-  const tonightOpen = earliestTonight <= dayRange(hours, days[0].weekday).end - 60;
+  const tonightOpen = earliestTonight <= dayRange(hours, weekdayOf(todayIso())).end - 60;
 
   // The days this deal runs, as indexes into `days`. One day is a one-off deal;
   // several, or "every week", are saved as one schedule covering them all.
-  const [picked, setPicked] = useState<number[]>([tonightOpen ? 0 : 1]);
-  const chosen = picked.map((i) => days[i]);
+  const [picked, setPicked] = useState<number[]>(() => {
+    if (editSchedule) {
+      const on = days.flatMap((d, i) => (editSchedule.weekdays.includes(d.weekday) ? [i] : []));
+      return on.length ? on : [0];
+    }
+    if (editDeal) return [Math.max(0, days.findIndex((d) => d.iso === editDeal.deal_date))];
+    return [tonightOpen ? 0 : 1];
+  });
+  // Every week: weekdays from a start date (and maybe to an end), like a
+  // calendar, not this week's dated days. A weekly deal being edited opens here.
+  const [repeat, setRepeat] = useState(!!editSchedule);
+  const [weekly, setWeekly] = useState<number[]>(editSchedule?.weekdays ?? []);
+  const [startsOn, setStartsOn] = useState(() => {
+    const saved = editSchedule?.starts_on;
+    return saved && saved > todayIso() ? saved : todayIso();
+  });
+  const [endsOn, setEndsOn] = useState(editSchedule?.ends_on ?? "");
+  const chosen = repeat
+    ? [...weekly].sort((a, b) => a - b).map((w) => nextOn(startsOn, w)).sort((a, b) => a.iso.localeCompare(b.iso))
+    : picked.map((i) => days[i]);
   const day = chosen[0];
   const pickedWeekdays = [...new Set(chosen.map((c) => c.weekday))].sort((a, b) => a - b);
-  const tonightPicked = picked.includes(0);
+  // Weekly deals aren't held to tonight's clock: a slot already gone tonight
+  // just starts next week.
+  const tonightPicked = !repeat && chosen.some((c) => c.iso === todayIso());
   const closedOn = hours ? chosen.filter((c) => !hours[DAYS[c.weekday]].open) : [];
   // One window for every picked day, so the timeline spans the hours they all share.
   const range = (() => {
@@ -212,38 +293,49 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
     const end = Math.min(...spans.map((r) => r.end));
     return end - start >= 60 ? { start, end } : FALLBACK;
   })();
-  const minStart = tonightPicked ? clamp(earliestTonight, range.start, range.end - STEP) : range.start;
+  // An edit keeps whatever window the deal had, even if part of it has passed.
+  const minStart = tonightPicked && !editing ? clamp(earliestTonight, range.start, range.end - STEP) : range.start;
 
-  const [repeat, setRepeat] = useState(false);
 
   // Longest a group can stay. With a limit, sessions run back to back, each that
   // long. With none, groups arrive at any half hour in the window and stay as
   // long as they like; only the number of spots limits the deal.
-  const [lengthChoice, setLengthChoice] = useState<"0" | "30" | "60" | "120" | "custom">("0");
-  const [customLength, setCustomLength] = useState("90"); // minutes, as typed
+  const [lengthChoice, setLengthChoice] = useState<"0" | "30" | "60" | "120" | "custom">(initialWindow.length);
+  const [customLength, setCustomLength] = useState(initialWindow.custom); // minutes, as typed
   const customMinutes = Math.round(Number(customLength));
   const customValid = Number.isFinite(customMinutes) && customMinutes >= MIN_SESSION && customMinutes <= MAX_SESSION;
   // An unfinished custom value falls back to no limit until it's valid.
   const sessionLength = lengthChoice === "custom" ? (customValid ? customMinutes : 0) : Number(lengthChoice);
-  const [win, setWin] = useState<{ start: number; end: number } | null>(null);
+  const [win, setWin] = useState<{ start: number; end: number } | null>(initialWindow.win);
   // The window mid-drag, in unsnapped minutes, so the pill tracks the pointer.
   const [ghost, setGhost] = useState<{ start: number; end: number } | null>(null);
 
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState(venue.category || CATEGORIES[0]);
-  const [discount, setDiscount] = useState(50);
-  const [otherDiscount, setOtherDiscount] = useState(false);
-  const [otherText, setOtherText] = useState("");
-  const [price, setPrice] = useState("");
-  const [unit, setUnit] = useState<string>("pp");
-  const [spots, setSpots] = useState(20);
-  const [groupMax, setGroupMax] = useState(6);
-  const [spotsUnlimited, setSpotsUnlimited] = useState(false);
-  const [groupUnlimited, setGroupUnlimited] = useState(false);
-  const [description, setDescription] = useState("");
-  const [live, setLive] = useState(true);
-  // The Discover video for this deal: none, one of the venue's, or a fresh upload.
-  const [video, setVideo] = useState<DealVideo | null>(null);
+  const [title, setTitle] = useState(editing && !editing.auto_title ? editing.title : "");
+  const [category, setCategory] = useState(editing?.category || venue.category || CATEGORIES[0]);
+  const [discount, setDiscount] = useState(editing ? Number(editing.discount_pct) : 50);
+  const [otherDiscount, setOtherDiscount] = useState(!!editing && !DISCOUNTS.includes(Number(editing.discount_pct)));
+  const [otherText, setOtherText] = useState(editing ? String(Number(editing.discount_pct)) : "");
+  // Early-bird pricing: the steps after the opening discount, per time slot.
+  const [drops, setDrops] = useState<PriceDrop[]>(editing?.price_drops ?? []);
+  const [price, setPrice] = useState(editing ? Number(editing.original_price).toFixed(2) : "");
+  const [unit, setUnit] = useState<string>(editing?.unit ?? "pp");
+  const [spots, setSpots] = useState(editing && editing.total_spots < UNLIMITED_SPOTS ? editing.total_spots : 20);
+  const [groupMax, setGroupMax] = useState(editing && editing.max_group_size < MAX_GROUP_SIZE ? editing.max_group_size : 6);
+  const [spotsUnlimited, setSpotsUnlimited] = useState(!!editing && editing.total_spots >= UNLIMITED_SPOTS);
+  const [groupUnlimited, setGroupUnlimited] = useState(!!editing && editing.max_group_size >= MAX_GROUP_SIZE);
+  const [description, setDescription] = useState(editing?.description ?? "");
+  const [live, setLive] = useState(editing ? editing.is_active : true);
+  // The Discover video for this deal: none, one of the venue's, or a fresh
+  // upload. undefined: an edit still showing the deal's saved video.
+  const [videoChoice, setVideoChoice] = useState<DealVideo | null | undefined>(editing ? undefined : null);
+  const { data: venueReels = [] } = useQuery<VenueReel[]>({
+    queryKey: ["venue-reels", venue.id],
+    queryFn: () => venueApi.reels(venue.id),
+    enabled: !!editing?.reel_id,
+  });
+  const savedReel = editing?.reel_id ? venueReels.find((r) => r.id === editing.reel_id) : undefined;
+  const video: DealVideo | null = videoChoice !== undefined ? videoChoice : savedReel ? { reel: savedReel } : null;
+  const setVideo = (v: DealVideo | null) => setVideoChoice(v);
   const [videoBusy, setVideoBusy] = useState(false);
   // Ask the Impulse media team to shoot a video for the venue's deals. One
   // per venue: once asked for, the option isn't offered again.
@@ -372,8 +464,13 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
     for (const c of chosen) {
       // With several days picked, say which day each one is on.
       const tag = chosen.length > 1 ? `${c.tab} · ` : "";
-      for (const d of deals) if (d.is_active && d.deal_date === c.iso) add(`${c.iso}-${d.id}`, tag + d.title, d.slots);
+      // The deal being edited isn't "something else on": leave it (and what its schedule made) out.
+      for (const d of deals) {
+        if (d.id === editDeal?.id || (editSchedule && d.schedule_id === editSchedule.id)) continue;
+        if (d.is_active && d.deal_date === c.iso) add(`${c.iso}-${d.id}`, tag + d.title, d.slots);
+      }
       for (const s of schedules) {
+        if (s.id === editSchedule?.id) continue;
         if (!s.is_active || !s.weekdays.includes(c.weekday)) continue;
         if ((s.starts_on && s.starts_on > c.iso) || (s.ends_on && s.ends_on < c.iso)) continue;
         if (deals.some((d) => d.schedule_id === s.id && d.deal_date === c.iso)) continue;
@@ -391,6 +488,8 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
       });
   })();
   const laneCount = Math.max(1, ...liveDeals.map((l) => l.lane + 1));
+  // Other deals running at the same time as this one's window.
+  const clashes = liveDeals.filter((l) => l.start < shown.end && l.end > shown.start);
 
   // ── Window dragging ──
   // While dragging, the pill follows the pointer freely; on release it springs
@@ -477,7 +576,50 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
       : { start, end: clamp(end + delta, start + STEP, range.end) });
   }
 
+  function toggleWeekday(w: number) {
+    // Always at least one day.
+    setWeekly((ws) => (ws.includes(w) ? (ws.length > 1 ? ws.filter((x) => x !== w) : ws) : [...ws, w]));
+    setWin(null);
+  }
+
+  /** Every week ⇄ just these days, carrying the picked weekdays across. */
+  function switchRepeat(on: boolean) {
+    if (on === repeat) return;
+    if (on) {
+      setWeekly(pickedWeekdays.length ? pickedWeekdays : [weekdayOf(todayIso())]);
+    } else {
+      const back = days.flatMap((d, i) => (weekly.includes(d.weekday) ? [i] : []));
+      if (back.length) setPicked(back);
+    }
+    setRepeat(on);
+  }
+
+  // The repeat menu, Google Calendar style: presets over the weekday chips.
+  const weeklyAnchor = (repeat ? weekly : pickedWeekdays)[0] ?? weekdayOf(todayIso());
+  const sameDays = (a: number[], b: number[]) => a.length === b.length && b.every((x) => a.includes(x));
+  const repeatValue: RepeatChoice = !repeat
+    ? "once"
+    : sameDays(weekly, [weeklyAnchor]) ? "day"
+    : sameDays(weekly, [0, 1, 2, 3, 4]) ? "weekdays"
+    : sameDays(weekly, [5, 6]) ? "weekends"
+    : "custom";
+
+  function chooseRepeat(v: RepeatChoice) {
+    if (v === "once") return switchRepeat(false);
+    if (!repeat) switchRepeat(true);
+    if (v === "day") setWeekly([weeklyAnchor]);
+    else if (v === "weekdays") setWeekly([0, 1, 2, 3, 4]);
+    else if (v === "weekends") setWeekly([5, 6]);
+    setWin(null);
+  }
+
   function toggleDay(i: number) {
+    // A one-off deal being edited stays one day: picking another moves it.
+    if (editDeal) {
+      setPicked([i]);
+      setWin(null);
+      return;
+    }
     // Always at least one day: unticking the last one does nothing.
     setPicked((p) => (p.includes(i) ? (p.length > 1 ? p.filter((x) => x !== i) : p) : [...p, i].sort((x, y) => x - y)));
     setWin(null);
@@ -509,7 +651,9 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
     if (videoBusy) return "Wait for the video to finish uploading.";
     if (guestPays === null || usual <= 0) return "Enter the usual price.";
     if (!(discount > 0 && discount < 100)) return "Set a discount between 1% and 99%.";
-    if (tonightPicked && span.start < Math.ceil(nowMinutes() / STEP) * STEP) {
+    const dropProblem = drops.length ? priceDropsProblem(discount, drops, spotsUnlimited ? null : spots) : null;
+    if (dropProblem) return dropProblem;
+    if (!editing && tonightPicked && span.start < Math.ceil(nowMinutes() / STEP) * STEP) {
       return "That window has already started tonight. Move it later, or untick Tonight.";
     }
     return null;
@@ -553,6 +697,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
       unit,
       original_price: Math.round(usual * 100) / 100,
       discount_pct: discount,
+      price_drops: drops.length ? drops : null,
       slots: slots.map(slotString),
       max_group_size: groupUnlimited ? MAX_GROUP_SIZE : groupMax,
       total_spots: spotsUnlimited ? UNLIMITED_SPOTS : spots,
@@ -561,14 +706,35 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
 
     setSaving(true);
     try {
+      if (editing) {
+        // "" puts an unnamed deal back on its automatic "<venue> · <price>" title.
+        const changes = { ...common, title: title.trim(), description: description.trim(), price_drops: drops.length ? drops : [] };
+        if (editSchedule) {
+          await scheduleApi.update(editSchedule.id, {
+            ...changes,
+            weekdays: pickedWeekdays,
+            starts_on: repeat ? startsOn : day.iso,
+            ends_on: repeat ? endsOn || null : chosen[chosen.length - 1].iso,
+          } satisfies DealScheduleInput);
+          await askForShoot({ schedule_id: editSchedule.id });
+        } else if (editDeal) {
+          await dealApi.update(editDeal.id, { ...changes, deal_date: day.iso } satisfies DealUpdate);
+          await askForShoot({ deal_id: editDeal.id });
+        }
+        qc.invalidateQueries({ queryKey: ["deals", venue.id] });
+        qc.invalidateQueries({ queryKey: ["schedules", venue.id] });
+        qc.invalidateQueries({ queryKey: [editSchedule ? "schedule" : "deal", editing.id] });
+        router.push("/dashboard/deals");
+        return;
+      }
       if (repeat || chosen.length > 1) {
         // One deal across several days: a schedule from the first picked day,
         // ending on the last one unless it repeats every week.
         const created = await scheduleApi.create({
           ...common,
           weekdays: pickedWeekdays,
-          starts_on: day.iso,
-          ends_on: repeat ? null : chosen[chosen.length - 1].iso,
+          starts_on: repeat ? startsOn : day.iso,
+          ends_on: repeat ? endsOn || null : chosen[chosen.length - 1].iso,
           venue_id: venue.id,
         } satisfies DealScheduleInput & { venue_id: string });
         setPublished({ live: created.is_active, shoot: await askForShoot({ schedule_id: created.id }) });
@@ -590,9 +756,15 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
   // ── Render ──
   // "Tonight, Wed 28 and Fri 30" or "Every Wed and Fri, from 28 Oct".
   const daysSummary = repeat
-    ? `Every ${joinAnd(pickedWeekdays.map((w) => DAYS[w]))}, from ${shortDate(day.iso)}`
+    ? `${weekdaysPhrase(pickedWeekdays)}, from ${shortDate(startsOn)}${endsOn ? ` to ${shortDate(endsOn)}` : ""}`
     : joinAnd(chosen.map((c) => c.tab));
   const whenLabel = `${daysSummary} · ${rangeLabel(span.start, span.end)}`;
+  // The headline of the When row: "Thursday 26 Nov", "Tonight", or the weekly summary.
+  const whenSummary = repeat || chosen.length > 1
+    ? daysSummary
+    : day.iso === todayIso()
+      ? "Tonight"
+      : new Date(`${day.iso}T12:00:00`).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "short" });
   const daysPhrase = chosen.length > 1 || repeat ? "these days" : tonightPicked ? "tonight" : day.long;
   const isQuietest = !!quietest && quietest.start === span.start && quietest.end === span.end;
   // The projection: the discount's uplift (demo values above) applied to a
@@ -645,7 +817,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
             </button>
           )}
           <span style={{ position: "absolute", left: 16, bottom: 14, padding: "4px 9px", borderRadius: 6, background: "var(--accent)", color: "#FFFFFF", fontSize: 12, fontWeight: 600, letterSpacing: ".1em" }}>
-            {discount}% OFF
+            {drops.length ? `UP TO ${discount}% OFF` : `${discount}% OFF`}
           </span>
           {badge ? (
             <span style={{ position: "absolute", right: 14, bottom: 13, display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 9px", borderRadius: 999, background: "rgba(0,0,0,.55)", fontSize: 12.5, fontWeight: 600, color: badge === "live" ? "var(--good)" : "var(--muted)" }}>
@@ -698,7 +870,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
     const tonightOnly = tonightPicked && chosen.length === 1 && !repeat;
     const from = shortTime(span.start);
     const when = repeat
-      ? `every ${joinAnd(pickedWeekdays.map((w) => DAYS[w]))} from ${from}, starting ${shortDate(day.iso)}`
+      ? `every ${joinAnd(pickedWeekdays.map((w) => DAYS[w]))} from ${from}, starting ${shortDate(startsOn)}`
       : tonightOnly
         ? `tonight from ${from}`
         : `on ${joinAnd(chosen.map((c) => (c.tab === "Tonight" ? "tonight" : c.tab)))} from ${from}`;
@@ -709,7 +881,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
     ];
     return (
       <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-        <header style={{ position: "sticky", top: 0, zIndex: 10, display: "flex", alignItems: "center", gap: 16, padding: "20px 40px", borderBottom: "1px solid var(--line)", background: "var(--surface)" }}>
+        <header style={{ position: "sticky", top: 0, zIndex: 10, display: "flex", alignItems: "center", gap: 16, padding: "20px 40px", background: "var(--surface)" }}>
           <button type="button" aria-label="Back to deals" onClick={() => router.push("/dashboard/deals")} style={squareBtn}>
             <ArrowLeft size={16} strokeWidth={2} aria-hidden />
           </button>
@@ -783,58 +955,125 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       {/* Header */}
-      <header style={{ position: "sticky", top: 0, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "20px 40px", borderBottom: "1px solid var(--line)", background: "var(--surface)" }}>
+      <header style={{ position: "sticky", top: 0, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "20px 40px", background: "var(--surface)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <button type="button" aria-label="Back to deals" onClick={() => router.push("/dashboard/deals")} style={squareBtn}>
             <ArrowLeft size={16} strokeWidth={2} aria-hidden />
           </button>
           <div>
             <div style={eyebrowStyle}>Deals</div>
-            <h1 style={{ margin: "2px 0 0", fontSize: 22, fontWeight: 600, letterSpacing: "-0.015em" }}>New deal</h1>
+            <h1 style={{ margin: "2px 0 0", fontSize: 22, fontWeight: 600, letterSpacing: "-0.015em" }}>
+              {editSchedule ? "Edit weekly deal" : editDeal ? "Edit deal" : "New deal"}
+            </h1>
           </div>
         </div>
       </header>
 
       <div style={{ width: "100%", maxWidth: 1040, margin: "0 auto", padding: "30px 40px 60px", boxSizing: "border-box" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 22, minWidth: 0 }}>
-          <section style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
-            {/* What's the offer: first, so the rest of the card is about this deal */}
-            <div style={{ padding: "24px 24px 26px", borderBottom: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 22 }}>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em" }}>What&apos;s the offer?</h2>
-            <label style={{ display: "block" }}>
-              <span style={labelStyle}>
-                Name <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500 }}>(optional · guests see the price either way)</span>
-              </span>
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={shownTitle} style={inputStyle} />
-            </label>
-
-            <label style={{ display: "block" }}>
-              <span style={labelStyle}>
-                Description <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500 }}>(optional)</span>
-              </span>
-              <textarea
-                rows={2}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Anything guests should know — e.g. bar seating only"
-                style={{ ...inputStyle, height: "auto", minHeight: 50, padding: "13px 16px", lineHeight: 1.5, resize: "vertical", font: "inherit", fontSize: 17 }}
-              />
-            </label>
-
-            <div>
-              <div style={labelStyle}>
-                Category <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500 }}>· defaults to your venue</span>
+          {/* 1. Name: what the deal is called and what guests get. Not clipped, and
+              above step 2, so the category list can open over it. */}
+          <section style={{ ...cardStyle, padding: 0, position: "relative", zIndex: 2 }}>
+            <div style={{ padding: "26px 28px 24px", display: "flex", flexDirection: "column", gap: 18 }}>
+              {/* Title first and large, like a calendar event: blank keeps the automatic name. */}
+              <div style={{ paddingLeft: 46 }}>
+                <input
+                  className="nd-title"
+                  aria-label="Deal name"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Add title"
+                  style={{ width: "100%", boxSizing: "border-box", border: 0, borderBottom: "2px solid var(--line)", background: "transparent", color: "var(--text)", fontSize: 26, fontWeight: 500, letterSpacing: "-0.015em", padding: "4px 0 10px", outline: "none", transition: "border-color .2s ease" }}
+                />
+                <div style={{ marginTop: 8, fontSize: 13, color: "var(--faint)" }}>
+                  {title.trim() ? "Guests see this name on the deal card." : <>Left blank, guests see <span style={{ color: "var(--muted)" }}>{shownTitle}</span>.</>}
+                </div>
               </div>
-              <CategoryField value={category} onChange={setCategory} options={CATEGORIES} />
+
+              <IconRow icon={AlignLeft} label="Description">
+                <textarea
+                  rows={2}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Add description, e.g. bar seating only"
+                  style={{ ...inputStyle, height: "auto", minHeight: 50, padding: "13px 16px", lineHeight: 1.5, resize: "vertical", font: "inherit", fontSize: 16 }}
+                />
+              </IconRow>
+
+              <IconRow icon={Tag} label="Category">
+                <CategoryField value={category} onChange={setCategory} options={CATEGORIES} />
+              </IconRow>
             </div>
+          </section>
+
+          {/* 2. When and how much: the days and times, the price, the spots */}
+          <section style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+            <div style={{ padding: "24px 28px 4px" }}>
+              <SectionHeader
+                icon={Clock}
+                title="When"
+                sub={<><span style={{ color: "var(--text)", fontWeight: 500 }}>{whenSummary}</span> · {rangeLabel(span.start, span.end)}</>}
+              />
+              <div style={{ paddingLeft: 48, marginTop: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  {!editDeal && (
+                    <label style={selectShell}>
+                      <span style={srOnly}>Repeat</span>
+                      <select value={repeatValue} onChange={(e) => chooseRepeat(e.target.value as RepeatChoice)} style={selectInput}>
+                        <option value="once">Does not repeat</option>
+                        <option value="day">Weekly on {WEEKDAY_LONG[weeklyAnchor]}</option>
+                        <option value="weekdays">Every weekday (Mon–Fri)</option>
+                        <option value="weekends">Weekends (Sat and Sun)</option>
+                        <option value="custom">Custom days…</option>
+                      </select>
+                      <ChevronDown size={15} strokeWidth={2} aria-hidden style={{ color: "var(--muted)", pointerEvents: "none" }} />
+                    </label>
+                  )}
+                  {repeat && (
+                    <>
+                      <label style={dateField}>
+                        Starts
+                        <input type="date" value={startsOn} min={editSchedule ? undefined : todayIso()} onChange={(e) => e.target.value && setStartsOn(e.target.value)} style={dateInput} />
+                      </label>
+                      <label style={dateField}>
+                        Ends
+                        <input type="date" value={endsOn} min={startsOn} onChange={(e) => setEndsOn(e.target.value)} style={{ ...dateInput, color: endsOn ? "var(--text)" : "var(--faint)" }} />
+                        {endsOn
+                          ? <button type="button" onClick={() => setEndsOn("")} aria-label="No end date" style={{ border: 0, background: "none", color: "var(--faint)", cursor: "pointer", padding: 0, display: "grid" }}><X size={14} strokeWidth={2} aria-hidden /></button>
+                          : <span style={{ fontSize: 12.5, color: "var(--faint)" }}>never</span>}
+                      </label>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Day tabs */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "0 12px", borderBottom: "1px solid var(--line)", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "2px 28px 0 76px", flexWrap: "wrap" }}>
+              {repeat ? (
+                <div role="group" aria-label="Weekdays this deal runs" style={{ display: "flex", alignItems: "center", gap: 6, height: 60, overflowX: "auto" }}>
+                  {WEEKDAY_LONG.map((name, w) => {
+                    const on = weekly.includes(w);
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        aria-pressed={on}
+                        aria-label={`${name}s`}
+                        onClick={() => toggleWeekday(w)}
+                        style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, height: 38, minWidth: 62, padding: "0 12px", borderRadius: 10, border: 0, background: on ? "var(--accent-soft)" : "var(--sunken)", color: on ? "var(--accent-text)" : "var(--muted)", fontSize: 15, fontWeight: on ? 600 : 500, cursor: "pointer", whiteSpace: "nowrap", transition: "background-color .2s ease, border-color .2s ease, color .2s ease" }}
+                      >
+                        {on && <Check size={15} strokeWidth={2.5} aria-hidden />}
+                        {DAYS[w]}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
               <div role="group" aria-label="Days this deal runs" style={{ display: "flex", alignItems: "center", gap: 6, height: 60, overflowX: "auto" }}>
                 {days.map((d, i) => {
                   const on = picked.includes(i);
-                  const disabled = i === 0 && !tonightOpen;
+                  const disabled = d.iso === todayIso() && !tonightOpen && !picked.includes(i);
                   return (
                     <button
                       key={d.iso}
@@ -843,7 +1082,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
                       disabled={disabled}
                       title={disabled ? "Tonight's hours have passed" : undefined}
                       onClick={() => toggleDay(i)}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 38, padding: on ? "0 14px 0 11px" : "0 14px", borderRadius: 999, border: `1px solid ${on ? "var(--accent)" : "var(--line2)"}`, background: on ? "var(--accent-soft)" : "transparent", color: on ? "var(--accent-text)" : "var(--muted)", fontSize: 15, fontWeight: on ? 600 : 500, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.4 : 1, whiteSpace: "nowrap", transition: "background-color .2s ease, border-color .2s ease, color .2s ease" }}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 38, padding: on ? "0 14px 0 11px" : "0 14px", borderRadius: 10, border: 0, background: on ? "var(--accent-soft)" : "var(--sunken)", color: on ? "var(--accent-text)" : "var(--muted)", fontSize: 15, fontWeight: on ? 600 : 500, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.4 : 1, whiteSpace: "nowrap", transition: "background-color .2s ease, border-color .2s ease, color .2s ease" }}
                     >
                       {on && <Check size={15} strokeWidth={2.5} aria-hidden />}
                       {d.tab}
@@ -851,31 +1090,13 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
                   );
                 })}
               </div>
-              <div style={{ display: "flex", alignItems: "center", height: 60 }}>
-                <Segmented
-                  label="How often"
-                  value={repeat ? "weekly" : "once"}
-                  onChange={(v) => setRepeat(v === "weekly")}
-                  options={[{ value: "once", label: "Just these days" }, { value: "weekly", label: "Every week" }]}
-                />
-              </div>
-            </div>
-
-            {/* What's picked, in words, so several days read as one deal */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "12px 24px", borderBottom: "1px solid var(--line)", fontSize: 14, color: "var(--muted)" }}>
-              <span>Runs</span>
-              <b style={{ color: "var(--text)", fontWeight: 600 }}>{daysSummary}</b>
-              {(chosen.length > 1 || repeat) && (
-                <span style={{ fontSize: 12.5, padding: "3px 9px", borderRadius: 999, background: "var(--surface3)", color: "var(--muted)" }}>
-                  One deal · {repeat ? `${pickedWeekdays.length} day${pickedWeekdays.length === 1 ? "" : "s"} a week` : `${chosen.length} days`}
-                </span>
               )}
-              <span style={{ marginLeft: "auto", fontSize: 13, color: "var(--faint)" }}>Tap days to add or remove them</span>
+
             </div>
 
             <div style={{ padding: "22px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16, flexWrap: "wrap" }}>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em" }}>When can guests book?</h2>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, letterSpacing: "-0.01em" }}>What time can guests book?</h3>
                 <span style={{ fontSize: 13, color: "var(--muted)" }}>
                   {!hours
                     ? "Add opening hours in Venue details to fit your night"
@@ -932,25 +1153,58 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
                   })}
                 </div>
 
-                <span style={rowLabel}>Live deals</span>
-                <div style={{ position: "relative", height: 36 + (laneCount - 1) * 32, borderRadius: 18, background: "var(--sunken)" }}>
+                <span style={rowLabel}>
+                  Live deals
+                  {liveDeals.length > 0 && (
+                    <span style={{ display: "block", marginTop: 3, fontSize: 12, fontWeight: 500, color: clashes.length ? "var(--accent-text)" : "var(--faint)" }}>
+                      {clashes.length ? `${clashes.length} overlap${clashes.length === 1 ? "s" : ""}` : "No clashes"}
+                    </span>
+                  )}
+                </span>
+                <div style={{ position: "relative", height: 10 + laneCount * 22, borderRadius: 10, background: "var(--sunken)", overflow: "hidden" }}>
                   {liveDeals.length === 0 && (
-                    <span style={{ position: "absolute", left: 16, top: 10, fontSize: 12, color: "var(--faint)" }}>Nothing else on {daysPhrase}</span>
+                    <span style={{ position: "absolute", left: 14, top: 7, fontSize: 12, color: "var(--faint)" }}>Nothing else on {daysPhrase}</span>
                   )}
                   <div style={{ position: "absolute", inset: `0 ${INSET}px` }}>
-                  {liveDeals.map((l) => {
-                    const left = clamp(pct(l.start), 0, 100);
-                    const right = clamp(pct(l.end), 0, 100);
-                    return (
-                      <div
-                        key={l.id}
-                        title={`${l.title} · ${rangeLabel(l.start, l.end)}`}
-                        style={{ position: "absolute", left: `${left}%`, width: `${Math.max(right - left, 2)}%`, top: 3 + l.lane * 32, height: 30, boxSizing: "border-box", borderRadius: 999, background: "color-mix(in oklab, var(--info) 22%, transparent)", border: "1px solid color-mix(in oklab, var(--info) 45%, transparent)", display: "flex", alignItems: "center", padding: "0 12px", fontSize: 13, fontWeight: 600, color: "var(--info)", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}
-                      >
-                        {l.title}
-                      </div>
-                    );
-                  })}
+                    {/* This deal's window, carried up from the track so clashes line up with it */}
+                    {liveDeals.length > 0 && (
+                      <div aria-hidden style={{ position: "absolute", top: 0, bottom: 0, left: `${pct(shown.start)}%`, width: `${pct(shown.end) - pct(shown.start)}%`, background: "color-mix(in oklab, var(--accent) 10%, transparent)", transition: dragging ? "none" : "left .2s ease, width .2s ease" }} />
+                    )}
+                    {liveDeals.map((l) => {
+                      const left = clamp(pct(l.start), 0, 100);
+                      const right = clamp(pct(l.end), 0, 100);
+                      const width = Math.max(right - left, 1.5);
+                      // The stretch of this bar inside the window, as a share of the bar.
+                      const from = Math.max(l.start, shown.start);
+                      const to = Math.min(l.end, shown.end);
+                      const overlaps = to > from;
+                      return (
+                        <div
+                          key={l.id}
+                          title={`${l.title} · ${rangeLabel(l.start, l.end)}${overlaps ? ` · overlaps ${rangeLabel(from, to)}` : ""}`}
+                          style={{
+                            position: "absolute", left: `${left}%`, width: `${width}%`, top: 5 + l.lane * 22, height: 17, boxSizing: "border-box",
+                            borderRadius: 5, overflow: "hidden", background: "color-mix(in oklab, var(--info) 20%, transparent)",
+                            display: "flex", alignItems: "center", padding: "0 8px",
+                          }}
+                        >
+                          {overlaps && (
+                            <span
+                              aria-hidden
+                              style={{
+                                position: "absolute", top: 0, bottom: 0,
+                                left: `${((from - l.start) / (l.end - l.start)) * 100}%`, width: `${((to - from) / (l.end - l.start)) * 100}%`,
+                                background: "repeating-linear-gradient(135deg, color-mix(in oklab, var(--accent) 55%, transparent) 0 4px, color-mix(in oklab, var(--accent) 22%, transparent) 4px 8px)",
+                                transition: dragging ? "none" : "left .2s ease, width .2s ease",
+                              }}
+                            />
+                          )}
+                          <span style={{ position: "relative", fontSize: 11.5, fontWeight: 600, color: "var(--info)", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+                            {l.title}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -973,7 +1227,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
                   onPointerMove={onPointerMove}
                   onPointerUp={endDrag}
                   onPointerCancel={endDrag}
-                  style={{ position: "relative", height: 48 + INSET * 2, borderRadius: 999, background: "var(--sunken)", border: "1px solid var(--line)", boxShadow: "inset 0 1px 3px rgba(0,0,0,.35)", cursor: dragging ? "grabbing" : "crosshair", touchAction: "none", userSelect: "none" }}
+                  style={{ position: "relative", height: 48 + INSET * 2, borderRadius: 16, background: "var(--sunken)", boxShadow: "inset 0 1px 2px rgba(0,0,0,.25)", cursor: dragging ? "grabbing" : "crosshair", touchAction: "none", userSelect: "none" }}
                 >
                   {/* The groove's inner edge, inset so the pill's curve matches the track's */}
                   <div ref={trackRef} style={{ position: "absolute", inset: INSET - 1 }}>
@@ -982,7 +1236,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
                     <span key={h} aria-hidden style={{ position: "absolute", left: `${pct(h)}%`, top: 10, bottom: 10, width: 1, background: "var(--line)", pointerEvents: "none" }} />
                   ))}
                   {minStart > range.start && (
-                    <div title="Already passed" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct(minStart)}%`, borderRadius: "999px 0 0 999px", background: "color-mix(in oklab, var(--line) 60%, transparent)", pointerEvents: "none" }} />
+                    <div title="Already passed" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct(minStart)}%`, borderRadius: "16px 0 0 16px", background: "color-mix(in oklab, var(--line) 60%, transparent)", pointerEvents: "none" }} />
                   )}
 
                   <div
@@ -1021,7 +1275,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
                 </div>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: 14, paddingTop: 16, borderTop: "1px solid var(--line)", fontSize: 14, color: "var(--muted)", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, paddingTop: 8, fontSize: 14, color: "var(--muted)", flexWrap: "wrap" }}>
                 <span>Max session length</span>
                 <Segmented
                   label="Max session length"
@@ -1043,7 +1297,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
                       aria-label="Session length in minutes"
                       aria-invalid={!customValid}
                       onChange={(e) => setCustomLength(e.target.value.replace(/\D/g, "").slice(0, 3))}
-                      style={{ width: 64, height: 32, boxSizing: "border-box", padding: "0 10px", borderRadius: 8, border: `1px solid ${customValid ? "var(--line2)" : "var(--accent)"}`, background: "var(--sunken)", color: "var(--text)", fontSize: 14, ...numeric }}
+                      style={{ width: 64, height: 32, boxSizing: "border-box", padding: "0 10px", borderRadius: 8, border: `1px solid ${customValid ? "transparent" : "var(--accent)"}`, background: "var(--sunken)", color: "var(--text)", fontSize: 14, ...numeric }}
                     />
                     <span>min</span>
                     {!customValid && <span style={{ color: "var(--accent-text)", fontSize: 13 }}>{MIN_SESSION} to {MAX_SESSION} min</span>}
@@ -1064,9 +1318,13 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
                 )}
               </div>
 
-              {/* Price and discount sit under the slider so the projection above moves as you choose */}
-              <div style={{ paddingTop: 20, borderTop: "1px solid var(--line)" }}>
-            <div className="nd-pair" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+            </div>
+          </section>
+
+          {/* Price: the usual price, the discount, and early-bird steps */}
+          <section style={{ ...cardStyle, padding: "24px 28px 28px" }}>
+            <SectionHeader icon={DollarSign} title="Price" sub="What guests usually pay, and how much you take off." />
+            <div className="nd-pair" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginTop: 22 }}>
               <div>
                 <div style={labelStyle}>Usual price</div>
                 <div style={{ display: "flex", gap: 8 }}>
@@ -1122,6 +1380,17 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
                 </div>
               </div>
 
+              <div style={{ gridColumn: "1 / -1", padding: "16px 18px", borderRadius: 12, background: "var(--surface2)" }}>
+                <PriceDropsEditor opening={discount} drops={drops} onChange={setDrops} usual={isNaN(usual) ? null : usual} capacity={spotsUnlimited ? null : spots} />
+              </div>
+
+            </div>
+          </section>
+
+          {/* Spots: how many can book, and the biggest group */}
+          <section style={{ ...cardStyle, padding: "24px 28px 28px" }}>
+            <SectionHeader icon={Users} title="Spots" sub="How many people can book across all times, and the biggest single group." />
+            <div className="nd-pair" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginTop: 22 }}>
               <StepperCard title="Total spots" sub="Across all times" value={spots} min={1} max={500}
                 onChange={(n) => { setSpots(n); setGroupMax((g) => Math.min(g, n)); }}
                 unlimited={spotsUnlimited} onUnlimited={setSpotsUnlimited} />
@@ -1129,13 +1398,15 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
                 max={Math.min(MAX_GROUP_SIZE, spotsUnlimited ? MAX_GROUP_SIZE : spots)} onChange={setGroupMax}
                 unlimited={groupUnlimited} onUnlimited={setGroupUnlimited} unlimitedHint={`Up to ${MAX_GROUP_SIZE}, the app's limit`} />
             </div>
-              </div>
-            </div>
           </section>
 
-          <section style={{ ...cardStyle, padding: "24px 24px 26px" }}>
-            <DealVideoPicker venueId={venue.id} value={video} onChange={setVideo} onBusy={setVideoBusy} />
-            {canAskForShoot && <label style={{ display: "flex", alignItems: "flex-start", gap: 12, marginTop: 18, padding: "14px 16px", borderRadius: 12, border: `1px solid ${wantShoot ? "var(--accent)" : "var(--line2)"}`, background: wantShoot ? "var(--accent-soft)" : "var(--surface2)", cursor: "pointer" }}>
+          {/* 3. Video */}
+          <section style={{ ...cardStyle, padding: "24px 28px 28px" }}>
+            <div style={{ marginBottom: 20 }}>
+              <SectionHeader icon={Film} title="Video" sub="Optional. A short upright clip for the app's Discover feed, with a Book button for this deal." />
+            </div>
+            <DealVideoPicker venueId={venue.id} value={video} onChange={setVideo} onBusy={setVideoBusy} hideHeading />
+            {canAskForShoot && <label style={{ display: "flex", alignItems: "flex-start", gap: 12, marginTop: 18, padding: "14px 16px", borderRadius: 12, border: `1px solid ${wantShoot ? "var(--accent)" : "transparent"}`, background: wantShoot ? "var(--accent-soft)" : "var(--surface2)", cursor: "pointer" }}>
               <input type="checkbox" checked={wantShoot} onChange={(e) => setWantShoot(e.target.checked)} style={{ width: 18, height: 18, margin: "2px 0 0", flexShrink: 0, accentColor: "var(--accent)", cursor: "pointer" }} />
               <span>
                 <span style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--text)" }}>Get a complimentary video shot by the Impulse media team for your deals</span>
@@ -1150,7 +1421,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
             <button type="button" onClick={() => router.push("/dashboard/deals")} style={headerGhost}>Cancel</button>
             <button type="button" onClick={openPreview} style={headerPrimary}>
               <Eye size={16} strokeWidth={2} aria-hidden />
-              Preview &amp; publish
+              {editing ? "Preview & save" : <>Preview &amp; publish</>}
               <ArrowRight size={16} strokeWidth={2} aria-hidden />
             </button>
           </div>
@@ -1208,7 +1479,7 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
           <div style={{ display: "flex", gap: 12 }}>
             <button type="button" onClick={() => setPreviewOpen(false)} style={{ ...headerGhost, flex: 1 }}>Keep editing</button>
             <button type="button" onClick={publish} disabled={saving} style={{ ...headerPrimary, flex: 1.4, justifyContent: "center", opacity: saving ? 0.6 : 1, cursor: saving ? "not-allowed" : "pointer" }}>
-              {saving ? "Saving…" : goesLive ? "Publish deal" : "Save draft"}
+              {saving ? "Saving…" : editing ? "Save changes" : goesLive ? "Publish deal" : "Save draft"}
               {!saving && <ArrowRight size={16} strokeWidth={2} aria-hidden />}
             </button>
           </div>
@@ -1216,6 +1487,8 @@ export function NewDealComposer({ venue, onAnother }: { venue: Venue; onAnother?
       </aside>
 
       <style>{`
+        .nd-title:focus { border-bottom-color: var(--accent) !important; }
+        .nd-title::placeholder { color: var(--faint); }
         .nd-grip:hover > span, .nd-grip:focus-visible > span { height: 28px !important; }
         .nd-grip:focus-visible { outline: 2px solid #FFFFFF; outline-offset: -4px; border-radius: 999px; }
         @media (prefers-reduced-motion: reduce) {
@@ -1247,7 +1520,7 @@ function Segmented({
 }) {
   const index = Math.max(0, options.findIndex((o) => o.value === value));
   return (
-    <div role="radiogroup" aria-label={label} style={{ position: "relative", display: "grid", gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))`, padding: 4, borderRadius: 999, background: "var(--sunken)", border: "1px solid var(--line2)", flexShrink: 0 }}>
+    <div role="radiogroup" aria-label={label} style={{ position: "relative", display: "grid", gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))`, padding: 4, borderRadius: 12, background: "var(--sunken)", flexShrink: 0 }}>
       <span
         aria-hidden
         className="nd-anim"
@@ -1262,7 +1535,7 @@ function Segmented({
             role="radio"
             aria-checked={on}
             onClick={() => onChange(o.value)}
-            style={{ position: "relative", height: tall ? 40 : 30, padding: "0 14px", borderRadius: 999, border: 0, background: "transparent", color: on ? "var(--text)" : "var(--muted)", fontSize: 14, fontWeight: on ? 600 : 400, cursor: "pointer", whiteSpace: "nowrap", transition: "color .25s ease" }}
+            style={{ position: "relative", height: tall ? 40 : 30, padding: "0 14px", borderRadius: 9, border: 0, background: "transparent", color: on ? "var(--text)" : "var(--muted)", fontSize: 14, fontWeight: on ? 600 : 400, cursor: "pointer", whiteSpace: "nowrap", transition: "color .25s ease" }}
           >
             {o.label}
           </button>
@@ -1375,7 +1648,7 @@ function StepperCard({
   unlimitedHint?: string;
 }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 12, border: "1px solid var(--line2)" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 12, background: "var(--surface2)" }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 15, fontWeight: 600 }}>{title}</div>
         <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>{unlimited && unlimitedHint ? unlimitedHint : sub}</div>
@@ -1409,7 +1682,7 @@ function StepperCard({
           aria-label={`Unlimited ${title.toLowerCase()}`}
           title={unlimited ? "Set a limit" : "No limit"}
           onClick={() => onUnlimited(!unlimited)}
-          style={{ ...stepBtn(false), borderColor: unlimited ? "var(--accent)" : "var(--line2)", background: unlimited ? "var(--accent-soft)" : "transparent", color: unlimited ? "var(--accent-text)" : "var(--muted)", transition: "background-color .2s ease, color .2s ease, border-color .2s ease" }}
+          style={{ ...stepBtn(false), background: unlimited ? "var(--accent-soft)" : "var(--sunken)", color: unlimited ? "var(--accent-text)" : "var(--muted)", transition: "background-color .2s ease, color .2s ease, border-color .2s ease" }}
         >
           <InfinityIcon size={18} strokeWidth={2} aria-hidden />
         </button>
@@ -1422,7 +1695,55 @@ function StepperCard({
 
 const srOnly: React.CSSProperties = { position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)", whiteSpace: "nowrap" };
 
-const cardStyle: React.CSSProperties = { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 16 };
+/** The head of a section card: a tinted icon tile, its name, and one line on what it's for. */
+function SectionHeader({ icon: Icon, title, sub }: { icon: LucideIcon; title: string; sub: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+      <span aria-hidden style={{ width: 34, height: 34, flexShrink: 0, borderRadius: 10, display: "grid", placeItems: "center", background: "var(--surface3)", color: "var(--muted)" }}>
+        <Icon size={17} strokeWidth={1.75} />
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: "-0.01em" }}>{title}</h2>
+        <p style={{ margin: "2px 0 0", fontSize: 13.5, color: "var(--muted)", lineHeight: 1.45 }}>{sub}</p>
+      </div>
+    </div>
+  );
+}
+
+/** A calendar-style row: an icon in the gutter, the field beside it. */
+function IconRow({ icon: Icon, label, children }: { icon: LucideIcon; label: string; children: React.ReactNode }) {
+  return (
+    <div role="group" aria-label={label} style={{ display: "grid", gridTemplateColumns: "28px minmax(0, 1fr)", columnGap: 18, alignItems: "start" }}>
+      <span aria-hidden title={label} style={{ display: "grid", placeItems: "center", height: 44, color: "var(--muted)" }}>
+        <Icon size={20} strokeWidth={1.8} />
+      </span>
+      <div style={{ minWidth: 0 }}>{children}</div>
+    </div>
+  );
+}
+
+const dateField: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", gap: 8, height: 34, padding: "0 10px", borderRadius: 9,
+  border: 0, background: "var(--sunken)", fontSize: 13, color: "var(--muted)",
+};
+
+const dateInput: React.CSSProperties = {
+  border: 0, background: "transparent", color: "var(--text)", font: "inherit", fontSize: 13, padding: 0,
+};
+
+type RepeatChoice = "once" | "day" | "weekdays" | "weekends" | "custom";
+
+const selectShell: React.CSSProperties = {
+  position: "relative", display: "inline-flex", alignItems: "center", gap: 8, height: 36, padding: "0 12px", borderRadius: 9,
+  background: "var(--sunken)", cursor: "pointer",
+};
+
+const selectInput: React.CSSProperties = {
+  appearance: "none", border: 0, background: "transparent", color: "var(--text)", font: "inherit", fontSize: 14, fontWeight: 500,
+  padding: 0, paddingRight: 2, cursor: "pointer", outline: "none",
+};
+
+const cardStyle: React.CSSProperties = { background: "var(--surface)", borderRadius: 16 };
 
 const eyebrowStyle: React.CSSProperties = { fontSize: 12, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--muted)", fontWeight: 500 };
 
@@ -1430,15 +1751,15 @@ const labelStyle: React.CSSProperties = { display: "block", fontSize: 12, letter
 
 const inputStyle: React.CSSProperties = {
   width: "100%", height: 50, boxSizing: "border-box", padding: "0 16px", borderRadius: 10,
-  border: "1px solid var(--line2)", background: "var(--sunken)", color: "var(--text)", fontSize: 17,
+  border: "1px solid transparent", background: "var(--sunken)", color: "var(--text)", fontSize: 17,
 };
 
 function discountBtn(on: boolean): React.CSSProperties {
   return {
     position: "relative", height: 50, boxSizing: "border-box", borderRadius: 10, cursor: "pointer", fontSize: 16, fontWeight: 600,
     display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
-    border: `1px solid ${on ? "var(--accent)" : "var(--line2)"}`,
-    background: on ? "var(--accent-soft)" : "transparent",
+    border: 0,
+    background: on ? "var(--accent-soft)" : "var(--sunken)",
     color: on ? "var(--accent-text)" : "var(--muted)",
     ...numeric,
   };
@@ -1446,19 +1767,19 @@ function discountBtn(on: boolean): React.CSSProperties {
 
 function stepBtn(disabled: boolean): React.CSSProperties {
   return {
-    width: 40, height: 40, borderRadius: 10, border: "1px solid var(--line2)", background: "transparent",
+    width: 40, height: 40, borderRadius: 10, border: 0, background: "var(--sunken)",
     color: "var(--text)", display: "grid", placeItems: "center", flexShrink: 0,
     cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.35 : 1,
   };
 }
 
 const squareBtn: React.CSSProperties = {
-  width: 40, height: 40, boxSizing: "border-box", borderRadius: 10, border: "1px solid var(--line2)",
-  background: "transparent", color: "var(--muted)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+  width: 40, height: 40, boxSizing: "border-box", borderRadius: 10, border: 0,
+  background: "var(--surface2)", color: "var(--muted)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
 };
 
 const headerGhost: React.CSSProperties = {
-  height: 46, padding: "0 20px", borderRadius: 10, border: "1px solid var(--line2)", background: "transparent",
+  height: 46, padding: "0 20px", borderRadius: 10, border: 0, background: "var(--surface2)",
   color: "var(--text)", fontSize: 15, fontWeight: 600, cursor: "pointer",
 };
 
@@ -1470,16 +1791,16 @@ const headerPrimary: React.CSSProperties = {
 
 // The window: one flat accent pill.
 const glassPill: React.CSSProperties = {
-  position: "absolute", top: 0, bottom: 0, borderRadius: 999, overflow: "hidden",
+  position: "absolute", top: 0, bottom: 0, borderRadius: 11, overflow: "hidden",
   display: "flex", alignItems: "center", justifyContent: "center", padding: "0 24px", boxSizing: "border-box",
   background: "var(--accent)",
 };
 
 // The neutral glass chip that slides behind the selected tab or option.
 const glassChip: React.CSSProperties = {
-  borderRadius: 999,
+  borderRadius: 9,
   background: "var(--surface3)",
-  border: "1px solid var(--line2)",
+  boxShadow: "0 1px 2px rgba(0,0,0,.18)",
 };
 
 const pillText: React.CSSProperties = {

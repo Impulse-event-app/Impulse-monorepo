@@ -420,7 +420,8 @@ export function Radar({
 }: {
   size?: number;
   radius?: number;
-  kind?: 'full' | 'compact' | 'sweep';
+  /** `sweep`: the rings drawn as open arcs, for loading and confirmation moments. */
+  kind?: 'full' | 'sweep';
   style?: StyleProp<ViewStyle>;
   /** Hide from VoiceOver when the wordmark or a title already names it. */
   decorative?: boolean;
@@ -443,28 +444,19 @@ export function Radar({
     >
       <Svg width={size} height={size} viewBox="0 0 512 512">
         <Rect width={512} height={512} fill={IMPULSE_RED} />
-        {kind === 'compact' ? (
-          <>
-            <Circle cx={256} cy={256} r={150} fill="none" stroke="#FFFFFF" strokeWidth={54} />
-            <Circle cx={256} cy={256} r={46} fill="#FFFFFF" />
-          </>
-        ) : (
-          <>
-            <Circle
-              cx={256} cy={256} r={172} fill="none" stroke="#FFFFFF" strokeWidth={13}
-              strokeDasharray={sweep ? dash(172, 255) : undefined}
-              strokeLinecap={sweep ? 'round' : undefined}
-              transform={sweep ? 'rotate(-135 256 256)' : undefined}
-            />
-            <Circle
-              cx={256} cy={256} r={98} fill="none" stroke="#FFFFFF" strokeWidth={22}
-              strokeDasharray={sweep ? dash(98, 255) : undefined}
-              strokeLinecap={sweep ? 'round' : undefined}
-              transform={sweep ? 'rotate(-135 256 256)' : undefined}
-            />
-            <Circle cx={256} cy={256} r={34} fill="#FFFFFF" />
-          </>
-        )}
+        <Circle
+          cx={256} cy={256} r={172} fill="none" stroke="#FFFFFF" strokeWidth={13}
+          strokeDasharray={sweep ? dash(172, 255) : undefined}
+          strokeLinecap={sweep ? 'round' : undefined}
+          transform={sweep ? 'rotate(-135 256 256)' : undefined}
+        />
+        <Circle
+          cx={256} cy={256} r={98} fill="none" stroke="#FFFFFF" strokeWidth={22}
+          strokeDasharray={sweep ? dash(98, 255) : undefined}
+          strokeLinecap={sweep ? 'round' : undefined}
+          transform={sweep ? 'rotate(-135 256 256)' : undefined}
+        />
+        <Circle cx={256} cy={256} r={34} fill="#FFFFFF" />
       </Svg>
     </View>
   );
