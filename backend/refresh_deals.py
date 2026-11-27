@@ -50,13 +50,13 @@ def main() -> None:
     try:
         venues = db.query(Venue).filter(Venue.owner_id == args.owner_id, Venue.is_active == True).order_by(Venue.name).all()
         for v in venues:
-            template = db.query(Deal).filter(Deal.venue_id == v.id, Deal.deleted_at.is_(None)).order_by(Deal.created_at.desc()).first()
+            template = db.query(Deal).filter(Deal.venue_id == v.id, Deal.deleted_at.is_(None), Deal.is_standard == False).order_by(Deal.created_at.desc()).first()
             if not template:
                 print(f"skip  {v.name}: no deal to copy")
                 continue
             publish = can_publish_deals(v)
 
-            stale = db.query(Deal).filter(Deal.venue_id == v.id, Deal.is_active == True).all()
+            stale = db.query(Deal).filter(Deal.venue_id == v.id, Deal.is_active == True, Deal.is_standard == False).all()
             for d in stale:
                 d.is_active = False
 

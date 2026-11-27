@@ -105,7 +105,7 @@ export function DealDetail({ id, embedded = false }: { id: string | undefined; e
             </View>
           </View>
 
-          <DropTicket d={d} />
+          {d.kind === 'venue' ? <NothingToday venue={d.venue} /> : <DropTicket d={d} />}
 
           {/* Where: one row, tap for directions. */}
           <Pressable
@@ -182,8 +182,9 @@ export function DealDetail({ id, embedded = false }: { id: string | undefined; e
 
       {head}
 
-      {/* Book now on its own: the price is already on screen in the PriceBlock. */}
-      <FloatingFooter>
+      {/* Book now on its own: the price is already on screen in the PriceBlock.
+          A browse-only venue has nothing to book. */}
+      {d.kind === 'venue' ? null : <FloatingFooter>
         <Btn
           full
           onPress={() => requireAuth(() => router.push(`/(user)/claim/${d.id}`))}
@@ -191,7 +192,20 @@ export function DealDetail({ id, embedded = false }: { id: string | undefined; e
         >
           Book now
         </Btn>
-      </FloatingFooter>
+      </FloatingFooter>}
+    </View>
+  );
+}
+
+/** A browse-only venue: no deal and no full-price booking today. */
+function NothingToday({ venue }: { venue: string }) {
+  const T = useTheme();
+  return (
+    <View style={{ marginTop: 22, borderRadius: 22, borderCurve: 'continuous', borderWidth: 1, borderColor: T.line, backgroundColor: T.surface, padding: 18, gap: 6 }}>
+      <Text style={{ ...fontUI(600), fontSize: 17, letterSpacing: -0.25, color: T.text }}>Nothing to book today</Text>
+      <Text style={{ ...fontUI(400), fontSize: 15, lineHeight: 21, color: T.muted }}>
+        {venue} isn’t taking bookings through Impulse right now. Deals here show up on your feed when they go live.
+      </Text>
     </View>
   );
 }
@@ -227,7 +241,9 @@ function DropTicket({ d }: { d: Drop }) {
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
             <Radar size={20} decorative />
-            <Text style={{ ...fontUI(600), fontSize: 13.5, letterSpacing: -0.1, color: T.text }}>Impulse special</Text>
+            <Text style={{ ...fontUI(600), fontSize: 13.5, letterSpacing: -0.1, color: T.text }}>
+              {d.kind === 'standard' ? 'Book at the usual price' : 'Impulse special'}
+            </Text>
           </View>
           {/* The discount, as text, top right. */}
           {p > 0 ? (

@@ -58,7 +58,7 @@ def list_reels(db: Session = Depends(get_db), user: Optional[dict] = Depends(get
     venue_ids = {r.venue_id for r in reels}
     deals = (
         db.query(Deal)
-        .filter(Deal.venue_id.in_(venue_ids), Deal.is_active == True, Deal.spots_remaining > 0)
+        .filter(Deal.venue_id.in_(venue_ids), Deal.is_active == True, Deal.is_standard == False, Deal.spots_remaining > 0)
         .all()
     ) if venue_ids else []
     live = newest_live_deal_by_venue(deals)

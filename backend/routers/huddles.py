@@ -44,6 +44,7 @@ def candidate_deals(db: Session, group_size: int):
         db.query(Deal)
         .filter(
             Deal.is_active == True,
+            Deal.is_standard == False,  # Huddles vote on deals, not full-price bookings
             Deal.spots_remaining >= group_size,
             Deal.max_group_size >= group_size,
             or_(Deal.expires_at.is_(None), Deal.expires_at > now),
@@ -191,6 +192,7 @@ def huddle_candidates(
         hide_demo_venues(q, db, user)
         .filter(
             Deal.is_active == True,
+            Deal.is_standard == False,
             Deal.spots_remaining >= b.num_people,
             Deal.max_group_size >= b.num_people,
             or_(Deal.expires_at.is_(None), Deal.expires_at > _now()),

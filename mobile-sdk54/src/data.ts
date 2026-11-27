@@ -149,7 +149,18 @@ export type Drop = {
   slotPrices?: Record<string, { now: number; left: number | null }>;
   /** Set by onePerVenue: how many other live deals this venue has. */
   moreAtVenue?: number;
+  /** deal (default): a discount. standard: the venue's usual price, bookable
+   *  when it has no deal. venue: nothing to book today, browse only. */
+  kind?: DropKind;
 };
+
+export type DropKind = 'deal' | 'standard' | 'venue';
+const KIND_ORDER: Record<DropKind, number> = { deal: 0, standard: 1, venue: 2 };
+export const dropKind = (d: Pick<Drop, 'kind'>): DropKind => d.kind ?? 'deal';
+
+/** A map pin's text: the price, or for a browse-only venue its (short) name. */
+export const pinLabel = (d: Pick<Drop, 'kind' | 'now' | 'venue'>): string =>
+  d.kind === 'venue' ? (d.venue.length > 14 ? `${d.venue.slice(0, 13)}…` : d.venue) : money(d.now);
 
 // max party each venue fits (drives the party-size filter)
 const CAPS: Record<string, number> = {
@@ -262,7 +273,8 @@ export const DROPS: Drop[] = RAW.map((d) => ({
  * first deal in `drops`, and notes how many more it has in moreAtVenue.
  */
 export function onePerVenue(drops: Drop[]): Drop[] {
-  const rank = (d: Drop) => [d.status === 'now' ? 0 : 1, -(d.usual > 0 ? pct(d.now, d.usual) : 0), d.target ?? Infinity];
+  // A deal always beats the venue's full-price offer, which beats browse-only.
+  const rank = (d: Drop) => [KIND_ORDER[dropKind(d)], d.status === 'now' ? 0 : 1, -(d.usual > 0 ? pct(d.now, d.usual) : 0), d.target ?? Infinity];
   const better = (a: Drop, b: Drop) => {
     const ra = rank(a), rb = rank(b);
     for (let i = 0; i < ra.length; i++) if (ra[i] !== rb[i]) return ra[i] < rb[i];
@@ -276,9 +288,13 @@ export function onePerVenue(drops: Drop[]): Drop[] {
     const cur = best.get(key);
     if (!cur) order.push(key);
     if (!cur || better(d, cur)) best.set(key, d);
-    count.set(key, (count.get(key) ?? 0) + 1);
+    if (dropKind(d) === 'deal') count.set(key, (count.get(key) ?? 0) + 1);
   }
-  return order.map((k) => ({ ...best.get(k)!, moreAtVenue: (count.get(k) ?? 1) - 1 }));
+  return order.map((k) => {
+    const b = best.get(k)!;
+    const deals = count.get(k) ?? 0;
+    return { ...b, moreAtVenue: dropKind(b) === 'deal' ? deals - 1 : deals };
+  });
 }
 
 // region that frames all of the drops (Sydney inner-city)
@@ -400,7 +416,50 @@ export const genCode = () => 'IMP-' + Math.floor(1000 + Math.random() * 9000);
 // ── API → Drop adapter ───────────────────────────────────────
 // Converts a backend ApiDeal (from GET /deals) into the Drop shape used
 // by the UI, filters, and map. Import ApiDeal from './api'.
-import type { ApiDeal, ApiBooking, BookingStatus } from './api';
+import type { ApiDeal, ApiBooking, ApiBrowseVenue, BookingStatus } from './api';
+
+/** A venue with nothing bookable today, shaped like a deal so the feed, map
+ *  and detail screen can show it (browse_only: no price, no Book button). */
+export function venueToApiDeal(v: ApiBrowseVenue): ApiDeal {
+  return {
+    id: `venue:${v.id}`,
+    venue_id: v.id,
+    venue_name: v.name,
+    venue_address: v.address,
+    venue_suburb: v.suburb,
+    venue_lat: v.lat,
+    venue_lng: v.lng,
+    venue_avg_rating: v.avg_rating,
+    venue_image_url: v.image_url,
+    venue_image_urls: v.image_urls,
+    reel_video_url: v.reel_video_url,
+    reel_poster_url: v.reel_poster_url,
+    title: v.name,
+    auto_title: true,
+    category: v.category,
+    description: v.description,
+    unit: null,
+    original_price: 0,
+    discount_pct: 0,
+    deal_price: 0,
+    date: '',
+    slots: [],
+    max_group_size: 99,
+    total_spots: 0,
+    spots_remaining: 0,
+    is_active: true,
+    expires_at: null,
+    created_at: '',
+    browse_only: true,
+  };
+}
+
+/** The feed's list: every deal (standard offers included), then a browse-only
+ *  stand-in for each venue that has none. */
+export function withBrowseVenues(deals: ApiDeal[], venues: ApiBrowseVenue[]): ApiDeal[] {
+  const listed = new Set(deals.map((d) => d.venue_id));
+  return [...deals, ...venues.filter((v) => !listed.has(v.id)).map(venueToApiDeal)];
+}
 
 export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): Drop {
   // Distance from user (requires venue coordinates and user location)
@@ -412,6 +471,8 @@ export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): D
     km = haversineKm(userLat, userLng, d.venue_lat, d.venue_lng);
   }
 
+  const kind: DropKind = d.browse_only ? 'venue' : d.is_standard ? 'standard' : 'deal';
+
   // expires_at drives the "hot" countdown and now/later status
   const expiresMs = d.expires_at ? new Date(d.expires_at).getTime() : null;
   const msLeft = expiresMs ? expiresMs - Date.now() : null;
@@ -421,7 +482,11 @@ export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): D
   // Human-readable availability window
   const openSlots = upcomingSlots(d.date, d.slots);
   const window =
-    openSlots.length > 0
+    kind === 'venue'
+      ? 'Nothing to book today'
+      : kind === 'standard'
+      ? openSlots.length > 0 ? `Book from ${openSlots[0]}` : 'Booked out today'
+      : openSlots.length > 0
       ? status === 'now'
         ? `On now · ${openSlots.join(', ')}`
         : `From ${openSlots[0]} tonight`
@@ -443,16 +508,19 @@ export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): D
     unit: d.unit ?? 'pp',
     status,
     window,
-    hotMin,
+    hotMin: kind === 'deal' ? hotMin : null,
     rating: d.venue_avg_rating,
     // The intro is the venue's description, or nothing: falling back to the
     // title repeated it under "What you get". An unnamed deal already shows its
     // description there, so its intro stays empty too.
     blurb: d.auto_title ? '' : d.description ?? '',
     // An unnamed deal's title just repeats the venue and price shown above it.
-    gets: d.auto_title ? d.description || `${Math.round(d.discount_pct)}% off` : d.title,
+    gets: kind === 'venue' ? ''
+      : d.auto_title ? d.description || (kind === 'standard' ? 'Book at the usual price' : `${Math.round(d.discount_pct)}% off`)
+      : d.title,
     addr: d.venue_address ?? '',
-    target: expiresMs,
+    // Only deals count down: the usual price isn't going anywhere.
+    target: kind === 'deal' ? expiresMs : null,
     cap: d.max_group_size,
     latitude: d.venue_lat,
     longitude: d.venue_lng,
@@ -460,6 +528,7 @@ export function apiDealToDrop(d: ApiDeal, userLat?: number, userLng?: number): D
     images: d.venue_image_urls?.length ? d.venue_image_urls : d.venue_image_url ? [d.venue_image_url] : [],
     video: d.reel_video_url ? { url: d.reel_video_url, poster: d.reel_poster_url ?? null } : null,
     slotPrices,
+    kind,
   };
 }
 

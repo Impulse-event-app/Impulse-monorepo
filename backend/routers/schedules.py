@@ -32,7 +32,8 @@ def _owned_venue(venue_id: str, user: dict, db: Session) -> Venue:
 
 
 def _owned_schedule(schedule_id: str, user: dict, db: Session) -> DealSchedule:
-    schedule = db.query(DealSchedule).filter(DealSchedule.id == schedule_id).first()
+    # The standard offer is a schedule too, but it's managed at /venues/{id}/standard-offer.
+    schedule = db.query(DealSchedule).filter(DealSchedule.id == schedule_id, DealSchedule.is_standard == False).first()
     if not schedule:
         raise HTTPException(status_code=404, detail="Schedule not found")
     _owned_venue(schedule.venue_id, user, db)
@@ -44,7 +45,7 @@ def list_schedules(venue_id: str, db: Session = Depends(get_db), user: dict = De
     _owned_venue(venue_id, user, db)
     return (
         db.query(DealSchedule)
-        .filter(DealSchedule.venue_id == venue_id)
+        .filter(DealSchedule.venue_id == venue_id, DealSchedule.is_standard == False)
         .order_by(DealSchedule.created_at.desc())
         .all()
     )

@@ -383,7 +383,7 @@ def list_venue_deals(
     _assert_owner(venue, user)
     return (
         db.query(Deal)
-        .filter(Deal.venue_id == venue_id, Deal.deleted_at.is_(None))
+        .filter(Deal.venue_id == venue_id, Deal.deleted_at.is_(None), Deal.is_standard == False)
         .order_by(Deal.created_at.desc())
         .all()
     )
@@ -632,7 +632,7 @@ def get_stats(
     _assert_owner(venue, user)
 
     active_deals_q = db.query(Deal).filter(
-        Deal.venue_id == venue_id, Deal.is_active == True
+        Deal.venue_id == venue_id, Deal.is_active == True, Deal.is_standard == False
     )
     active_deals_count = active_deals_q.count()
 
@@ -699,7 +699,7 @@ def get_deal_performance(
     completed: List[Deal] = []
     for deal in (
         db.query(Deal)
-        .filter(Deal.venue_id == venue_id)
+        .filter(Deal.venue_id == venue_id, Deal.is_standard == False)
         .order_by(Deal.created_at.desc())
         .all()
     ):

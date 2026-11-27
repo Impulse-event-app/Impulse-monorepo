@@ -68,13 +68,18 @@ def list_deals(
     category: Optional[str] = Query(None),
     date: Optional[str] = Query(None),
     active_only: bool = Query(True),
+    include_standard: bool = Query(False),
     db: Session = Depends(get_db),
     user: Optional[dict] = Depends(get_optional_user),
 ):
     """Public: browse active deals with venue info included. Demo venues only
-    show for demo accounts (demo_mode)."""
+    show for demo accounts (demo_mode). Venues' full-price standard offers
+    (is_standard) only come with include_standard: builds from before them
+    would show one as a 0%-off deal."""
     q = db.query(Deal).options(joinedload(Deal.venue), joinedload(Deal.reel)).join(Venue, Deal.venue_id == Venue.id)
     q = hide_demo_venues(q, db, user)
+    if not include_standard:
+        q = q.filter(Deal.is_standard == False)  # noqa: E712
     if active_only:
         # A deal is gone once its last slot has passed (expires_at), even if
         # nobody switched it off.

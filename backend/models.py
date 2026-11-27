@@ -252,6 +252,9 @@ class Deal(Base):
     # The venue deleted it but it has bookings, which must keep their deal: it is
     # switched off and hidden from the venue's list instead of removed.
     deleted_at = Column(DateTime(timezone=True), nullable=True)
+    # Made from the venue's standard offer: full price, bookable when no deal
+    # runs. The app lists these after real deals; old builds never see them.
+    is_standard = Column(Boolean, default=False, server_default="false", nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     venue: "Venue" = relationship("Venue", back_populates="deals")
@@ -288,7 +291,15 @@ class DealSchedule(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     reel_id = Column(UUID(as_uuid=False), ForeignKey("venue_reels.id", ondelete="SET NULL"), nullable=True)
     auto_title = Column(Boolean, default=False, server_default="false", nullable=False)
+    # The venue's standard offer (one per venue): full price every open day,
+    # slots each hour of that day's opening hours instead of `slots`.
+    is_standard = Column(Boolean, default=False, server_default="false", nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("uq_deal_schedules_standard_venue", "venue_id", unique=True,
+              postgresql_where=is_standard),
+    )
 
 
 _INTERACTION_TYPE = SAEnum(

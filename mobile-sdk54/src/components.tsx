@@ -999,11 +999,12 @@ function GlassCard({
 /** One spoken summary for a drop card, so VoiceOver reads it as a single element. */
 export function dropA11yLabel(d: Drop): string {
   const p = pct(d.now, d.usual);
+  const browse = d.kind === 'venue';
   return [
     d.venue,
     d.cat,
     d.suburb || null,
-    `${money(d.now)} ${unitLabel(d.unit)}`,
+    browse ? null : `${money(d.now)} ${unitLabel(d.unit)}`,
     p > 0 ? `${p} percent off` : null,
     d.status === 'now' ? 'On now' : sentence(d.window),
   ].filter(Boolean).join(', ');
@@ -1047,6 +1048,7 @@ export function DropCardEditorial({ d, onPress, a11yLabel, a11yHint }: { d: Drop
               </View>
               <MetaLine d={d} style={{ marginTop: 5 }} />
             </View>
+            {d.kind === 'venue' ? null : (
             <View
               accessible
               accessibilityLabel={`${money(d.now)} ${unitLabel(d.unit)}${d.usual > d.now ? `, usually ${money(d.usual)}` : ''}`}
@@ -1064,6 +1066,7 @@ export function DropCardEditorial({ d, onPress, a11yLabel, a11yHint }: { d: Drop
                 </Text>
               </View>
             </View>
+            )}
           </View>
           {/* Deals without a countdown show their time window here. Countdown
               deals show no timer on the card; it's on the deal page. */}
@@ -1091,7 +1094,7 @@ export function DropCardCompact({ d, onPress }: { d: Drop; onPress?: () => void 
             <Text numberOfLines={2} style={{ flex: 1, ...fontUI(600), fontSize: 17, letterSpacing: -0.26, color: T.text }}>
               {d.venue}
             </Text>
-            <Text style={{ ...fontMono(600, 17), fontSize: 17, color: T.text }}>{money(d.now)}</Text>
+            {d.kind === 'venue' ? null : <Text style={{ ...fontMono(600, 17), fontSize: 17, color: T.text }}>{money(d.now)}</Text>}
           </View>
           <MetaLine d={d} style={{ marginTop: 3, fontSize: 12.5 }} />
           <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
