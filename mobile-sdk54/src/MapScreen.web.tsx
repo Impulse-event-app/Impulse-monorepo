@@ -9,7 +9,7 @@ import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, money, onePerVenue } from './data';
+import { SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, money, onePerVenue, pinLabel } from './data';
 import { useApp } from './theme';
 import { Glass, Touchable, ViewSwitch } from './components';
 import { Filter, categoryIconSvg } from './icons';
@@ -119,7 +119,7 @@ export default function MapScreenWeb({ onShowList }: { onShowList?: () => void }
     matched.forEach((d) => {
       const c = dropCoords(d);
       if (!c) return;
-      const el = pinElement(money(d.now), d.cat, T.accent);
+      const el = pinElement(pinLabel(d), d.cat, T.accent);
       el.title = `${d.venue} · ${d.cat} · ${d.suburb || 'Sydney'}`;
       el.addEventListener('click', () => router.push(`/(user)/event/${d.id}`));
       const marker = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -7] })

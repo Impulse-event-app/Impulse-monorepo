@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
-import { DEFAULT_FILTERS, Drop, LatLng, SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, money, onePerVenue } from './data';
+import { DEFAULT_FILTERS, Drop, LatLng, SYDNEY_REGION, activeFilterCount, applyFilters, dropCoords, money, onePerVenue, pinLabel } from './data';
 import { fontUI, useApp } from './theme';
 import { DropCardCompact, FadeIn, Glass, Pin, TextBtn, Touchable, ViewSwitch } from './components';
 import { Filter } from './icons';
@@ -171,9 +171,9 @@ export default function MapScreen({ onShowList }: { onShowList?: () => void }) {
             key={d.id}
             latitude={coord.latitude}
             longitude={coord.longitude}
-            label={money(d.now)}
+            label={pinLabel(d)}
             cat={d.cat}
-            a11yLabel={`${d.venue}, ${d.cat}, ${money(d.now)}`}
+            a11yLabel={d.kind === 'venue' ? `${d.venue}, ${d.cat}, nothing to book today` : `${d.venue}, ${d.cat}, ${money(d.now)}`}
             active={sel === d.id}
             onPress={() => select(d.id)}
           />

@@ -10,7 +10,7 @@ import booking_flow
 from database import SessionLocal
 from deal_schedules import generate_scheduled_deals
 from routers import (
-    bookings, contact, deals, huddles, interactions, merchants, reels, schedules, users, venues,
+    bookings, contact, deals, huddles, interactions, merchants, reels, schedules, standard_offers, users, venues,
     waitlist, webhooks,
 )
 
@@ -94,6 +94,7 @@ app.add_middleware(
 )
 
 app.include_router(users.router,        prefix="/users",        tags=["users"])
+app.include_router(standard_offers.router, prefix="/venues",     tags=["venues"])  # before venues: /venues/browse
 app.include_router(venues.router,       prefix="/venues",       tags=["venues"])
 app.include_router(deals.router,        prefix="/deals",        tags=["deals"])
 app.include_router(schedules.router,    prefix="/deal-schedules", tags=["deal-schedules"])

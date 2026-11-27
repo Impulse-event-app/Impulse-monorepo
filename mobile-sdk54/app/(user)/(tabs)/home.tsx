@@ -7,6 +7,7 @@ import {
   activeFilterCount,
   applyFilters,
   onePerVenue,
+  dropKind,
 } from '../../../src/data';
 import { useBlockTabSwipe } from '../../../src/tabBarScroll';
 import { getHuddle, submitBallot, ApiError, ApiHuddle } from '../../../src/api';
@@ -290,9 +291,13 @@ export default function HomeScreen() {
   // One card per venue, so a venue with many deals can't fill the feed. Its
   // other deals are on the deal page. Voting is the exception: the ballot
   // lists specific deals.
-  const listed = voting ? boosted : onePerVenue(boosted);
-  const now = listed.filter((d) => d.status === 'now');
-  const later = listed.filter((d) => d.status === 'later');
+  // Voting ballots are deals only; the full-price and browse-only cards follow
+  // the deals in their own section.
+  const listed = voting ? boosted.filter((d) => dropKind(d) === 'deal') : onePerVenue(boosted);
+  const deals = listed.filter((d) => dropKind(d) === 'deal');
+  const now = deals.filter((d) => d.status === 'now');
+  const later = deals.filter((d) => d.status === 'later');
+  const more = listed.filter((d) => dropKind(d) !== 'deal');
   const activeCount = activeFilterCount(filters);
 
   // Upright, partially open iPhone Duo (split top and bottom, useSplitAxis()):
@@ -490,6 +495,7 @@ export default function HomeScreen() {
                 <>
                   {section('On now', now)}
                   {section('Later tonight', later, now.length)}
+                  {section(deals.length ? 'More places' : 'Places', more, now.length + later.length)}
                   {drops.length === 0 && (
                     // Nothing live anywhere: not a filter problem, so don't
                     // tell the user to change their filters.
